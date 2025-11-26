@@ -80,6 +80,7 @@ class StatisticsViewController: UIViewController , CustomToggleControlDelegate{
                 self.goalCard.setProgress(to: 0.5)
             }
         updateHistoryCards()
+        goalCard.configure(start: 78.0, current: 75.0, target: 73.0)
     }
     func updateHistoryCards() {
             // 1. Update Last Session

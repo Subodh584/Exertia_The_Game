@@ -7,6 +7,24 @@ class WeightGoalCardView: UIView {
     @IBOutlet weak var progressWidthConstraint: NSLayoutConstraint!
     @IBOutlet weak var trackView: UIView!
     
+    func configure(start: Double, current: Double, target: Double) {
+            
+            // 1. Calculate total amount to lose (e.g., 78 - 73 = 5)
+            let totalToLose = start - target
+            
+            // 2. Calculate amount lost so far (e.g., 78 - 75 = 3)
+            let lostSoFar = start - current
+            
+            // 3. Calculate percentage (e.g., 3 / 5 = 0.6)
+            var progressRatio: CGFloat = 0.0
+            
+            if totalToLose > 0 {
+                progressRatio = CGFloat(lostSoFar / totalToLose)
+            }
+            
+            // 4. Update the bar
+            self.setProgress(to: progressRatio)
+        }
     
     func setProgress(to value: CGFloat) {
             
