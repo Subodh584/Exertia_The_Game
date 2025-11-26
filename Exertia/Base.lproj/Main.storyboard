@@ -75,11 +75,11 @@
                                 <rect key="frame" x="0.0" y="0.0" width="393" height="673"/>
                             </imageView>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="f5t-UZ-6CA">
-                                <rect key="frame" x="16.000000000000004" y="61" width="44.333333333333343" height="37.666666666666657"/>
+                                <rect key="frame" x="15.999999999999996" y="61" width="39.666666666666657" height="34.333333333333343"/>
                                 <color key="tintColor" name="TitleColor"/>
                                 <state key="normal" title="Button"/>
                                 <buttonConfiguration key="configuration" style="plain" image="chevron.left" catalog="system">
-                                    <preferredSymbolConfiguration key="preferredSymbolConfigurationForImage" configurationType="pointSize" pointSize="20" weight="heavy"/>
+                                    <preferredSymbolConfiguration key="preferredSymbolConfigurationForImage"/>
                                 </buttonConfiguration>
                                 <connections>
                                     <action selector="backButtonTapped:" destination="PKG-RZ-45r" eventType="touchUpInside" id="6Ia-0t-14W"/>
@@ -111,17 +111,17 @@
                                 <nil key="highlightedColor"/>
                             </label>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="peZ-d5-q8q">
-                                <rect key="frame" x="332.66666666666669" y="383" width="44.333333333333314" height="40"/>
+                                <rect key="frame" x="337.33333333333331" y="383" width="39.666666666666686" height="40"/>
                                 <subviews>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ZPl-zS-d1S">
-                                        <rect key="frame" x="0.0" y="0.0" width="44.333333333333336" height="40"/>
+                                        <rect key="frame" x="0.0" y="0.0" width="39.666666666666664" height="40"/>
                                         <constraints>
                                             <constraint firstAttribute="height" constant="40" id="Kzi-9f-HCe"/>
                                         </constraints>
                                         <color key="tintColor" name="TitleColor"/>
                                         <state key="normal" title="Button"/>
                                         <buttonConfiguration key="configuration" style="plain" image="chevron.right" catalog="system">
-                                            <preferredSymbolConfiguration key="preferredSymbolConfigurationForImage" configurationType="pointSize" pointSize="20" weight="heavy"/>
+                                            <preferredSymbolConfiguration key="preferredSymbolConfigurationForImage"/>
                                             <color key="baseForegroundColor" red="0.0" green="0.043137254901960784" blue="0.34509803921568627" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                                         </buttonConfiguration>
                                         <connections>
@@ -226,11 +226,11 @@
                                 </connections>
                             </button>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="fXg-mK-DJv">
-                                <rect key="frame" x="16.000000000000004" y="75" width="44.333333333333343" height="37.666666666666657"/>
+                                <rect key="frame" x="15.999999999999996" y="75" width="39.666666666666657" height="34.333333333333343"/>
                                 <color key="tintColor" name="TitleColor"/>
                                 <state key="normal" title="Button"/>
                                 <buttonConfiguration key="configuration" style="plain" image="chevron.left" catalog="system">
-                                    <preferredSymbolConfiguration key="preferredSymbolConfigurationForImage" configurationType="pointSize" pointSize="20" weight="heavy"/>
+                                    <preferredSymbolConfiguration key="preferredSymbolConfigurationForImage"/>
                                 </buttonConfiguration>
                                 <connections>
                                     <action selector="backButtonTapped:" destination="SQn-lH-d3m" eventType="touchUpInside" id="kL7-i1-PbJ"/>
@@ -545,11 +545,11 @@
                                 <nil key="highlightedColor"/>
                             </label>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="ETG-Lh-NFU">
-                                <rect key="frame" x="0.0" y="61" width="44.333333333333336" height="37.666666666666657"/>
+                                <rect key="frame" x="15.999999999999996" y="61" width="39.666666666666657" height="34.333333333333343"/>
                                 <color key="tintColor" name="TitleColor"/>
                                 <state key="normal" title="Button"/>
                                 <buttonConfiguration key="configuration" style="plain" image="chevron.left" catalog="system">
-                                    <preferredSymbolConfiguration key="preferredSymbolConfigurationForImage" configurationType="pointSize" pointSize="20" weight="heavy"/>
+                                    <preferredSymbolConfiguration key="preferredSymbolConfigurationForImage"/>
                                 </buttonConfiguration>
                                 <connections>
                                     <action selector="backButtonTapped:" destination="PKG-RZ-45r" eventType="touchUpInside" id="1ek-y3-nOh"/>
@@ -648,7 +648,7 @@
                             <constraint firstItem="tHk-Um-hrS" firstAttribute="top" secondItem="YI1-Mh-TYS" secondAttribute="bottom" constant="18" id="ZxB-ku-aQH"/>
                             <constraint firstItem="CUR-74-Ubz" firstAttribute="top" secondItem="pQh-Mf-AxW" secondAttribute="top" constant="110" id="bEL-xc-EhP"/>
                             <constraint firstItem="1RJ-aa-Qio" firstAttribute="leading" secondItem="iaA-4e-Jkl" secondAttribute="leading" constant="120" id="dLq-x3-crs"/>
-                            <constraint firstItem="ETG-Lh-NFU" firstAttribute="leading" secondItem="pQh-Mf-AxW" secondAttribute="leading" id="ePu-q9-7qz"/>
+                            <constraint firstItem="ETG-Lh-NFU" firstAttribute="leading" secondItem="pQh-Mf-AxW" secondAttribute="leading" constant="16" id="ePu-q9-7qz"/>
                             <constraint firstItem="aqG-RX-zeV" firstAttribute="top" secondItem="YI1-Mh-TYS" secondAttribute="bottom" constant="117" id="fLD-vD-VG4"/>
                             <constraint firstItem="iaA-4e-Jkl" firstAttribute="trailing" secondItem="aqG-RX-zeV" secondAttribute="trailing" constant="20" id="ich-1E-dSj"/>
                             <constraint firstItem="iaA-4e-Jkl" firstAttribute="bottom" secondItem="Qdc-8N-g39" secondAttribute="bottom" constant="20" id="nJq-xN-Do8"/>
@@ -683,13 +683,13 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Your Daily Report" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="8Jg-vt-0p9">
-                                <rect key="frame" x="20" y="157" width="131.66666666666666" height="20.333333333333343"/>
+                                <rect key="frame" x="20" y="158" width="131.66666666666666" height="20.333333333333343"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                 <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                 <nil key="highlightedColor"/>
                             </label>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="a7f-jZ-cLM">
-                                <rect key="frame" x="15.999999999999996" y="60" width="39.666666666666657" height="34.333333333333343"/>
+                                <rect key="frame" x="15.999999999999996" y="61" width="39.666666666666657" height="34.333333333333343"/>
                                 <state key="normal" title="Button"/>
                                 <buttonConfiguration key="configuration" style="plain" image="chevron.left" catalog="system">
                                     <color key="baseForegroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
@@ -700,7 +700,7 @@
                                 </connections>
                             </button>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Hkr-rI-fJt" customClass="WeightGoalCardView" customModule="Exertia">
-                                <rect key="frame" x="20" y="531.33333333333337" width="353" height="96.666666666666629"/>
+                                <rect key="frame" x="20" y="532.33333333333337" width="353" height="95.666666666666629"/>
                                 <subviews>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Weight Goal Progress" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="h3h-r8-y8I">
                                         <rect key="frame" x="12" y="18" width="139.33333333333334" height="15.666666666666664"/>
@@ -983,7 +983,7 @@
                                 </userDefinedRuntimeAttributes>
                             </view>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Ug6-09-H61">
-                                <rect key="frame" x="20" y="185.33333333333337" width="353" height="170"/>
+                                <rect key="frame" x="20" y="186.33333333333337" width="353" height="170"/>
                                 <subviews>
                                     <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="VZm-tA-DmD" customClass="CustomToggleControl" customModule="Exertia" customModuleProvider="target">
                                         <rect key="frame" x="10" y="10" width="200" height="40"/>
@@ -1111,7 +1111,7 @@
                                 </userDefinedRuntimeAttributes>
                             </view>
                             <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="16" translatesAutoresizingMaskIntoConstraints="NO" id="m8p-Sk-kMh">
-                                <rect key="frame" x="20" y="379.33333333333331" width="353" height="128"/>
+                                <rect key="frame" x="20" y="380.33333333333331" width="353" height="128"/>
                                 <subviews>
                                     <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="Vnr-D2-39n">
                                         <rect key="frame" x="0.0" y="0.0" width="168.66666666666666" height="128"/>
@@ -1201,7 +1201,7 @@
                                 </constraints>
                             </stackView>
                             <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="uf1-Vu-aXK">
-                                <rect key="frame" x="20" y="102.33333333333333" width="285" height="45.999999999999986"/>
+                                <rect key="frame" x="20" y="103.33333333333333" width="285" height="45.999999999999986"/>
                                 <subviews>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="253" text="Welcome Back," textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="9qo-Fp-E78">
                                         <rect key="frame" x="0.0" y="9.9999999999999982" width="146.66666666666666" height="26.333333333333329"/>
@@ -1235,7 +1235,7 @@
                             <constraint firstItem="Ug6-09-H61" firstAttribute="top" secondItem="8Jg-vt-0p9" secondAttribute="bottom" constant="8" id="BeW-yd-N9J"/>
                             <constraint firstItem="kx9-3d-eCR" firstAttribute="bottom" secondItem="u6i-oV-yye" secondAttribute="bottom" id="BvC-D6-Ddf"/>
                             <constraint firstItem="8Jg-vt-0p9" firstAttribute="leading" secondItem="kx9-3d-eCR" secondAttribute="leading" constant="20" id="DY6-JH-k2t"/>
-                            <constraint firstItem="a7f-jZ-cLM" firstAttribute="top" secondItem="wfj-xK-jxv" secondAttribute="top" constant="60" id="DiU-n0-HMx"/>
+                            <constraint firstItem="a7f-jZ-cLM" firstAttribute="top" secondItem="wfj-xK-jxv" secondAttribute="top" constant="61" id="DiU-n0-HMx"/>
                             <constraint firstItem="Hkr-rI-fJt" firstAttribute="top" secondItem="m8p-Sk-kMh" secondAttribute="bottom" constant="24" id="FWs-3i-GgJ"/>
                             <constraint firstItem="kx9-3d-eCR" firstAttribute="trailing" secondItem="uf1-Vu-aXK" secondAttribute="trailing" constant="88" id="FgQ-42-QYb"/>
                             <constraint firstItem="kx9-3d-eCR" firstAttribute="trailing" secondItem="u6i-oV-yye" secondAttribute="trailing" constant="20" id="Hzi-XC-9YA"/>
