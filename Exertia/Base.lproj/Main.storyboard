@@ -719,11 +719,10 @@
                                         <color key="backgroundColor" red="0.27450980390000002" green="0.27450980390000002" blue="0.33333333329999998" alpha="1" colorSpace="calibratedRGB"/>
                                         <constraints>
                                             <constraint firstAttribute="height" constant="12" id="0S8-0K-s60"/>
+                                            <constraint firstItem="wl5-GP-HGq" firstAttribute="width" secondItem="eHc-Tr-dbj" secondAttribute="width" id="Ifa-JD-SAI"/>
                                             <constraint firstAttribute="bottom" secondItem="wl5-GP-HGq" secondAttribute="bottom" id="Jml-Sb-fA7"/>
-                                            <constraint firstAttribute="trailing" secondItem="wl5-GP-HGq" secondAttribute="trailing" id="Ox4-Ba-OZ1"/>
                                             <constraint firstItem="wl5-GP-HGq" firstAttribute="top" secondItem="eHc-Tr-dbj" secondAttribute="top" id="QGN-zK-sg0"/>
                                             <constraint firstItem="wl5-GP-HGq" firstAttribute="leading" secondItem="eHc-Tr-dbj" secondAttribute="leading" id="Thd-8p-c4a"/>
-                                            <constraint firstItem="wl5-GP-HGq" firstAttribute="width" secondItem="eHc-Tr-dbj" secondAttribute="width" id="mDM-ki-eDU"/>
                                         </constraints>
                                         <userDefinedRuntimeAttributes>
                                             <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
@@ -754,26 +753,16 @@
                                     </label>
                                     <view contentMode="scaleToFill" ambiguous="YES" translatesAutoresizingMaskIntoConstraints="NO" id="HIh-dW-I63">
                                         <rect key="frame" x="321" y="51.666666666666629" width="20" height="20"/>
-                                        <subviews>
-                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" ambiguous="YES" text="75" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="Qr7-jl-jPC">
-                                                <rect key="frame" x="-14" y="-1" width="13" height="12"/>
-                                                <fontDescription key="fontDescription" type="system" pointSize="10"/>
-                                                <color key="textColor" red="0.9267578125" green="0.4055175781" blue="0.9711914062" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
-                                                <nil key="highlightedColor"/>
-                                            </label>
-                                        </subviews>
                                         <color key="backgroundColor" red="0.9267578125" green="0.4055175781" blue="0.9711914062" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                                         <constraints>
-                                            <constraint firstItem="Qr7-jl-jPC" firstAttribute="centerX" secondItem="HIh-dW-I63" secondAttribute="centerX" id="ML6-pc-f1h"/>
-                                            <constraint firstItem="Qr7-jl-jPC" firstAttribute="centerY" secondItem="HIh-dW-I63" secondAttribute="centerY" id="SNH-zH-nu4"/>
+                                            <constraint firstAttribute="width" constant="20" id="Rza-E6-nqq"/>
+                                            <constraint firstAttribute="height" constant="20" id="cz2-mV-ucN"/>
                                         </constraints>
                                     </view>
                                 </subviews>
                                 <color key="backgroundColor" red="0.48627450979999998" green="0.48627450979999998" blue="0.48627450979999998" alpha="0.28999999999999998" colorSpace="custom" customColorSpace="calibratedRGB"/>
                                 <constraints>
-                                    <constraint firstItem="HIh-dW-I63" firstAttribute="leading" secondItem="wl5-GP-HGq" secondAttribute="trailing" constant="-10" id="0F1-fn-suT"/>
                                     <constraint firstAttribute="trailing" secondItem="eHc-Tr-dbj" secondAttribute="trailing" constant="22" id="34o-gv-VaK"/>
-                                    <constraint firstItem="HIh-dW-I63" firstAttribute="centerY" secondItem="eHc-Tr-dbj" secondAttribute="centerY" id="462-xV-WvH"/>
                                     <constraint firstItem="eHc-Tr-dbj" firstAttribute="top" secondItem="h3h-r8-y8I" secondAttribute="bottom" constant="22" id="8bq-gh-PUE"/>
                                     <constraint firstItem="eHc-Tr-dbj" firstAttribute="leading" secondItem="Hkr-rI-fJt" secondAttribute="leading" constant="22" id="Cm2-eo-ELa"/>
                                     <constraint firstItem="h3h-r8-y8I" firstAttribute="top" secondItem="Hkr-rI-fJt" secondAttribute="top" constant="18" id="VQC-up-xTW"/>
@@ -786,7 +775,8 @@
                                 </userDefinedRuntimeAttributes>
                                 <connections>
                                     <outlet property="progressView" destination="wl5-GP-HGq" id="sMy-p2-XxV"/>
-                                    <outlet property="progressWidthConstraint" destination="mDM-ki-eDU" id="zmu-Ps-SfG"/>
+                                    <outlet property="progressWidthConstraint" destination="Ifa-JD-SAI" id="eVF-37-Xtd"/>
+                                    <outlet property="thumbCircleView" destination="HIh-dW-I63" id="BV0-Q0-me1"/>
                                     <outlet property="trackView" destination="eHc-Tr-dbj" id="ymk-ut-C0r"/>
                                 </connections>
                             </view>
