@@ -12,6 +12,12 @@ class StatisticsViewController: UIViewController , CustomToggleControlDelegate{
     @IBOutlet weak var headingLabel: UILabel!
     @IBOutlet weak var lastSessionCardView: UIView!
     @IBOutlet weak var personalBestCardView: UIView!
+    
+    @IBOutlet weak var lastSessionDurationLabel: UILabel!
+    @IBOutlet weak var lastSessionCaloriesLabel: UILabel!
+        
+    @IBOutlet weak var personalBestDurationLabel: UILabel!
+    @IBOutlet weak var personalBestCaloriesLabel: UILabel!
   
     @IBOutlet weak var goalCard: WeightGoalCardView!
     
@@ -73,7 +79,27 @@ class StatisticsViewController: UIViewController , CustomToggleControlDelegate{
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 self.goalCard.setProgress(to: 0.5)
             }
+        updateHistoryCards()
     }
+    func updateHistoryCards() {
+            // 1. Update Last Session
+            if let last = GameData.shared.lastSession {
+                lastSessionDurationLabel.text = "Duration: \(last.durationMinutes) mins"
+                lastSessionCaloriesLabel.text = "Calories Burned: \(last.caloriesBurned)"
+            } else {
+                lastSessionDurationLabel.text = "No games played yet"
+                lastSessionCaloriesLabel.text = ""
+            }
+            
+            // 2. Update Personal Best
+            if let best = GameData.shared.personalBest {
+                personalBestDurationLabel.text = "Duration: \(best.durationMinutes) mins"
+                personalBestCaloriesLabel.text = "Calories Burned: \(best.caloriesBurned)"
+            } else {
+                personalBestDurationLabel.text = "Go play a game!"
+                personalBestCaloriesLabel.text = ""
+            }
+        }
     func updateDailyReportCard(isCalBurnSelected: Bool) {
             guard let user = userProfile else { return }
 

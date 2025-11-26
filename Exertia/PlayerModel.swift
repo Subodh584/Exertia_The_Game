@@ -7,6 +7,13 @@
 
 import Foundation
 
+struct GameSession {
+    let date: Date
+    let durationMinutes: Int
+    let caloriesBurned: Int
+    let trackName: String
+}
+
 // MARK: - 1. Player Stats Model (User's current stats)
 struct PlayerStats {
     var calories: Int           // For headerCaloriesLabel & statsCaloriesLabel
@@ -167,6 +174,56 @@ class GameData {
             isLocked: false
         )
     ]
+    
+    var gameHistory: [GameSession] = [
+            
+            // 1. Two days ago (A warm-up run)
+            // 10 mins * 8 = 80 cal
+            GameSession(
+                date: Date().addingTimeInterval(-86400 * 2),
+                durationMinutes: 10,
+                caloriesBurned: 80,
+                trackName: "Planet X"
+            ),
+
+            // 2. Yesterday (This is your PERSONAL BEST)
+            // Longest duration (25 mins) = Highest calories (200)
+            GameSession(
+                date: Date().addingTimeInterval(-86400),
+                durationMinutes: 25,
+                caloriesBurned: 200,
+                trackName: "Planet Y"
+            ),
+
+            // 3. Today (This is your LAST SESSION)
+            // Matches your home screen stats (12 mins)
+            // 12 mins * 8 = 96 cal
+            GameSession(
+                date: Date(),
+                durationMinutes: 12,
+                caloriesBurned: 96,
+                trackName: "Warzone"
+            )
+        ]
+    
+    // Logic: Returns the session with the most recent Date
+        var lastSession: GameSession? {
+            return gameHistory.sorted(by: { $0.date < $1.date }).last
+        }
+    // Logic: Returns the session with the highest Calories
+        var personalBest: GameSession? {
+            return gameHistory.max(by: { $0.caloriesBurned < $1.caloriesBurned })
+        }
+    
+    func addSession(duration: Int, calories: Int, track: String) {
+            let newSession = GameSession(date: Date(), durationMinutes: duration, caloriesBurned: calories, trackName: track)
+            gameHistory.append(newSession)
+            
+            // Also update the total stats
+            stats.calories += calories
+            stats.runTimeMinutes += duration
+            // (You can add streak logic here later)
+        }
     
     // MARK: - Helper Functions
     

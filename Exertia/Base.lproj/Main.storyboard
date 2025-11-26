@@ -1222,9 +1222,13 @@
                         <outlet property="dailyreportView" destination="Ug6-09-H61" id="AnA-Cb-4TD"/>
                         <outlet property="goalCard" destination="Hkr-rI-fJt" id="Ue5-CK-GqH"/>
                         <outlet property="headingLabel" destination="8Jg-vt-0p9" id="bRN-Rz-UuH"/>
+                        <outlet property="lastSessionCaloriesLabel" destination="WfJ-41-VHJ" id="00l-Gv-RI0"/>
                         <outlet property="lastSessionCardView" destination="Vnr-D2-39n" id="FAk-Tz-UcV"/>
+                        <outlet property="lastSessionDurationLabel" destination="Dil-KE-0LH" id="qnU-Fp-fnP"/>
                         <outlet property="nameLabel" destination="igE-jV-Kdo" id="VCi-KF-Hh9"/>
+                        <outlet property="personalBestCaloriesLabel" destination="DBf-Sr-Lu4" id="Djk-3D-Pfb"/>
                         <outlet property="personalBestCardView" destination="Oy2-Kt-gi6" id="hZ8-tH-YuB"/>
+                        <outlet property="personalBestDurationLabel" destination="ekx-2Z-4cy" id="OBv-gQ-zl1"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dc2-NZ-GlX" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
