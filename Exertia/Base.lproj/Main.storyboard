@@ -759,6 +759,25 @@
                                             <constraint firstAttribute="height" constant="20" id="cz2-mV-ucN"/>
                                         </constraints>
                                     </view>
+                                    <view contentMode="scaleToFill" ambiguous="YES" translatesAutoresizingMaskIntoConstraints="NO" id="3v4-qr-2hD">
+                                        <rect key="frame" x="154" y="-22" width="40" height="25"/>
+                                        <subviews>
+                                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="71.5" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="lzo-Hn-RFf">
+                                                <rect key="frame" x="7.6666666666666679" y="5.3333333333332584" width="25.000000000000004" height="14.333333333333336"/>
+                                                <fontDescription key="fontDescription" type="boldSystem" pointSize="12"/>
+                                                <color key="textColor" red="0.9267578125" green="0.4055175781" blue="0.9711914062" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
+                                                <nil key="highlightedColor"/>
+                                            </label>
+                                        </subviews>
+                                        <color key="backgroundColor" name="TitleColor"/>
+                                        <color key="tintColor" name="TitleColor"/>
+                                        <constraints>
+                                            <constraint firstItem="lzo-Hn-RFf" firstAttribute="centerX" secondItem="3v4-qr-2hD" secondAttribute="centerX" id="5Kh-sx-eC5"/>
+                                            <constraint firstAttribute="height" constant="25" id="Buu-P2-aRj"/>
+                                            <constraint firstAttribute="width" constant="40" id="OS9-2s-sTJ"/>
+                                            <constraint firstItem="lzo-Hn-RFf" firstAttribute="centerY" secondItem="3v4-qr-2hD" secondAttribute="centerY" id="U0p-e5-1mO"/>
+                                        </constraints>
+                                    </view>
                                 </subviews>
                                 <color key="backgroundColor" red="0.48627450979999998" green="0.48627450979999998" blue="0.48627450979999998" alpha="0.28999999999999998" colorSpace="custom" customColorSpace="calibratedRGB"/>
                                 <constraints>
@@ -777,6 +796,8 @@
                                     <outlet property="progressView" destination="wl5-GP-HGq" id="sMy-p2-XxV"/>
                                     <outlet property="progressWidthConstraint" destination="Ifa-JD-SAI" id="eVF-37-Xtd"/>
                                     <outlet property="thumbCircleView" destination="HIh-dW-I63" id="BV0-Q0-me1"/>
+                                    <outlet property="tooltipLabel" destination="lzo-Hn-RFf" id="1nw-Sc-6bH"/>
+                                    <outlet property="tooltipView" destination="3v4-qr-2hD" id="eIu-Er-JOD"/>
                                     <outlet property="trackView" destination="eHc-Tr-dbj" id="ymk-ut-C0r"/>
                                 </connections>
                             </view>
@@ -1285,7 +1306,7 @@
                     </constraints>
                 </stackView>
             </objects>
-            <point key="canvasLocation" x="-1509" y="720"/>
+            <point key="canvasLocation" x="-1509.1603053435115" y="719.71830985915494"/>
         </scene>
         <!--Home View Controller-->
         <scene sceneID="foK-lt-dIU">

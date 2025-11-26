@@ -7,6 +7,11 @@ class WeightGoalCardView: UIView {
     @IBOutlet weak var trackView: UIView!
     @IBOutlet weak var thumbCircleView: UIView!
     
+    @IBOutlet weak var tooltipView: UIView!  // The yellow box
+        @IBOutlet weak var tooltipLabel: UILabel! // The text inside
+    
+    private let triangleView = UIView()
+    
     // MARK: - Configuration
     func configure(start: Double, current: Double, target: Double) {
         // 1. Calculate Math
@@ -27,6 +32,12 @@ class WeightGoalCardView: UIView {
         */
         
         // 3. Update Bar
+        self.setProgress(to: progressRatio)
+        
+        if let toolTip = tooltipLabel {
+                    toolTip.text = "\(current)"
+                }
+                
         self.setProgress(to: progressRatio)
     }
 
@@ -63,7 +74,7 @@ class WeightGoalCardView: UIView {
     override func layoutSubviews() {
             super.layoutSubviews()
             
-            // 1. Setup Gradient (Existing Code)
+            // 1. Gradient Setup (Keep existing code)
             if progressView.layer.sublayers?.first is CAGradientLayer == false {
                 let gradient = CAGradientLayer()
                 gradient.colors = [
@@ -82,7 +93,7 @@ class WeightGoalCardView: UIView {
                 gradient.cornerRadius = progressView.layer.cornerRadius
             }
             
-            // 2. Make Thumb Circular
+            // 2. Thumb Styling
             if let thumb = thumbCircleView {
                 thumb.layer.cornerRadius = thumb.frame.width / 2
                 thumb.layer.masksToBounds = true
@@ -90,20 +101,71 @@ class WeightGoalCardView: UIView {
                 thumb.layer.borderColor = UIColor(hex: "#FFEFBE").cgColor
             }
             
-            // --- 3. MANUAL POSITIONING (The Fix) ---
-            // We force the thumb to sit exactly at the end of the pink bar
-        if let thumb = thumbCircleView, let pView = progressView, let tView = trackView {
+            // --- 3. MANUAL POSITIONING (Thumb & Tooltip) ---
+            if let thumb = thumbCircleView, let pView = progressView, let tView = trackView {
+                
+                // A. Calculate Thumb Position
+                let endPointInTrack = CGPoint(x: pView.frame.maxX, y: pView.frame.midY)
+                let thumbCenter = tView.convert(endPointInTrack, to: self)
+                
+                // Move Thumb
+                thumb.center = thumbCenter
+                
+                // B. Calculate Tooltip Position
+                // B. Calculate Tooltip Position
+                            if let tooltip = tooltipView {
+                                // Style the tooltip box
+                                tooltip.backgroundColor = UIColor(hex: "#FFEFBE")
+                                tooltip.layer.cornerRadius = 6
+                                tooltip.layer.masksToBounds = true
+                                
+                                // --- NEW: SIZE & POSITION LOGIC ---
+                                let tooltipWidth: CGFloat = 40
+                                let tooltipHeight: CGFloat = 22
+                                let padding: CGFloat = 8
+                                
+                                // Calculate Y to be above thumb
+                                let tooltipY = thumb.frame.minY - (tooltipHeight / 2) - padding
+                                
+                                // Set the frame manually (forces size and position)
+                                tooltip.bounds = CGRect(x: 0, y: 0, width: tooltipWidth, height: tooltipHeight)
+                                tooltip.center = CGPoint(x: thumbCenter.x, y: tooltipY)
+                            }
+                
+            }
+        if let thumb = thumbCircleView, let tooltip = tooltipView {
                     
-                    // 1. Find the point at the end of the pink bar
-                    // (This point is currently relative to the Gray Track)
-                    let endPointInTrack = CGPoint(x: pView.frame.maxX, y: pView.frame.midY)
+                    // 1. Add to screen if needed
+                    if triangleView.superview == nil {
+                        self.addSubview(triangleView)
+                        triangleView.backgroundColor = .clear
+                    }
                     
-                    // 2. Convert that point to the "Card" coordinates
-                    // This adds the position of the Gray Track automatically!
-                    let convertedPoint = tView.convert(endPointInTrack, to: self)
+                    // 2. Define Size
+                    let triWidth: CGFloat = 10
+                    let triHeight: CGFloat = 8
                     
-                    // 3. Move the thumb to that calculated spot
-                    thumb.center = convertedPoint
+                    // 3. Draw the Triangle Shape
+                    // We draw an upside-down triangle (V shape) to point down at the thumb
+                    let path = UIBezierPath()
+                    path.move(to: CGPoint(x: 0, y: 0))           // Top Left
+                    path.addLine(to: CGPoint(x: triWidth, y: 0)) // Top Right
+                    path.addLine(to: CGPoint(x: triWidth/2, y: triHeight)) // Bottom Point
+                    path.close()
+                    
+                    let shapeLayer = CAShapeLayer()
+                    shapeLayer.path = path.cgPath
+                    shapeLayer.fillColor = UIColor(hex: "#FFEFBE").cgColor // Same yellow as tooltip
+                    
+                    // Reset layer to avoid drawing it 100 times
+                    triangleView.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+                    triangleView.layer.addSublayer(shapeLayer)
+                    
+                    // 4. Position it
+                    // X: Center of the thumb
+                    // Y: Right below the tooltip box
+                    triangleView.frame = CGRect(x: 0, y: 0, width: triWidth, height: triHeight)
+                    triangleView.center = CGPoint(x: thumb.center.x, y: tooltip.frame.maxY + (triHeight / 2))
                 }
         }
 }
