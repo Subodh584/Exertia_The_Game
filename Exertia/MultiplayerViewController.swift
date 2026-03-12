@@ -60,17 +60,62 @@ class MultiplayerViewController: UIViewController, UITableViewDataSource, UITabl
     
     // MARK: - Data Setup
     func setupData() {
-        let allFriends: [Friend] = [
-            Friend(name: "Ekansh", avatarImageName: "FriendPFP1", isOnline: true),
-            Friend(name: "Subodh", avatarImageName: "FriendPFP2", isOnline: true),
-            Friend(name: "Satakshi", avatarImageName: "FriendPFP3", isOnline: false),
-            Friend(name: "Ekansh 1", avatarImageName: "FriendPFP4", isOnline: true),
-            Friend(name: "Subodh 2", avatarImageName: "FriendPFP4", isOnline: false),
-            Friend(name: "Satakshi 2", avatarImageName: "FriendPFP5", isOnline: false),
-            Friend(name: "Satakshi 3", avatarImageName: "FriendPFP5", isOnline: true),
-        ]
-        onlineFriends = allFriends.filter { $0.isOnline }
-        offlineFriends = allFriends.filter { !$0.isOnline }
+        // Start with empty arrays, will be populated by API
+        onlineFriends = []
+        offlineFriends = []
+        fetchFriendsFromAPI()
+    }
+    
+    func fetchFriendsFromAPI() {
+        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else {
+            print("⚠️ No Django User ID found. Showing empty friends list.")
+            return
+        }
+        
+        Task {
+            do {
+                // 1. Fetch accepted friendships for this user
+                let friendships = try await APIManager.shared.getUserFriends(userId: userId)
+                
+                var loadedFriends: [Friend] = []
+                let avatarImages = ["FriendPFP1", "FriendPFP2", "FriendPFP3", "FriendPFP4", "FriendPFP5"]
+                
+                for (index, friendship) in friendships.enumerated() {
+                    // Determine who is the friend (the other person)
+                    let friendId = (friendship.requester == userId) ? friendship.receiver : friendship.requester
+                    let friendUsername = (friendship.requester == userId) ? friendship.receiverUsername : friendship.requesterUsername
+                    
+                    // Fetch the friend's user details to get online status
+                    do {
+                        let friendUser = try await APIManager.shared.getUser(userId: friendId)
+                        let avatarImg = avatarImages[index % avatarImages.count]
+                        
+                        loadedFriends.append(Friend(
+                            name: friendUser.displayName ?? friendUser.username,
+                            avatarImageName: avatarImg,
+                            isOnline: friendUser.isOnline ?? false
+                        ))
+                    } catch {
+                        // If we can't fetch details, use username only
+                        let avatarImg = avatarImages[index % avatarImages.count]
+                        loadedFriends.append(Friend(
+                            name: friendUsername,
+                            avatarImageName: avatarImg,
+                            isOnline: false
+                        ))
+                    }
+                }
+                
+                DispatchQueue.main.async {
+                    self.onlineFriends = loadedFriends.filter { $0.isOnline }
+                    self.offlineFriends = loadedFriends.filter { !$0.isOnline }
+                    self.friendsTableView.reloadData()
+                    print("✅ Friends list hydrated from API! Online: \(self.onlineFriends.count), Offline: \(self.offlineFriends.count)")
+                }
+            } catch {
+                print("❌ Failed to fetch friends: \(error)")
+            }
+        }
     }
     
     // MARK: - Tab Bar Logic

@@ -13,7 +13,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        
+        // FORCE WAKE UP
+        print("⚡️ APP LAUNCHED. WAKING UP SUPABASE...")
+        _ = SupabaseManager.shared
+        
+        // Set user online in Django if logged in
+        if let userId = UserDefaults.standard.string(forKey: "djangoUserID") {
+            Task {
+                try? await APIManager.shared.setUserOnline(userId: userId)
+                print("✅ User marked online in Django on app launch")
+            }
+        }
+        
         return true
     }
 

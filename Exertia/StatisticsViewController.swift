@@ -62,15 +62,83 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         addGradient()
         configureNavBar()
         configureScroll()
-        
         addHeader()
         addMainCard()
         addGridCards()
         addWeightView()
         addStreakView()
-        
         styleTabBar()
         initTabs()
+        fetchRealUserName()
+        fetchStatsData()
+    }
+    
+    // MARK: - Cached API data for display
+    private var apiTotalCalories: Int = 0
+    private var apiTotalMinutes: Int = 0
+    private var apiCompletedSessions: Int = 0
+    private var apiLastSessionDuration: Int? = nil
+    private var apiLastSessionCalories: Int? = nil
+    private var apiBestSessionDuration: Int? = nil
+    private var apiBestSessionCalories: Int? = nil
+    private var apiDailyTargetCalories: Int = 500
+    private var apiDailyTargetMins: Int = 60
+    
+    func fetchRealUserName() {
+            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+            
+            Task {
+                do {
+                    let user = try await APIManager.shared.getUser(userId: userId)
+                    DispatchQueue.main.async {
+                        self.nameLabel.text = user.displayName ?? user.username
+                        self.apiDailyTargetCalories = user.dailyTargetCalories ?? 500
+                        self.apiDailyTargetMins = user.dailyTargetMins ?? 60
+                    }
+                } catch {
+                    print("❌ Failed to fetch user name for stats page: \(error)")
+                }
+            }
+        }
+    
+    func fetchStatsData() {
+        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        
+        Task {
+            do {
+                // Fetch aggregated stats
+                let stats = try await APIManager.shared.getUserStats(userId: userId)
+                self.apiTotalCalories = stats.totalCalories
+                self.apiTotalMinutes = stats.totalMinutes
+                self.apiCompletedSessions = stats.completedSessions
+                
+                // Fetch all sessions to find last run & personal best
+                let sessions = try await APIManager.shared.getUserSessions(userId: userId)
+                let completed = sessions.filter { $0.completionStatus == "completed" }
+                
+                // Sort by created_at to find the most recent
+                let sorted = completed.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
+                
+                if let lastSession = sorted.first {
+                    self.apiLastSessionDuration = lastSession.durationMinutes
+                    self.apiLastSessionCalories = lastSession.caloriesBurned
+                }
+                
+                // Personal best = highest calories in a single session
+                if let bestSession = completed.max(by: { ($0.caloriesBurned ?? 0) < ($1.caloriesBurned ?? 0) }) {
+                    self.apiBestSessionDuration = bestSession.durationMinutes
+                    self.apiBestSessionCalories = bestSession.caloriesBurned
+                }
+                
+                DispatchQueue.main.async {
+                    self.refreshUI()
+                    print("✅ Statistics UI hydrated with real API data!")
+                }
+            } catch {
+                print("❌ Failed to fetch stats data: \(error). Using defaults.")
+                DispatchQueue.main.async { self.refreshUI() }
+            }
+        }
     }
     
     override func viewDidLayoutSubviews() {
@@ -379,9 +447,10 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         fireImg.translatesAutoresizingMaskIntoConstraints = false
 
         let t1 = UILabel()
-        t1.text = "4 Day Streak!"
+        t1.text = "\(apiCompletedSessions) Day Streak!"
         t1.font = .systemFont(ofSize: 22, weight: .bold)
         t1.textColor = .white
+        t1.tag = 999 // Tag for updating later
         
         let t2 = UILabel()
         t2.text = "Keep going, you are almost there"
@@ -617,27 +686,43 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     func refreshUI() {
-        nameLabel.text = "Satakshi"
-        
-        let cal = 350
-        let time = 45
+        // Use API data (falls back to 0 if not yet loaded)
+        let cal = apiTotalCalories
+        let time = apiTotalMinutes
         
         UIView.transition(with: bigStatLabel, duration: 0.3, options: .transitionCrossDissolve) {
-            self.bigStatLabel.text = self.showCalories ? "\(Int(cal))" : "\(Int(time))"
+            self.bigStatLabel.text = self.showCalories ? "\(cal)" : "\(time)"
             self.subStatLabel.text = self.showCalories ? "Calories Burned" : "Minutes Ran"
             self.subStatLabel.textColor = self.showCalories ? .neonPink : .neonYellow
         }
         
-        outerRing.strokeEnd = 0.7
-        innerRing.strokeEnd = 0.4
+        // Ring progress based on daily targets
+        let calProgress = apiDailyTargetCalories > 0 ? min(CGFloat(cal) / CGFloat(apiDailyTargetCalories), 1.0) : 0.0
+        let timeProgress = apiDailyTargetMins > 0 ? min(CGFloat(time) / CGFloat(apiDailyTargetMins), 1.0) : 0.0
+        outerRing.strokeEnd = calProgress
+        innerRing.strokeEnd = timeProgress
         outerRing.opacity = showCalories ? 1.0 : 0.2
         innerRing.opacity = showCalories ? 0.2 : 1.0
         
-        lastTimeLabel.text = "32 min"
-        lastCalLabel.text = "210 cal"
-        bestTimeLabel.text = "55 min"
-        bestCalLabel.text = "480 cal"
+        // Last Run card
+        if let lastDur = apiLastSessionDuration, let lastCal = apiLastSessionCalories {
+            lastTimeLabel.text = "\(lastDur) min"
+            lastCalLabel.text = "\(lastCal) cal"
+        } else {
+            lastTimeLabel.text = "-- min"
+            lastCalLabel.text = "-- cal"
+        }
         
+        // Personal Best card
+        if let bestDur = apiBestSessionDuration, let bestCal = apiBestSessionCalories {
+            bestTimeLabel.text = "\(bestDur) min"
+            bestCalLabel.text = "\(bestCal) cal"
+        } else {
+            bestTimeLabel.text = "-- min"
+            bestCalLabel.text = "-- cal"
+        }
+        
+        // Weight & streak (keep existing logic for now)
         weightBar.progress = 0.6
         bubbleLabel.text = "75.0"
         moveBubble()

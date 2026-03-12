@@ -11,6 +11,8 @@ class HomeViewController: UIViewController {
     @IBOutlet weak var caloriesLabel: UILabel!
     @IBOutlet weak var timeLabel: UILabel!
     
+    
+    
     private let tabBarContainer = UIView()
     private let tabBarStackView = UIStackView()
     private let indicatorView = UIView()
@@ -40,9 +42,45 @@ class HomeViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         updateUI()
+        fetchHomeData()
         if tabWrappers.indices.contains(currentTabIndex) {
             tabBarContainer.layoutIfNeeded()
             moveIndicator(to: tabWrappers[currentTabIndex], animated: false)
+        }
+    }
+    
+    func fetchHomeData() {
+        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        
+        Task {
+            do {
+                // Fetch real stats from Django
+                let stats = try await APIManager.shared.getUserStats(userId: userId)
+                let sessions = try await APIManager.shared.getUserSessions(userId: userId)
+                
+                // Update local GameData with real values
+                self.gameData.stats.calories = stats.totalCalories
+                self.gameData.stats.runTimeMinutes = stats.totalMinutes
+                
+                // Find the last session and personal best
+                let completedSessions = sessions.filter { $0.completionStatus == "completed" }
+                
+                DispatchQueue.main.async {
+                    // Update currency / calories
+                    self.currencyLabel.text = "\(stats.totalCalories)"
+                    self.caloriesLabel.text = "\(stats.totalCalories) cal"
+                    self.timeLabel.text = "\(stats.totalMinutes) mins"
+                    self.streakLabel.text = "\(stats.completedSessions)"
+                    
+                    // Distance estimate (~0.1 km per minute of running)
+                    let estimatedKm = Double(stats.totalMinutes) * 0.1
+                    self.distanceLabel.text = String(format: "%.1f km", estimatedKm)
+                    
+                    print("✅ Home UI hydrated with real API data!")
+                }
+            } catch {
+                print("❌ Failed to fetch home data: \(error). Using local data.")
+            }
         }
     }
 
@@ -225,10 +263,21 @@ class HomeViewController: UIViewController {
         let selectedPlayer = gameData.getSelectedPlayer()
         let stats = gameData.stats
         characterImageView.image = UIImage(named: selectedPlayer.fullBodyImageName)
+        // These are defaults that get overwritten by fetchHomeData() once API responds
         currencyLabel.text = "\(stats.calories)"
         streakLabel.text = "\(stats.currentStreak)"
-        distanceLabel.text = "5 km"
+        distanceLabel.text = "--"
         caloriesLabel.text = "\(stats.calories) cal"
         timeLabel.text = "\(stats.runTimeMinutes) mins"
+    }
+    
+    @IBAction func playButtonTapped(_ sender: UIButton) {
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
+        if let trackVC = storyboard.instantiateViewController(withIdentifier: "TrackSelectionViewController") as? TrackSelectionViewController {
+            
+            trackVC.modalPresentationStyle = .fullScreen
+            trackVC.modalTransitionStyle = .crossDissolve
+            self.present(trackVC, animated: true, completion: nil)
+        }
     }
 }

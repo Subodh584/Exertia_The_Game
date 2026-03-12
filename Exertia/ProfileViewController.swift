@@ -34,6 +34,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     private var inProgressBadges: [Badge] = []
     private var completedBadges: [Badge] = []
     private var activeBadges: [Badge] { return isShowingCompleted ? completedBadges : inProgressBadges }
+    private var realUserId: String = ""
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -42,7 +43,63 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         setupUI()
         setupActions()
         updateTabSelection()
+        fetchRealProfileData()
     }
+    
+    func fetchRealProfileData() {
+            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+            
+            Task {
+                do {
+                    let user = try await APIManager.shared.getUser(userId: userId)
+                    let stats = try await APIManager.shared.getUserStats(userId: userId)
+                    
+                    DispatchQueue.main.async {
+                        // 1. Set the Display Name
+                        self.nameLabel.text = user.displayName ?? user.username
+                        
+                        // 2. Use the Username with an '@' symbol
+                        self.emailLabel.text = "@\(user.username)"
+                        
+                        // 3. Show the first 8 characters of their real Django UUID
+                        let shortId = String(user.id.prefix(8)).uppercased()
+                        self.idLabel.text = "ID: \(shortId)"
+                        self.realUserId = user.id
+                        
+                        // 4. Update badges with real stats
+                        let totalCal = stats.totalCalories
+                        let totalMins = stats.totalMinutes
+                        let totalSessions = stats.totalSessions
+                        
+                        self.inProgressBadges = [
+                            Badge(title: "Reactor Core", description: "Burn 500 active calories.", iconName: "badge1", progress: min(Float(totalCal) / 500.0, 1.0), progressText: "\(min(totalCal, 500))/500", isLocked: totalCal < 500),
+                            Badge(title: "Nebula Walker", description: "Run for 100 minutes total.", iconName: "badge1", progress: min(Float(totalMins) / 100.0, 1.0), progressText: "\(min(totalMins, 100))/100", isLocked: totalMins < 100),
+                            Badge(title: "Titanium Lungs", description: "Complete 10 sessions.", iconName: "badge1", progress: min(Float(totalSessions) / 10.0, 1.0), progressText: "\(min(totalSessions, 10))/10", isLocked: totalSessions < 10)
+                        ]
+                        
+                        self.completedBadges = []
+                        if totalCal >= 500 {
+                            self.completedBadges.append(Badge(title: "Reactor Core", description: "Burn 500 active calories.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false))
+                        }
+                        if totalSessions >= 1 {
+                            self.completedBadges.append(Badge(title: "First Run", description: "Complete your first session.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false))
+                        }
+                        if stats.friendCount >= 1 {
+                            self.completedBadges.append(Badge(title: "Social Voyager", description: "Add a friend.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false))
+                        }
+                        
+                        // Filter out completed from in-progress
+                        let completedTitles = Set(self.completedBadges.map { $0.title })
+                        self.inProgressBadges = self.inProgressBadges.filter { !completedTitles.contains($0.title) }
+                        
+                        self.tableView.reloadData()
+                        print("✅ Profile UI updated with real Django data!")
+                    }
+                } catch {
+                    print("❌ Failed to fetch profile data: \(error)")
+                }
+            }
+        }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
@@ -52,19 +109,19 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         idPillView.layer.cornerRadius = idPillView.frame.height / 2
     }
 
-        func setupData() {
-            inProgressBadges = [
-                Badge(title: "Reactor Core", description: "Burn 500 active calories.", iconName: "badge1", progress: 0.62, progressText: "312/500", isLocked: true),
-                Badge(title: "Nebula Walker", description: "Walk 10 km in total.", iconName: "badge1", progress: 0.7, progressText: "7/10", isLocked: true),
-                Badge(title: "Titanium Lungs", description: "Run for 30 minutes nonstop.", iconName: "badge1", progress: 0.5, progressText: "15/30", isLocked: true)
-            ]
+    func setupData() {
+        inProgressBadges = [
+            Badge(title: "Reactor Core", description: "Burn 500 active calories.", iconName: "badge1", progress: 0.62, progressText: "312/500", isLocked: true),
+            Badge(title: "Nebula Walker", description: "Walk 10 km in total.", iconName: "badge1", progress: 0.7, progressText: "7/10", isLocked: true),
+            Badge(title: "Titanium Lungs", description: "Run for 30 minutes nonstop.", iconName: "badge1", progress: 0.5, progressText: "15/30", isLocked: true)
+        ]
 
-            completedBadges = [
-                Badge(title: "First Run", description: "Complete your first 1-kilometer run.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false),
-                Badge(title: "Social Voyager", description: "Invite a friend.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false),
-                Badge(title: "Comet Leap", description: "Jump 100 times in a single run.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false)
-            ]
-        }
+        completedBadges = [
+            Badge(title: "First Run", description: "Complete your first 1-kilometer run.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false),
+            Badge(title: "Social Voyager", description: "Invite a friend.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false),
+            Badge(title: "Comet Leap", description: "Jump 100 times in a single run.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false)
+        ]
+    }
 
     func setupUI() {
         view.backgroundColor = UIColor(red: 0.05, green: 0.02, blue: 0.1, alpha: 1.0)
@@ -273,6 +330,10 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
 
     func setupActions() {
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+        
+        // 🔥 ADDED THIS: Connect the settings button
+        settingsButton.addTarget(self, action: #selector(settingsTapped), for: .touchUpInside)
+        
         inProgressButton.addTarget(self, action: #selector(tabChanged(_:)), for: .touchUpInside)
         completedButton.addTarget(self, action: #selector(tabChanged(_:)), for: .touchUpInside)
     }
@@ -281,8 +342,18 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         dismiss(animated: true, completion: nil)
     }
     
+    // 🔥 ADDED THIS: Action to open Settings
+    @objc func settingsTapped() {
+        print("⚙️ Opening Settings...")
+        let settingsVC = SettingsViewController()
+        settingsVC.modalPresentationStyle = .fullScreen
+        settingsVC.modalTransitionStyle = .crossDissolve
+        present(settingsVC, animated: true)
+    }
+    
     @objc func copyIDTapped() {
-        UIPasteboard.general.string = "123456"
+        let idToCopy = realUserId.isEmpty ? (UserDefaults.standard.string(forKey: "djangoUserID") ?? "123456") : realUserId
+        UIPasteboard.general.string = idToCopy
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
     }

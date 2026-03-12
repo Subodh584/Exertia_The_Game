@@ -27,11 +27,55 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         super.viewDidLoad()
         view.backgroundColor = UIColor.black.withAlphaComponent(0.6)
         
+        // Start with local history as fallback
         history = GameData.shared.gameHistory.sorted(by: { $0.date > $1.date })
         if selectedSession == nil { selectedSession = history.first }
         
         setupUI()
         updateHeroView(with: selectedSession)
+        
+        // Fetch from API
+        fetchSessionsFromAPI()
+    }
+    
+    func fetchSessionsFromAPI() {
+        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        
+        Task {
+            do {
+                let sessions = try await APIManager.shared.getUserSessions(userId: userId)
+                let completed = sessions.filter { $0.completionStatus == "completed" }
+                
+                // Convert DjangoSession -> GameSession for display
+                let dateFormatter = ISO8601DateFormatter()
+                dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                
+                let convertedHistory: [GameSession] = completed.compactMap { s in
+                    let date = dateFormatter.date(from: s.createdAt ?? "") ?? Date()
+                    return GameSession(
+                        date: date,
+                        durationMinutes: s.durationMinutes ?? 0,
+                        caloriesBurned: s.caloriesBurned ?? 0,
+                        trackName: s.trackId?.replacingOccurrences(of: "track_", with: "").replacingOccurrences(of: "_", with: " ").capitalized ?? "Unknown",
+                        totalJumps: 0,
+                        totalCrouches: 0,
+                        characterImageName: "character1"
+                    )
+                }
+                
+                DispatchQueue.main.async {
+                    if !convertedHistory.isEmpty {
+                        self.history = convertedHistory.sorted(by: { $0.date > $1.date })
+                        self.selectedSession = self.history.first
+                        self.updateHeroView(with: self.selectedSession)
+                        self.tableView.reloadData()
+                        print("✅ Run history hydrated from API! \(self.history.count) sessions loaded.")
+                    }
+                }
+            } catch {
+                print("❌ Failed to fetch sessions for history: \(error)")
+            }
+        }
     }
 
     func setupUI() {

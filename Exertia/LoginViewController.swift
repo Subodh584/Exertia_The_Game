@@ -2,18 +2,16 @@ import UIKit
 
 class LoginViewController: UIViewController {
 
+    // MARK: - UI Components
     private let backgroundImageView = UIImageView()
     private let scrollView = UIScrollView()
     private let contentView = UIView()
-    
     private let glassCard = UIView()
     private let logoImageView = UIImageView()
     private let titleLabel = UILabel()
-    
-    private let emailField = UITextField()
+    private let emailField = UITextField() // Keeping this variable name so constraints don't break
     private let passwordField = UITextField()
     private let signInButton = UIButton()
-    
     private let forgotButton = UIButton()
     private let registerLabel = UILabel()
     private let registerButton = UIButton()
@@ -24,6 +22,78 @@ class LoginViewController: UIViewController {
         setupKeyboardDismiss()
     }
 
+    // MARK: - ACTIONS
+    
+    @objc func signInTapped() {
+            // We use emailField.text here, but treat it as the username!
+            guard let username = emailField.text, !username.isEmpty else {
+                print("⚠️ Please enter your username")
+                return
+            }
+
+            print("🔍 Searching Django for user: \(username)...")
+
+            Task {
+                do {
+                    // 1. Ask APIManager to find the user
+                    if let foundUser = try await APIManager.shared.loginUser(username: username) {
+                        
+                        print("✅ LOGIN SUCCESS! Found user ID: \(foundUser.id)")
+                        
+                        // 2. Save their ID to the phone
+                        UserDefaults.standard.set(foundUser.id, forKey: "djangoUserID")
+                        
+                        // 3. Mark them as online
+                        try? await APIManager.shared.setUserOnline(userId: foundUser.id)
+                        
+                        // 4. Send them directly to the Home screen
+                        DispatchQueue.main.async {
+                            let sb = UIStoryboard(name: "Main", bundle: nil)
+                            // Make sure the ID below matches your storyboard perfectly
+                            if let homeVC = sb.instantiateViewController(withIdentifier: "HomeViewController") as? UIViewController {
+                                homeVC.modalPresentationStyle = .fullScreen
+                                homeVC.modalTransitionStyle = .crossDissolve
+                                self.present(homeVC, animated: true)
+                            } else {
+                                print("❌ ERROR: Could not find 'HomeViewController' in Main.storyboard")
+                            }
+                        }
+                        
+                    } else {
+                        print("❌ LOGIN FAILED: Username not found in database.")
+                    }
+                } catch {
+                    print("❌ API ERROR: \(error.localizedDescription)")
+                }
+            }
+        }
+    
+    @objc func registerTapped() {
+            print("📲 Navigating to Register Screen...")
+            DispatchQueue.main.async {
+                let registerVC = RegisterViewController()
+                // Presenting it full screen
+                registerVC.modalPresentationStyle = .fullScreen
+                registerVC.modalTransitionStyle = .coverVertical
+                self.present(registerVC, animated: true, completion: nil)
+            }
+        }
+    
+    func navigateToHome() {
+        DispatchQueue.main.async {
+            let storyboard = UIStoryboard(name: "Main", bundle: nil)
+            if let homeVC = storyboard.instantiateViewController(withIdentifier: "HomeViewController") as? UIViewController {
+                homeVC.modalPresentationStyle = .fullScreen
+                homeVC.modalTransitionStyle = .crossDissolve
+                self.present(homeVC, animated: true, completion: nil)
+                print("✅ NAVIGATION SUCCESS")
+            } else {
+                print("❌ ERROR: Could not find 'HomeViewController' in Main.storyboard")
+            }
+        }
+    }
+
+    // MARK: - UI Setup
     func setupUI() {
         backgroundImageView.image = UIImage(named: "loading background")
         backgroundImageView.contentMode = .scaleAspectFill
@@ -78,7 +148,8 @@ class LoginViewController: UIViewController {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(titleLabel)
         
-        styleTextField(emailField, placeholder: "Email", icon: "envelope")
+        // 🔥 CHANGED THIS LINE: Now it visually asks for a Username
+        styleTextField(emailField, placeholder: "Username", icon: "person")
         styleTextField(passwordField, placeholder: "Password", icon: "lock", isSecure: true)
         
         glassCard.addSubview(emailField)
@@ -111,7 +182,6 @@ class LoginViewController: UIViewController {
         socialStack.translatesAutoresizingMaskIntoConstraints = false
         
         let appleBtn = createSocialButton(iconName: "apple.logo", isSystem: true)
-        
         let googleBtn = createSocialButton(iconName: "google logo", isSystem: false)
         
         socialStack.addArrangedSubview(appleBtn)
@@ -129,6 +199,7 @@ class LoginViewController: UIViewController {
         registerButton.setTitle("Register for free", for: .normal)
         registerButton.setTitleColor(.white, for: .normal)
         registerButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+        registerButton.addTarget(self, action: #selector(registerTapped), for: .touchUpInside)
         
         registerStack.addArrangedSubview(registerLabel)
         registerStack.addArrangedSubview(registerButton)
@@ -241,14 +312,5 @@ class LoginViewController: UIViewController {
     
     @objc func dismissKeyboard() {
         view.endEditing(true)
-    }
-
-    @objc func signInTapped() {
-        let sb = UIStoryboard(name: "Main", bundle: nil)
-        if let homeVC = sb.instantiateViewController(withIdentifier: "HomeViewController") as? HomeViewController {
-            homeVC.modalPresentationStyle = .fullScreen
-            homeVC.modalTransitionStyle = .crossDissolve
-            present(homeVC, animated: true)
-        }
     }
 }
