@@ -124,11 +124,16 @@ class TrackSelectionViewController: UIViewController {
             self.present(profileVC, animated: true, completion: nil)
         }
     @IBAction func startButtonTapped(_ sender: UIButton) {
-        let gameStoryboard = UIStoryboard(name: "Game", bundle: nil)
-        if let gameVC = gameStoryboard.instantiateInitialViewController() {
-            gameVC.modalPresentationStyle = .fullScreen
-            gameVC.modalTransitionStyle = .crossDissolve
-            self.present(gameVC, animated: true, completion: nil)
+        let difficultyVC = DifficultySelectionViewController()
+        let navController = UINavigationController(rootViewController: difficultyVC)
+        navController.setNavigationBarHidden(true, animated: false)
+        navController.modalPresentationStyle = .fullScreen
+
+        difficultyVC.onDifficultySelected = { [weak navController] in
+            let cameraVC = CameraViewController()
+            navController?.pushViewController(cameraVC, animated: true)
         }
+
+        self.present(navController, animated: true, completion: nil)
     }
 }

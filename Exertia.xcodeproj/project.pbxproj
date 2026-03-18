@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		061A3EB72F3F1CD600F26D74 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 061A3EB62F3F1CD600F26D74 /* Supabase */; };
 		0625F18B2F3380B800D1B567 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 0625F18A2F3380B800D1B567 /* Lottie */; };
+		867819FF40C6C6EBC212A3F0 /* Pods_Exertia.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C52BAE987678EE4433DCA941 /* Pods_Exertia.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -29,9 +30,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1542F094DC1D66E384249633 /* Pods-Exertia.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Exertia.release.xcconfig"; path = "Target Support Files/Pods-Exertia/Pods-Exertia.release.xcconfig"; sourceTree = "<group>"; };
 		5B2754942EBD0DC6007BB1C0 /* Exertia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Exertia.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B2754AA2EBD0DC8007BB1C0 /* ExertiaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ExertiaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B2754B42EBD0DC8007BB1C0 /* ExertiaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ExertiaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C52BAE987678EE4433DCA941 /* Pods_Exertia.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Exertia.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F742E1088D91149DB72DBDF2 /* Pods-Exertia.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Exertia.debug.xcconfig"; path = "Target Support Files/Pods-Exertia/Pods-Exertia.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -72,6 +76,7 @@
 			files = (
 				061A3EB72F3F1CD600F26D74 /* Supabase in Frameworks */,
 				0625F18B2F3380B800D1B567 /* Lottie in Frameworks */,
+				867819FF40C6C6EBC212A3F0 /* Pods_Exertia.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -95,8 +100,18 @@
 		061A3EB52F3F1CBE00F26D74 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				C52BAE987678EE4433DCA941 /* Pods_Exertia.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		08010F468A10C22889C16B1D /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				F742E1088D91149DB72DBDF2 /* Pods-Exertia.debug.xcconfig */,
+				1542F094DC1D66E384249633 /* Pods-Exertia.release.xcconfig */,
+			);
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		5B27548B2EBD0DC6007BB1C0 = {
@@ -107,6 +122,7 @@
 				5B2754B72EBD0DC8007BB1C0 /* ExertiaUITests */,
 				061A3EB52F3F1CBE00F26D74 /* Frameworks */,
 				5B2754952EBD0DC6007BB1C0 /* Products */,
+				08010F468A10C22889C16B1D /* Pods */,
 			);
 			sourceTree = "<group>";
 		};
@@ -127,9 +143,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 5B2754BD2EBD0DC8007BB1C0 /* Build configuration list for PBXNativeTarget "Exertia" */;
 			buildPhases = (
+				69E9940036F9D380271A4A03 /* [CP] Check Pods Manifest.lock */,
 				5B2754902EBD0DC6007BB1C0 /* Sources */,
 				5B2754912EBD0DC6007BB1C0 /* Frameworks */,
 				5B2754922EBD0DC6007BB1C0 /* Resources */,
+				7D9B9A504052A4A0D8DC9C8E /* [CP] Embed Pods Frameworks */,
+				D468F2BD3BB5A2F61ADE205B /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -164,8 +183,6 @@
 				5B2754AD2EBD0DC8007BB1C0 /* ExertiaTests */,
 			);
 			name = ExertiaTests;
-			packageProductDependencies = (
-			);
 			productName = ExertiaTests;
 			productReference = 5B2754AA2EBD0DC8007BB1C0 /* ExertiaTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -187,8 +204,6 @@
 				5B2754B72EBD0DC8007BB1C0 /* ExertiaUITests */,
 			);
 			name = ExertiaUITests;
-			packageProductDependencies = (
-			);
 			productName = ExertiaUITests;
 			productReference = 5B2754B42EBD0DC8007BB1C0 /* ExertiaUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -265,6 +280,73 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		69E9940036F9D380271A4A03 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Exertia-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		7D9B9A504052A4A0D8DC9C8E /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Exertia/Pods-Exertia-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Exertia/Pods-Exertia-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Exertia/Pods-Exertia-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		D468F2BD3BB5A2F61ADE205B /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Exertia/Pods-Exertia-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Exertia/Pods-Exertia-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Exertia/Pods-Exertia-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		5B2754902EBD0DC6007BB1C0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -305,13 +387,15 @@
 /* Begin XCBuildConfiguration section */
 		5B2754BE2EBD0DC8007BB1C0 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F742E1088D91149DB72DBDF2 /* Pods-Exertia.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Exertia/Exertia.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = GBFBBK9G3K;
+				DEVELOPMENT_TEAM = 89MY228FTQ;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Exertia/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -324,7 +408,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.charSel;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.ExertiaFinal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -334,13 +418,15 @@
 		};
 		5B2754BF2EBD0DC8007BB1C0 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1542F094DC1D66E384249633 /* Pods-Exertia.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Exertia/Exertia.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = GBFBBK9G3K;
+				DEVELOPMENT_TEAM = 89MY228FTQ;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Exertia/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -353,7 +439,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.charSel;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.ExertiaFinal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
