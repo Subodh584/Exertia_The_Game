@@ -7,9 +7,16 @@ struct GameSession {
     let durationMinutes: Int
     let caloriesBurned: Int
     let trackName: String
+    let trackId: String
+    let characterId: String
     let totalJumps: Int
     let totalCrouches: Int
+    let totalLeftLeans: Int
+    let totalRightLeans: Int
+    let distanceCovered: Double     // meters
+    let averageSpeed: Double?       // m/min, nil if zero duration
     let characterImageName: String
+    let completionStatus: String    // "completed" or "abandoned"
 }
 
 struct PlayerStats {
@@ -58,9 +65,9 @@ class GameData {
     ]
 
     var gameHistory: [GameSession] = [
-        GameSession(date: Date().addingTimeInterval(-86400 * 2), durationMinutes: 10, caloriesBurned: 80, trackName: "Planet X", totalJumps: 45, totalCrouches: 12, characterImageName: "character1"),
-        GameSession(date: Date().addingTimeInterval(-86400), durationMinutes: 25, caloriesBurned: 200, trackName: "Planet Y", totalJumps: 120, totalCrouches: 40, characterImageName: "character4"),
-        GameSession(date: Date(), durationMinutes: 12, caloriesBurned: 96, trackName: "Warzone", totalJumps: 55, totalCrouches: 20, characterImageName: "character2")
+        GameSession(date: Date().addingTimeInterval(-86400 * 2), durationMinutes: 10, caloriesBurned: 80, trackName: "Planet X", trackId: "track_001", characterId: "p1", totalJumps: 45, totalCrouches: 12, totalLeftLeans: 0, totalRightLeans: 0, distanceCovered: 0, averageSpeed: nil, characterImageName: "character1", completionStatus: "completed"),
+        GameSession(date: Date().addingTimeInterval(-86400), durationMinutes: 25, caloriesBurned: 200, trackName: "Planet Y", trackId: "track_002", characterId: "p4", totalJumps: 120, totalCrouches: 40, totalLeftLeans: 0, totalRightLeans: 0, distanceCovered: 0, averageSpeed: nil, characterImageName: "character4", completionStatus: "completed"),
+        GameSession(date: Date(), durationMinutes: 12, caloriesBurned: 96, trackName: "Warzone", trackId: "track_003", characterId: "p2", totalJumps: 55, totalCrouches: 20, totalLeftLeans: 0, totalRightLeans: 0, distanceCovered: 0, averageSpeed: nil, characterImageName: "character2", completionStatus: "completed")
     ]
     
     var lastSession: GameSession? {
@@ -87,25 +94,56 @@ class GameData {
     }
     
     // MARK: - API Synced Session Handler
-    func addSession(duration: Int, calories: Int, track: String, jumps: Int, crouches: Int) {
+    func addSession(
+        duration: Int,
+        calories: Int,
+        track: String,
+        trackId: String,
+        characterId: String,
+        jumps: Int,
+        crouches: Int,
+        leftLeans: Int,
+        rightLeans: Int,
+        distanceCovered: Double,
+        averageSpeed: Double?,
+        completionStatus: String = "completed"
+    ) {
         let charImg = getSelectedPlayer().thumbnailImageName
-        let newSession = GameSession(date: Date(), durationMinutes: duration, caloriesBurned: calories, trackName: track, totalJumps: jumps, totalCrouches: crouches, characterImageName: charImg)
-        
+        let newSession = GameSession(
+            date: Date(),
+            durationMinutes: duration,
+            caloriesBurned: calories,
+            trackName: track,
+            trackId: trackId,
+            characterId: characterId,
+            totalJumps: jumps,
+            totalCrouches: crouches,
+            totalLeftLeans: leftLeans,
+            totalRightLeans: rightLeans,
+            distanceCovered: distanceCovered,
+            averageSpeed: averageSpeed,
+            characterImageName: charImg,
+            completionStatus: completionStatus
+        )
+
         gameHistory.append(newSession)
         stats.calories += calories
         stats.runTimeMinutes += duration
-        
+
         print("📊 Local stats updated! Attempting to sync with Django...")
-        
+        print("   Track: \(track) (\(trackId)) | Character: \(characterId)")
+        print("   Duration: \(duration)m | Calories: \(calories) | Distance: \(String(format: "%.1f", distanceCovered))m")
+        print("   Jumps: \(jumps) | Crouches: \(crouches) | Left: \(leftLeans) | Right: \(rightLeans)")
+
         Task {
             do {
                 guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else {
                     print("⚠️ No Django User ID found locally. Session saved locally only.")
                     return
                 }
-                
+
                 let apiSession = try await APIManager.shared.createSession(userId: userId)
-                
+
                 if let sessionId = apiSession.id {
                     let _ = try await APIManager.shared.completeSession(sessionId: sessionId, caloriesBurned: calories)
                     print("✅ Game Session successfully saved to Django Database!")
@@ -154,22 +192,36 @@ struct DjangoSession: Codable {
     let user: String?
     let username: String?
     let trackId: String?
+    let characterId: String?
     let durationMinutes: Int?
     let caloriesBurned: Int?
+    let distanceCovered: Double?
+    let averageSpeed: Double?
+    let totalJumps: Int?
+    let totalCrouches: Int?
+    let totalLeftLeans: Int?
+    let totalRightLeans: Int?
     let completionStatus: String?
     let createdAt: String?
-    
+
     // Legacy fields for backward compatibility
     let startTime: String?
     let endTime: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case user
         case username
         case trackId = "track_id"
+        case characterId = "character_id"
         case durationMinutes = "duration_minutes"
         case caloriesBurned = "calories_burned"
+        case distanceCovered = "distance_covered"
+        case averageSpeed = "average_speed"
+        case totalJumps = "total_jumps"
+        case totalCrouches = "total_crouches"
+        case totalLeftLeans = "total_left_leans"
+        case totalRightLeans = "total_right_leans"
         case completionStatus = "completion_status"
         case createdAt = "created_at"
         case startTime = "start_time"

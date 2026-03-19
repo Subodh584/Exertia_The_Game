@@ -46,6 +46,10 @@ class DifficultySettings {
     
     /// Whether to skip the demo/calibration and go directly to game
     private(set) var skipDemo: Bool = false
+
+    /// Selected track info, forwarded to ExertiaGameViewController for session recording
+    private(set) var selectedTrackId: String = "track_001"
+    private(set) var selectedTrackDisplayName: String = "Earth's Twin"
     
     // MARK: - Difficulty Values
     
@@ -107,6 +111,13 @@ class DifficultySettings {
     func setSkipDemo(_ skip: Bool) {
         skipDemo = skip
         print("🎮 Skip demo: \(skip)")
+    }
+
+    /// Set the selected track so ExertiaGameViewController can record it in the session
+    func setSelectedTrack(id: String, displayName: String) {
+        selectedTrackId = id
+        selectedTrackDisplayName = displayName
+        print("🎮 Track selected: \(displayName) (\(id))")
     }
 }
 

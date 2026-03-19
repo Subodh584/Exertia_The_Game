@@ -62,7 +62,18 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     var tier3DrainTime: Float = 6.0
     
     var speedBarFill: Float = 0.0
-    
+
+    // MARK: - Session Tracking
+    weak var gameDelegate: ExertiaGameDelegate?
+    private var sessionStartTime: Date = Date()
+    private var totalJumps: Int = 0
+    private var totalCrouches: Int = 0
+    private var totalLeftLeans: Int = 0
+    private var totalRightLeans: Int = 0
+    private var totalDistanceCovered: Float = 0.0
+    private let sceneKitUnitsToMeters: Float = 0.1
+    private var endGameButton: UIButton?
+
     // Smooth movement interpolation
     private var currentSpeed: Float = 0.0  // Actual interpolated speed
     private var targetSpeed: Float = 0.0   // Target speed from speed bar
@@ -508,7 +519,8 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                 DispatchQueue.main.async {
                     self.setupSpeedBar()
                     self.setupHitFlashOverlay()
-                    
+                    self.setupEndGameButton()
+
                     // Step 10: Start game & dismiss loading
                     self.startGame()
                     self.dismissLoadingScreen()
@@ -1168,12 +1180,14 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
     func movePlayerLeft() {
         guard currentLane > 0 else { return }
+        totalLeftLeans += 1
         currentLane -= 1
         animatePlayerToLane()
     }
-    
+
     func movePlayerRight() {
         guard currentLane < 2 else { return }
+        totalRightLeans += 1
         currentLane += 1
         animatePlayerToLane()
     }
@@ -1227,6 +1241,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
     func playerJump() {
         guard !isJumping else { return }
+        totalJumps += 1
         isJumping = true
         isJumpingUp = true
         isLanding = false
@@ -1304,6 +1319,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
     func playerDive() {
         guard !isDiving && !isJumping else { return }
+        totalCrouches += 1
         isDiving = true
         
         originalScaleY = playerNode.scale.y
@@ -1680,10 +1696,87 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     }
     
     // MARK: - Game Loop
+    // MARK: - End Game Button & Session Finalization
+
+    private func setupEndGameButton() {
+        let button = UIButton(type: .system)
+        button.setTitle("  END  ", for: .normal)
+        button.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .bold)
+        button.setTitleColor(UIColor(red: 1.0, green: 0.15, blue: 0.25, alpha: 1.0), for: .normal)
+        button.backgroundColor = UIColor(red: 0.12, green: 0.02, blue: 0.04, alpha: 0.9)
+        button.layer.cornerRadius = 10
+        button.layer.borderWidth = 1.0
+        button.layer.borderColor = UIColor(red: 1.0, green: 0.15, blue: 0.25, alpha: 0.5).cgColor
+        button.layer.shadowColor = UIColor(red: 1.0, green: 0.15, blue: 0.25, alpha: 1.0).cgColor
+        button.layer.shadowRadius = 6
+        button.layer.shadowOpacity = 0.4
+        button.layer.shadowOffset = .zero
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.addTarget(self, action: #selector(endGameButtonTapped), for: .touchUpInside)
+        view.addSubview(button)
+        endGameButton = button
+
+        NSLayoutConstraint.activate([
+            button.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            button.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            button.heightAnchor.constraint(equalToConstant: 32)
+        ])
+    }
+
+    @objc private func endGameButtonTapped() {
+        guard isGameRunning else { return }
+        finalizeAndSaveSession(completionStatus: "completed")
+    }
+
+    private func finalizeAndSaveSession(completionStatus: String) {
+        isGameRunning = false
+        sceneView.isPlaying = false
+
+        let durationSeconds = Int(Date().timeIntervalSince(sessionStartTime))
+        let durationMinutes = max(1, durationSeconds / 60)
+        // Calorie formula: 80 kcal per 600 seconds (from TrackModel.TimeAndCalories)
+        let caloriesBurned = Int(Double(durationSeconds) * (80.0 / 600.0))
+        let distanceMeters = Double(totalDistanceCovered)
+        let avgSpeed: Double? = durationMinutes > 0 ? distanceMeters / Double(durationMinutes) : nil
+
+        let trackId = DifficultySettings.shared.selectedTrackId
+        let trackDisplayName = DifficultySettings.shared.selectedTrackDisplayName
+        let character = GameData.shared.getSelectedPlayer()
+
+        GameData.shared.addSession(
+            duration: durationMinutes,
+            calories: caloriesBurned,
+            track: trackDisplayName,
+            trackId: trackId,
+            characterId: character.id,
+            jumps: totalJumps,
+            crouches: totalCrouches,
+            leftLeans: totalLeftLeans,
+            rightLeans: totalRightLeans,
+            distanceCovered: distanceMeters,
+            averageSpeed: avgSpeed,
+            completionStatus: completionStatus
+        )
+
+        gameDelegate?.gameDidEnd()
+
+        DispatchQueue.main.async { [weak self] in
+            self?.dismiss(animated: true)
+        }
+    }
+
     func startGame() {
         isGameRunning = true
         sceneView.delegate = self
         sceneView.isPlaying = true
+
+        // Session tracking initialization
+        sessionStartTime = Date()
+        totalJumps = 0
+        totalCrouches = 0
+        totalLeftLeans = 0
+        totalRightLeans = 0
+        totalDistanceCovered = 0.0
     }
     
     private var gameTime: TimeInterval = 0
@@ -1708,7 +1801,12 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         }
         
         playerZPosition += movement
-        
+
+        // Accumulate session distance (movement is negative when moving forward)
+        if movement < 0 {
+            totalDistanceCovered += abs(movement) * sceneKitUnitsToMeters
+        }
+
         // Handle Y position - either jumping or following ground
         if isJumping {
             // Physics-based jump update

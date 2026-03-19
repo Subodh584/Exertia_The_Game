@@ -20,6 +20,10 @@ import MLImage
 import MLKit
 import SwiftUI
 
+protocol ExertiaGameDelegate: AnyObject {
+    func gameDidEnd()
+}
+
 @objc(CameraViewController)
 class CameraViewController: UIViewController {
   
@@ -623,7 +627,8 @@ class CameraViewController: UIViewController {
     // Create and present the SceneKit game view controller
     let exertiaVC = ExertiaGameViewController()
     self.exertiaGameVC = exertiaVC
-    
+    exertiaVC.gameDelegate = self
+
     // Connect ML detectors directly to the SceneKit game
     connectDetectorsToExertiaGame(exertiaVC)
     
@@ -1022,6 +1027,19 @@ extension CameraViewController: AVCaptureVideoDataOutputSampleBufferDelegate {
 public enum Detector: String {
   case pose = "Pose Detection"
   case poseAccurate = "Pose Detection, accurate"
+}
+
+// MARK: - ExertiaGameDelegate
+
+extension CameraViewController: ExertiaGameDelegate {
+    func gameDidEnd() {
+        // Reset UI so user can replay or navigate away cleanly
+        playButton.isHidden = false
+        previewOverlayView.isHidden = false
+        annotationOverlayView.isHidden = false
+        currentStage = .completed
+        updateUIForCurrentStage()
+    }
 }
 
 private enum Constant {
