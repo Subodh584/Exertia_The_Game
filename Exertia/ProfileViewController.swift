@@ -68,12 +68,12 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
                         
                         // 4. Update badges with real stats
                         let totalCal = stats.totalCalories
-                        let totalMins = stats.totalMinutes
+                        let totalDist = stats.totalDistance
                         let totalSessions = stats.totalSessions
-                        
+
                         self.inProgressBadges = [
                             Badge(title: "Reactor Core", description: "Burn 500 active calories.", iconName: "badge1", progress: min(Float(totalCal) / 500.0, 1.0), progressText: "\(min(totalCal, 500))/500", isLocked: totalCal < 500),
-                            Badge(title: "Nebula Walker", description: "Run for 100 minutes total.", iconName: "badge1", progress: min(Float(totalMins) / 100.0, 1.0), progressText: "\(min(totalMins, 100))/100", isLocked: totalMins < 100),
+                            Badge(title: "Nebula Walker", description: "Cover 50 km total distance.", iconName: "badge1", progress: min(Float(totalDist) / 50.0, 1.0), progressText: String(format: "%.1f/50", min(totalDist, 50.0)), isLocked: totalDist < 50.0),
                             Badge(title: "Titanium Lungs", description: "Complete 10 sessions.", iconName: "badge1", progress: min(Float(totalSessions) / 10.0, 1.0), progressText: "\(min(totalSessions, 10))/10", isLocked: totalSessions < 10)
                         ]
                         
@@ -83,6 +83,9 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
                         }
                         if totalSessions >= 1 {
                             self.completedBadges.append(Badge(title: "First Run", description: "Complete your first session.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false))
+                        }
+                        if totalDist >= 50.0 {
+                            self.completedBadges.append(Badge(title: "Nebula Walker", description: "Cover 50 km total distance.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false))
                         }
                         if stats.friendCount >= 1 {
                             self.completedBadges.append(Badge(title: "Social Voyager", description: "Add a friend.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false))
@@ -110,17 +113,9 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
 
     func setupData() {
-        inProgressBadges = [
-            Badge(title: "Reactor Core", description: "Burn 500 active calories.", iconName: "badge1", progress: 0.62, progressText: "312/500", isLocked: true),
-            Badge(title: "Nebula Walker", description: "Walk 10 km in total.", iconName: "badge1", progress: 0.7, progressText: "7/10", isLocked: true),
-            Badge(title: "Titanium Lungs", description: "Run for 30 minutes nonstop.", iconName: "badge1", progress: 0.5, progressText: "15/30", isLocked: true)
-        ]
-
-        completedBadges = [
-            Badge(title: "First Run", description: "Complete your first 1-kilometer run.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false),
-            Badge(title: "Social Voyager", description: "Invite a friend.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false),
-            Badge(title: "Comet Leap", description: "Jump 100 times in a single run.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false)
-        ]
+        // Start empty — real data populated by fetchRealProfileData()
+        inProgressBadges = []
+        completedBadges = []
     }
 
     func setupUI() {
@@ -206,11 +201,11 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         editLabel.font = .systemFont(ofSize: 12, weight: .medium)
         editLabel.textColor = .lightGray
         editLabel.translatesAutoresizingMaskIntoConstraints = false
-        nameLabel.text = "satakshi_space"
+        nameLabel.text = ""
         nameLabel.font = .systemFont(ofSize: 22, weight: .bold)
         nameLabel.textColor = .white
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
-        emailLabel.text = "satakshisrivastava11@gmail.com"
+        emailLabel.text = ""
         emailLabel.font = .systemFont(ofSize: 12)
         emailLabel.textColor = .gray
         emailLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -218,7 +213,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         idPillView.layer.borderWidth = 1
         idPillView.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
         idPillView.translatesAutoresizingMaskIntoConstraints = false
-        idLabel.text = "ID : 123456"
+        idLabel.text = "ID: ..."
         idLabel.font = .systemFont(ofSize: 12, weight: .bold)
         idLabel.textColor = .white
         idLabel.translatesAutoresizingMaskIntoConstraints = false

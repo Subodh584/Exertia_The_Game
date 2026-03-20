@@ -51,35 +51,27 @@ class HomeViewController: UIViewController {
     
     func fetchHomeData() {
         guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
-        
+
         Task {
             do {
-                // Fetch real stats from Django
                 let stats = try await APIManager.shared.getUserStats(userId: userId)
-                let sessions = try await APIManager.shared.getUserSessions(userId: userId)
-                
-                // Update local GameData with real values
+                let user = try await APIManager.shared.getUser(userId: userId)
+
+                // Update local GameData cache
                 self.gameData.stats.calories = stats.totalCalories
                 self.gameData.stats.runTimeMinutes = stats.totalMinutes
-                
-                // Find the last session and personal best
-                let completedSessions = sessions.filter { $0.completionStatus == "completed" }
-                
+                self.gameData.stats.currentStreak = user.currentStreak ?? 0
+
                 DispatchQueue.main.async {
-                    // Update currency / calories
                     self.currencyLabel.text = "\(stats.totalCalories)"
                     self.caloriesLabel.text = "\(stats.totalCalories) cal"
-                    self.timeLabel.text = "\(stats.totalMinutes) mins"
-                    self.streakLabel.text = "\(stats.completedSessions)"
-                    
-                    // Distance estimate (~0.1 km per minute of running)
-                    let estimatedKm = Double(stats.totalMinutes) * 0.1
-                    self.distanceLabel.text = String(format: "%.1f km", estimatedKm)
-                    
+                    self.timeLabel.text = String(format: "%.1f km", stats.totalDistance)
+                    self.streakLabel.text = "\(user.currentStreak ?? 0)"
+                    self.distanceLabel.text = String(format: "%.1f km", stats.totalDistance)
                     print("✅ Home UI hydrated with real API data!")
                 }
             } catch {
-                print("❌ Failed to fetch home data: \(error). Using local data.")
+                print("❌ Failed to fetch home data: \(error)")
             }
         }
     }
@@ -261,14 +253,12 @@ class HomeViewController: UIViewController {
 
     func updateUI() {
         let selectedPlayer = gameData.getSelectedPlayer()
-        let stats = gameData.stats
         characterImageView.image = UIImage(named: selectedPlayer.fullBodyImageName)
-        // These are defaults that get overwritten by fetchHomeData() once API responds
-        currencyLabel.text = "\(stats.calories)"
-        streakLabel.text = "\(stats.currentStreak)"
+        currencyLabel.text = "--"
+        streakLabel.text = "--"
         distanceLabel.text = "--"
-        caloriesLabel.text = "\(stats.calories) cal"
-        timeLabel.text = "\(stats.runTimeMinutes) mins"
+        caloriesLabel.text = "-- cal"
+        timeLabel.text = "-- km"
     }
     
     @IBAction func playButtonTapped(_ sender: UIButton) {

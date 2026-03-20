@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import Security
 
 // MARK: - Game Data Models
 struct GameSession {
@@ -38,7 +39,7 @@ struct Player {
     let videoOffsetY: CGFloat
     var isSelected: Bool
     var isLocked: Bool
-    
+
     var statsImageName: String {
         switch videoName {
         case "c1_animated": return "Todays_stats_pink"
@@ -52,8 +53,8 @@ struct Player {
 class GameData {
     static let shared = GameData()
     private init() {}
-    
-    var stats = PlayerStats(calories: 180, runTimeMinutes: 23, currentStreak: 4)
+
+    var stats = PlayerStats(calories: 0, runTimeMinutes: 0, currentStreak: 0)
 
     var players: [Player] = [
         Player(id: "p1", name: "Glitch", description: "System error: Too cute.", fullBodyImageName: "character1", thumbnailImageName: "character1", backgroundImageName: "CharacterBg1", videoName: "c1_animated", videoScale: 1.05, videoOffsetX: -170, videoOffsetY: -30, isSelected: true, isLocked: false),
@@ -64,20 +65,16 @@ class GameData {
         Player(id: "p6", name: "Nova", description: "Starlight trapped in glass.", fullBodyImageName: "character6", thumbnailImageName: "character6", backgroundImageName: "CharacterBg6", videoName: "c2_animated", videoScale: 1.05, videoOffsetX: -170, videoOffsetY: -30, isSelected: false, isLocked: false)
     ]
 
-    var gameHistory: [GameSession] = [
-        GameSession(date: Date().addingTimeInterval(-86400 * 2), durationMinutes: 10, caloriesBurned: 80, trackName: "Planet X", trackId: "track_001", characterId: "p1", totalJumps: 45, totalCrouches: 12, totalLeftLeans: 0, totalRightLeans: 0, distanceCovered: 0, averageSpeed: nil, characterImageName: "character1", completionStatus: "completed"),
-        GameSession(date: Date().addingTimeInterval(-86400), durationMinutes: 25, caloriesBurned: 200, trackName: "Planet Y", trackId: "track_002", characterId: "p4", totalJumps: 120, totalCrouches: 40, totalLeftLeans: 0, totalRightLeans: 0, distanceCovered: 0, averageSpeed: nil, characterImageName: "character4", completionStatus: "completed"),
-        GameSession(date: Date(), durationMinutes: 12, caloriesBurned: 96, trackName: "Warzone", trackId: "track_003", characterId: "p2", totalJumps: 55, totalCrouches: 20, totalLeftLeans: 0, totalRightLeans: 0, distanceCovered: 0, averageSpeed: nil, characterImageName: "character2", completionStatus: "completed")
-    ]
-    
+    var gameHistory: [GameSession] = []
+
     var lastSession: GameSession? {
         return gameHistory.sorted(by: { $0.date < $1.date }).last
     }
-    
+
     var personalBest: GameSession? {
         return gameHistory.max(by: { $0.caloriesBurned < $1.caloriesBurned })
     }
-    
+
     func getSelectedPlayer() -> Player {
         return players.first(where: { $0.isSelected }) ?? players[0]
     }
@@ -85,14 +82,14 @@ class GameData {
     func getSelectedIndex() -> Int {
         return players.firstIndex(where: { $0.isSelected }) ?? 0
     }
-    
+
     func selectPlayer(at index: Int) -> Bool {
         guard index >= 0 && index < players.count else { return false }
         if players[index].isLocked { return false }
         for i in 0..<players.count { players[i].isSelected = (i == index) }
         return true
     }
-    
+
     // MARK: - API Synced Session Handler
     func addSession(
         duration: Int,
@@ -135,6 +132,8 @@ class GameData {
         print("   Duration: \(duration)m | Calories: \(calories) | Distance: \(String(format: "%.1f", distanceCovered))m")
         print("   Jumps: \(jumps) | Crouches: \(crouches) | Left: \(leftLeans) | Right: \(rightLeans)")
 
+        let distanceKm = distanceCovered / 1000.0
+
         Task {
             do {
                 guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else {
@@ -142,10 +141,24 @@ class GameData {
                     return
                 }
 
-                let apiSession = try await APIManager.shared.createSession(userId: userId)
+                // 1. Create the session with track + character
+                let apiSession = try await APIManager.shared.createSession(
+                    userId: userId, trackId: trackId, characterId: characterId
+                )
 
                 if let sessionId = apiSession.id {
-                    let _ = try await APIManager.shared.completeSession(sessionId: sessionId, caloriesBurned: calories)
+                    // 2. PATCH session with full stats
+                    let _ = try await APIManager.shared.updateSession(
+                        sessionId: sessionId,
+                        distanceCovered: distanceKm,
+                        caloriesBurned: calories,
+                        durationMinutes: duration,
+                        averageSpeed: averageSpeed.map { $0 * 0.06 }, // m/min → km/h
+                        totalJumps: jumps,
+                        totalCrouches: crouches
+                    )
+                    // 3. Complete the session (triggers streak + badge logic)
+                    let _ = try await APIManager.shared.completeSession(sessionId: sessionId)
                     print("✅ Game Session successfully saved to Django Database!")
                 }
             } catch {
@@ -167,6 +180,7 @@ enum LoginError: Error {
     case invalidCredentials  // 401 from server
     case userNotFound        // username doesn't exist
     case networkError        // connectivity / server down
+    case sessionExpired      // refresh token also expired
 }
 
 // MARK: - Login Response (JWT)
@@ -174,6 +188,12 @@ struct LoginResponse: Codable {
     let access: String
     let refresh: String
     let user: DjangoUser
+}
+
+// MARK: - Token Refresh Response
+struct TokenRefreshResponse: Codable {
+    let access: String
+    let refresh: String
 }
 
 struct PaginatedUserResponse: Codable {
@@ -220,27 +240,98 @@ class TokenManager {
     static let shared = TokenManager()
     private init() {}
 
-    private let accessKey = "jwt_access_token"
-    private let refreshKey = "jwt_refresh_token"
+    private let service = "com.exertia.jwt"
+    private let accessAccount = "access_token"
+    private let refreshAccount = "refresh_token"
+
+    /// Migrate tokens from UserDefaults to Keychain (one-time, for existing users)
+    func migrateFromUserDefaultsIfNeeded() {
+        let udAccessKey = "jwt_access_token"
+        let udRefreshKey = "jwt_refresh_token"
+        if let access = UserDefaults.standard.string(forKey: udAccessKey),
+           let refresh = UserDefaults.standard.string(forKey: udRefreshKey),
+           readKeychain(account: accessAccount) == nil {
+            save(access: access, refresh: refresh)
+            UserDefaults.standard.removeObject(forKey: udAccessKey)
+            UserDefaults.standard.removeObject(forKey: udRefreshKey)
+            print("🔐 Migrated tokens from UserDefaults to Keychain")
+        }
+    }
 
     var accessToken: String? {
-        get { UserDefaults.standard.string(forKey: accessKey) }
-        set { UserDefaults.standard.set(newValue, forKey: accessKey) }
+        get { readKeychain(account: accessAccount) }
+        set {
+            if let value = newValue { writeKeychain(account: accessAccount, value: value) }
+            else { deleteKeychain(account: accessAccount) }
+        }
     }
 
     var refreshToken: String? {
-        get { UserDefaults.standard.string(forKey: refreshKey) }
-        set { UserDefaults.standard.set(newValue, forKey: refreshKey) }
+        get { readKeychain(account: refreshAccount) }
+        set {
+            if let value = newValue { writeKeychain(account: refreshAccount, value: value) }
+            else { deleteKeychain(account: refreshAccount) }
+        }
     }
 
     func save(access: String, refresh: String) {
         accessToken = access
         refreshToken = refresh
+        print("🔐 Tokens saved to Keychain")
     }
 
     func clear() {
-        UserDefaults.standard.removeObject(forKey: accessKey)
-        UserDefaults.standard.removeObject(forKey: refreshKey)
+        deleteKeychain(account: accessAccount)
+        deleteKeychain(account: refreshAccount)
+        print("🔐 Tokens cleared from Keychain")
+    }
+
+    var hasTokens: Bool {
+        return refreshToken != nil
+    }
+
+    // MARK: - Keychain Helpers
+    private func writeKeychain(account: String, value: String) {
+        let data = Data(value.utf8)
+        // Delete existing item first
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        SecItemAdd(addQuery as CFDictionary, nil)
+    }
+
+    private func readKeychain(account: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func deleteKeychain(account: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 }
 
@@ -256,14 +347,8 @@ struct DjangoSession: Codable {
     let averageSpeed: Double?
     let totalJumps: Int?
     let totalCrouches: Int?
-    let totalLeftLeans: Int?
-    let totalRightLeans: Int?
     let completionStatus: String?
     let createdAt: String?
-
-    // Legacy fields for backward compatibility
-    let startTime: String?
-    let endTime: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -277,12 +362,8 @@ struct DjangoSession: Codable {
         case averageSpeed = "average_speed"
         case totalJumps = "total_jumps"
         case totalCrouches = "total_crouches"
-        case totalLeftLeans = "total_left_leans"
-        case totalRightLeans = "total_right_leans"
         case completionStatus = "completion_status"
         case createdAt = "created_at"
-        case startTime = "start_time"
-        case endTime = "end_time"
     }
 }
 
@@ -290,14 +371,20 @@ struct DjangoUserStats: Codable {
     let totalSessions: Int
     let totalMinutes: Int
     let totalCalories: Int
+    let totalDistance: Double
     let completedSessions: Int
+    let personalBestDistance: Double
+    let personalBestCalories: Int
     let friendCount: Int
-    
+
     enum CodingKeys: String, CodingKey {
         case totalSessions = "total_sessions"
         case totalMinutes = "total_minutes"
         case totalCalories = "total_calories"
+        case totalDistance = "total_distance"
         case completedSessions = "completed_sessions"
+        case personalBestDistance = "personal_best_distance"
+        case personalBestCalories = "personal_best_calories"
         case friendCount = "friend_count"
     }
 }
@@ -310,7 +397,7 @@ struct DjangoFriendship: Codable {
     let receiverUsername: String
     let status: String
     let createdAt: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case requester
@@ -332,25 +419,31 @@ struct PaginatedFriendshipResponse: Codable {
 class APIManager {
     static let shared = APIManager()
     private let baseURL = "https://exertia-backend.onrender.com/api"
-    
+    private var isRefreshing = false
+
     private init() {}
-    
+
+    // MARK: - Core request with automatic token refresh on 401
     private func makeRequest<T: Codable>(endpoint: String, method: String, body: Data? = nil, requiresAuth: Bool = true, responseType: T.Type) async throws -> T {
-        guard let url = URL(string: "\(baseURL)\(endpoint)") else { throw URLError(.badURL) }
+        let (data, httpResponse) = try await executeRequest(endpoint: endpoint, method: method, body: body, requiresAuth: requiresAuth)
 
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        if requiresAuth, let token = TokenManager.shared.accessToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // If 401 and we have a refresh token, try refreshing
+        if httpResponse.statusCode == 401 && requiresAuth {
+            let refreshed = await attemptTokenRefresh()
+            if refreshed {
+                // Retry the original request with new token
+                let (retryData, retryResponse) = try await executeRequest(endpoint: endpoint, method: method, body: body, requiresAuth: true)
+                if !(200...299).contains(retryResponse.statusCode) {
+                    let errorString = String(data: retryData, encoding: .utf8) ?? "Unknown Error"
+                    print("❌ API Error [\(retryResponse.statusCode)] after refresh: \(errorString)")
+                    throw URLError(.badServerResponse)
+                }
+                return try JSONDecoder().decode(T.self, from: retryData)
+            } else {
+                // Refresh failed — session expired. Don't redirect here; let callers handle it.
+                throw LoginError.sessionExpired
+            }
         }
-
-        if let body = body { request.httpBody = body }
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
 
         if !(200...299).contains(httpResponse.statusCode) {
             let errorString = String(data: data, encoding: .utf8) ?? "Unknown Error"
@@ -361,22 +454,8 @@ class APIManager {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    func createUser(username: String, displayName: String,
-                    email: String = "", password: String = "") async throws -> DjangoUser {
-        var payload: [String: Any] = [
-            "username": username,
-            "display_name": displayName,
-            "daily_target_distance": 5.0,
-            "daily_target_calories": 300
-        ]
-        if !email.isEmpty    { payload["email"]    = email }
-        if !password.isEmpty { payload["password"] = password }
-        let body = try JSONSerialization.data(withJSONObject: payload)
-        return try await makeRequest(endpoint: "/users/", method: "POST", body: body, requiresAuth: false, responseType: DjangoUser.self)
-    }
-    
-    // MARK: - Raw request that returns (Data, HTTPURLResponse) for custom status handling
-    private func makeRequestRaw(endpoint: String, method: String, body: Data? = nil, requiresAuth: Bool = false) async throws -> (Data, HTTPURLResponse) {
+    // MARK: - Raw HTTP executor (no status check)
+    private func executeRequest(endpoint: String, method: String, body: Data? = nil, requiresAuth: Bool = true) async throws -> (Data, HTTPURLResponse) {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else { throw URLError(.badURL) }
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -391,13 +470,79 @@ class APIManager {
         return (data, httpResponse)
     }
 
+    // MARK: - Token Refresh
+    func attemptTokenRefresh() async -> Bool {
+        guard !isRefreshing else { return false }
+        guard let refreshToken = TokenManager.shared.refreshToken else { return false }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        do {
+            let payload = ["refresh": refreshToken]
+            let body = try JSONSerialization.data(withJSONObject: payload)
+            let (data, httpResponse) = try await executeRequest(
+                endpoint: "/auth/refresh/", method: "POST", body: body, requiresAuth: false
+            )
+
+            if (200...299).contains(httpResponse.statusCode) {
+                let tokenResp = try JSONDecoder().decode(TokenRefreshResponse.self, from: data)
+                TokenManager.shared.save(access: tokenResp.access, refresh: tokenResp.refresh)
+                print("🔄 JWT tokens refreshed successfully")
+                return true
+            } else {
+                print("❌ Token refresh failed with status \(httpResponse.statusCode)")
+                return false
+            }
+        } catch {
+            print("❌ Token refresh error: \(error)")
+            return false
+        }
+    }
+
+    // MARK: - Session Expired Handler — forces redirect to login from any screen
+    func handleSessionExpired() {
+        TokenManager.shared.clear()
+        UserDefaults.standard.removeObject(forKey: "djangoUserID")
+
+        DispatchQueue.main.async {
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = scene.windows.first else { return }
+            let sb = UIStoryboard(name: "Main", bundle: nil)
+            if let loginVC = sb.instantiateViewController(withIdentifier: "LoginViewController") as? LoginViewController {
+                loginVC.modalPresentationStyle = .fullScreen
+                window.rootViewController = loginVC
+                window.makeKeyAndVisible()
+            }
+        }
+    }
+
+    // MARK: - Auth Check (GET /auth/me/) — validates access token
+    func getMe() async throws -> DjangoUser {
+        return try await makeRequest(endpoint: "/auth/me/", method: "GET", responseType: DjangoUser.self)
+    }
+
+    // MARK: - Create User (registration — no auth required)
+    func createUser(username: String, displayName: String,
+                    email: String = "", password: String = "") async throws -> DjangoUser {
+        var payload: [String: Any] = [
+            "username": username,
+            "display_name": displayName,
+            "daily_target_distance": 5.0,
+            "daily_target_calories": 300
+        ]
+        if !email.isEmpty    { payload["email"]    = email }
+        if !password.isEmpty { payload["password"] = password }
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        return try await makeRequest(endpoint: "/users/", method: "POST", body: body, requiresAuth: false, responseType: DjangoUser.self)
+    }
+
     // MARK: - Login with Username + Password → JWT (uses /api/auth/login/)
     func loginWithCredentials(username: String, password: String) async throws -> DjangoUser {
         let payload: [String: Any] = ["username": username, "password": password]
         let body = try JSONSerialization.data(withJSONObject: payload)
 
         do {
-            let (data, httpResponse) = try await makeRequestRaw(endpoint: "/auth/login/", method: "POST", body: body)
+            let (data, httpResponse) = try await executeRequest(endpoint: "/auth/login/", method: "POST", body: body, requiresAuth: false)
 
             switch httpResponse.statusCode {
             case 200...299:
@@ -421,86 +566,92 @@ class APIManager {
         }
     }
 
-    func loginUser(username: String) async throws -> DjangoUser? {
-            // 1. Fetch the list of users from Django
-            let response = try await makeRequest(endpoint: "/users/", method: "GET", requiresAuth: true, responseType: PaginatedUserResponse.self)
-
-            // 2. Search the list for the matching username (case-insensitive to be safe)
-            if let user = response.results.first(where: { $0.username.lowercased() == username.lowercased() }) {
-                return user
-            }
-
-            return nil // Return nil if the user doesn't exist
-        }
-    
+    // MARK: - Get User Profile
     func getUser(userId: String) async throws -> DjangoUser {
-            return try await makeRequest(endpoint: "/users/\(userId)/", method: "GET", responseType: DjangoUser.self)
-        }
-    
+        return try await makeRequest(endpoint: "/users/\(userId)/", method: "GET", responseType: DjangoUser.self)
+    }
+
+    // MARK: - Set User Online/Offline
     func setUserOnline(userId: String) async throws {
         let _ = try await makeRequest(endpoint: "/users/\(userId)/go-online/", method: "POST", responseType: [String: String].self)
         print("✅ User \(userId) is ONLINE in Django")
     }
-    
-    func createSession(userId: String) async throws -> DjangoSession {
-        let payload = ["user": userId]
-        let body = try JSONSerialization.data(withJSONObject: payload)
-        return try await makeRequest(endpoint: "/sessions/", method: "POST", body: body, responseType: DjangoSession.self)
-    }
-    
-    func completeSession(sessionId: String, caloriesBurned: Int) async throws -> DjangoSession {
-        let payload = ["calories_burned": caloriesBurned]
-        let body = try JSONSerialization.data(withJSONObject: payload)
-        return try await makeRequest(endpoint: "/sessions/\(sessionId)/complete/", method: "POST", body: body, responseType: DjangoSession.self)
-    }
-    
-    // MARK: - User Stats
-    func getUserStats(userId: String) async throws -> DjangoUserStats {
-        return try await makeRequest(endpoint: "/users/\(userId)/stats/", method: "GET", responseType: DjangoUserStats.self)
-    }
-    
-    // MARK: - User Sessions
-    func getUserSessions(userId: String) async throws -> [DjangoSession] {
-        return try await makeRequest(endpoint: "/users/\(userId)/sessions/", method: "GET", responseType: [DjangoSession].self)
-    }
-    
-    // MARK: - User Friends (accepted only)
-    func getUserFriends(userId: String) async throws -> [DjangoFriendship] {
-        return try await makeRequest(endpoint: "/users/\(userId)/friends/", method: "GET", responseType: [DjangoFriendship].self)
-    }
-    
-    // MARK: - Set User Offline
+
     func setUserOffline(userId: String) async throws {
         let _ = try await makeRequest(endpoint: "/users/\(userId)/go-offline/", method: "POST", responseType: [String: String].self)
         print("✅ User \(userId) is OFFLINE in Django")
     }
-    
+
+    // MARK: - Session Management
+    func createSession(userId: String, trackId: String = "track_001", characterId: String = "p1") async throws -> DjangoSession {
+        let payload: [String: Any] = [
+            "user": userId,
+            "track_id": trackId,
+            "character_id": characterId
+        ]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        return try await makeRequest(endpoint: "/sessions/", method: "POST", body: body, responseType: DjangoSession.self)
+    }
+
+    func updateSession(sessionId: String, distanceCovered: Double, caloriesBurned: Int,
+                       durationMinutes: Int, averageSpeed: Double?, totalJumps: Int,
+                       totalCrouches: Int) async throws -> DjangoSession {
+        var payload: [String: Any] = [
+            "distance_covered": distanceCovered,
+            "calories_burned": caloriesBurned,
+            "duration_minutes": durationMinutes,
+            "total_jumps": totalJumps,
+            "total_crouches": totalCrouches
+        ]
+        if let speed = averageSpeed { payload["average_speed"] = speed }
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        return try await makeRequest(endpoint: "/sessions/\(sessionId)/", method: "PATCH", body: body, responseType: DjangoSession.self)
+    }
+
+    func completeSession(sessionId: String) async throws -> DjangoSession {
+        return try await makeRequest(endpoint: "/sessions/\(sessionId)/complete/", method: "POST", responseType: DjangoSession.self)
+    }
+
+    func abandonSession(sessionId: String) async throws -> DjangoSession {
+        return try await makeRequest(endpoint: "/sessions/\(sessionId)/abandon/", method: "POST", responseType: DjangoSession.self)
+    }
+
+    // MARK: - User Stats
+    func getUserStats(userId: String) async throws -> DjangoUserStats {
+        return try await makeRequest(endpoint: "/users/\(userId)/stats/", method: "GET", responseType: DjangoUserStats.self)
+    }
+
+    // MARK: - User Sessions
+    func getUserSessions(userId: String) async throws -> [DjangoSession] {
+        return try await makeRequest(endpoint: "/users/\(userId)/sessions/", method: "GET", responseType: [DjangoSession].self)
+    }
+
+    // MARK: - User Friends (accepted only)
+    func getUserFriends(userId: String) async throws -> [DjangoFriendship] {
+        return try await makeRequest(endpoint: "/users/\(userId)/friends/", method: "GET", responseType: [DjangoFriendship].self)
+    }
+
     // MARK: - Update User
     func updateUser(userId: String, payload: [String: Any]) async throws -> DjangoUser {
         let body = try JSONSerialization.data(withJSONObject: payload)
         return try await makeRequest(endpoint: "/users/\(userId)/", method: "PATCH", body: body, responseType: DjangoUser.self)
     }
-    
+
     // MARK: - Friend Requests
     func sendFriendRequest(requesterId: String, receiverId: String) async throws -> DjangoFriendship {
         let payload = ["requester": requesterId, "receiver": receiverId]
         let body = try JSONSerialization.data(withJSONObject: payload)
         return try await makeRequest(endpoint: "/friendships/", method: "POST", body: body, responseType: DjangoFriendship.self)
     }
-    
+
     func acceptFriendship(friendshipId: String) async throws -> DjangoFriendship {
         return try await makeRequest(endpoint: "/friendships/\(friendshipId)/accept/", method: "POST", responseType: DjangoFriendship.self)
     }
-    
+
     func declineFriendship(friendshipId: String) async throws -> DjangoFriendship {
         return try await makeRequest(endpoint: "/friendships/\(friendshipId)/decline/", method: "POST", responseType: DjangoFriendship.self)
     }
-    
-    // MARK: - Abandon Session
-    func abandonSession(sessionId: String) async throws -> DjangoSession {
-        return try await makeRequest(endpoint: "/sessions/\(sessionId)/abandon/", method: "POST", responseType: DjangoSession.self)
-    }
-    
+
     // MARK: - Lookup user by username from all users
     func findUserByUsername(_ username: String) async throws -> DjangoUser? {
         let response = try await makeRequest(endpoint: "/users/", method: "GET", responseType: PaginatedUserResponse.self)

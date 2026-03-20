@@ -53,6 +53,13 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var showCalories = true
     private var calBtn: UIButton!
     private var timeBtn: UIButton!
+
+    // Dynamic weight labels
+    private let weightStartLabel = UILabel()
+    private let weightEndLabel = UILabel()
+
+    // Streak label reference
+    private var streakCountLabel: UILabel?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -75,14 +82,20 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     
     // MARK: - Cached API data for display
     private var apiTotalCalories: Int = 0
+    private var apiTotalDistance: Double = 0
     private var apiTotalMinutes: Int = 0
     private var apiCompletedSessions: Int = 0
     private var apiLastSessionDuration: Int? = nil
     private var apiLastSessionCalories: Int? = nil
+    private var apiLastSessionDistance: Double? = nil
     private var apiBestSessionDuration: Int? = nil
     private var apiBestSessionCalories: Int? = nil
+    private var apiBestSessionDistance: Double? = nil
     private var apiDailyTargetCalories: Int = 500
     private var apiDailyTargetDistance: Double = 5.0
+    private var apiCurrentWeight: Double? = nil
+    private var apiTargetWeight: Double? = nil
+    private var apiCurrentStreak: Int = 0
     
     func fetchRealUserName() {
             guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
@@ -94,6 +107,10 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                         self.nameLabel.text = user.displayName ?? user.username
                         self.apiDailyTargetCalories = user.dailyTargetCalories ?? 500
                         self.apiDailyTargetDistance = user.dailyTargetDistance ?? 5.0
+                        self.apiCurrentWeight = user.currentWeight
+                        self.apiTargetWeight = user.targetWeight
+                        self.apiCurrentStreak = user.currentStreak ?? 0
+                        self.refreshUI()
                     }
                 } catch {
                     print("❌ Failed to fetch user name for stats page: \(error)")
@@ -109,27 +126,30 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 // Fetch aggregated stats
                 let stats = try await APIManager.shared.getUserStats(userId: userId)
                 self.apiTotalCalories = stats.totalCalories
+                self.apiTotalDistance = stats.totalDistance
                 self.apiTotalMinutes = stats.totalMinutes
                 self.apiCompletedSessions = stats.completedSessions
-                
-                // Fetch all sessions to find last run & personal best
+
+                // Use stats endpoint for personal bests
+                self.apiBestSessionDistance = stats.personalBestDistance > 0 ? stats.personalBestDistance : nil
+                self.apiBestSessionCalories = stats.personalBestCalories > 0 ? stats.personalBestCalories : nil
+
+                // Fetch all sessions to find last run
                 let sessions = try await APIManager.shared.getUserSessions(userId: userId)
                 let completed = sessions.filter { $0.completionStatus == "completed" }
-                
-                // Sort by created_at to find the most recent
                 let sorted = completed.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
-                
+
                 if let lastSession = sorted.first {
                     self.apiLastSessionDuration = lastSession.durationMinutes
                     self.apiLastSessionCalories = lastSession.caloriesBurned
+                    self.apiLastSessionDistance = lastSession.distanceCovered
                 }
-                
-                // Personal best = highest calories in a single session
+
+                // If stats endpoint doesn't have best duration, compute from sessions
                 if let bestSession = completed.max(by: { ($0.caloriesBurned ?? 0) < ($1.caloriesBurned ?? 0) }) {
                     self.apiBestSessionDuration = bestSession.durationMinutes
-                    self.apiBestSessionCalories = bestSession.caloriesBurned
                 }
-                
+
                 DispatchQueue.main.async {
                     self.refreshUI()
                     print("✅ Statistics UI hydrated with real API data!")
@@ -299,7 +319,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         toggleBox.translatesAutoresizingMaskIntoConstraints = false
         
         calBtn = makeToggleBtn(text: "CAL BURN", color: .neonPink, on: true)
-        timeBtn = makeToggleBtn(text: "RUNTIME", color: .neonYellow, on: false)
+        timeBtn = makeToggleBtn(text: "DISTANCE", color: .neonYellow, on: false)
         
         calBtn.addTarget(self, action: #selector(clickedCal), for: .touchUpInside)
         timeBtn.addTarget(self, action: #selector(clickedTime), for: .touchUpInside)
@@ -324,15 +344,24 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         ringBox.translatesAutoresizingMaskIntoConstraints = false
         drawRings(in: ringBox)
         
+        let editTargetsBtn = UIButton(type: .system)
+        editTargetsBtn.setImage(UIImage(systemName: "slider.horizontal.3"), for: .normal)
+        editTargetsBtn.tintColor = .white.withAlphaComponent(0.6)
+        editTargetsBtn.addTarget(self, action: #selector(editTargetsTapped), for: .touchUpInside)
+        editTargetsBtn.translatesAutoresizingMaskIntoConstraints = false
+
         card.addSubview(toggleBox)
+        card.addSubview(editTargetsBtn)
         card.addSubview(textStack)
         card.addSubview(ringBox)
-        
+
         NSLayoutConstraint.activate([
             toggleBox.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
             toggleBox.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
             toggleBox.widthAnchor.constraint(equalToConstant: 180),
             toggleBox.heightAnchor.constraint(equalToConstant: 32),
+            editTargetsBtn.centerYAnchor.constraint(equalTo: toggleBox.centerYAnchor),
+            editTargetsBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
             stack.topAnchor.constraint(equalTo: toggleBox.topAnchor),
             stack.bottomAnchor.constraint(equalTo: toggleBox.bottomAnchor),
             stack.leadingAnchor.constraint(equalTo: toggleBox.leadingAnchor),
@@ -372,19 +401,25 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     func addWeightView() {
-        let card = glassCard(h: 120)
+        let card = glassCard(h: 140)
         let title = UILabel()
         title.text = "Weight Goal Progress"
         title.font = .systemFont(ofSize: 14, weight: .bold)
         title.textColor = .white
         title.translatesAutoresizingMaskIntoConstraints = false
-        
+
+        let editBtn = UIButton(type: .system)
+        editBtn.setImage(UIImage(systemName: "pencil.circle.fill"), for: .normal)
+        editBtn.tintColor = .neonPink
+        editBtn.addTarget(self, action: #selector(editWeightTapped), for: .touchUpInside)
+        editBtn.translatesAutoresizingMaskIntoConstraints = false
+
         weightBar.trackTintColor = UIColor.white.withAlphaComponent(0.1)
         weightBar.progressTintColor = .neonPink
         weightBar.layer.cornerRadius = 6
         weightBar.clipsToBounds = true
         weightBar.translatesAutoresizingMaskIntoConstraints = false
-        
+
         bubbleView.backgroundColor = .neonYellow
         bubbleView.layer.cornerRadius = 8
         bubbleView.translatesAutoresizingMaskIntoConstraints = false
@@ -393,32 +428,35 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         bubbleLabel.textAlignment = .center
         bubbleLabel.translatesAutoresizingMaskIntoConstraints = false
         bubbleView.addSubview(bubbleLabel)
-        
-        let start = UILabel()
-        start.text = "78 kg"
-        start.textColor = .white
-        start.font = .systemFont(ofSize: 12, weight: .bold)
-        let end = UILabel()
-        end.text = "73 kg"
-        end.textColor = .white
-        end.font = .systemFont(ofSize: 12, weight: .bold)
-        weightMsg.text = "Good Job! You are 6.5 kg down."
+
+        weightStartLabel.text = "-- kg"
+        weightStartLabel.textColor = .white
+        weightStartLabel.font = .systemFont(ofSize: 12, weight: .bold)
+        weightEndLabel.text = "-- kg"
+        weightEndLabel.textColor = .white
+        weightEndLabel.font = .systemFont(ofSize: 12, weight: .bold)
+        weightMsg.text = "Set your weight goal to track progress"
         weightMsg.textColor = .gray
         weightMsg.font = .systemFont(ofSize: 10)
         weightMsg.textAlignment = .center
-        let bottom = UIStackView(arrangedSubviews: [start, weightMsg, end])
+        let bottom = UIStackView(arrangedSubviews: [weightStartLabel, weightMsg, weightEndLabel])
         bottom.distribution = .equalCentering
         bottom.alignment = .center
         bottom.translatesAutoresizingMaskIntoConstraints = false
-        
+
         card.addSubview(title)
+        card.addSubview(editBtn)
         card.addSubview(weightBar)
         card.addSubview(bubbleView)
         card.addSubview(bottom)
-        
+
         NSLayoutConstraint.activate([
             title.topAnchor.constraint(equalTo: card.topAnchor, constant: 15),
             title.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            editBtn.centerYAnchor.constraint(equalTo: title.centerYAnchor),
+            editBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
+            editBtn.widthAnchor.constraint(equalToConstant: 28),
+            editBtn.heightAnchor.constraint(equalToConstant: 28),
             weightBar.centerYAnchor.constraint(equalTo: card.centerYAnchor, constant: 5),
             weightBar.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
             weightBar.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
@@ -447,10 +485,10 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         fireImg.translatesAutoresizingMaskIntoConstraints = false
 
         let t1 = UILabel()
-        t1.text = "\(apiCompletedSessions) Day Streak!"
+        t1.text = "0 Day Streak!"
         t1.font = .systemFont(ofSize: 22, weight: .bold)
         t1.textColor = .white
-        t1.tag = 999 // Tag for updating later
+        streakCountLabel = t1
         
         let t2 = UILabel()
         t2.text = "Keep going, you are almost there"
@@ -555,8 +593,9 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath) as! CalendarDayCell
         let date = dates[indexPath.item]
         let isToday = Calendar.current.isDateInToday(date)
+        // Only show activity for past dates within the current streak
         let daysSince = Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 99
-        let active = (date < Date()) && (daysSince >= 0 && daysSince < 4)
+        let active = (date <= Date()) && (daysSince >= 0 && daysSince < apiCurrentStreak)
         cell.configure(date: date, isToday: isToday, hasActivity: active)
         return cell
     }
@@ -686,46 +725,69 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     func refreshUI() {
-        // Use API data (falls back to 0 if not yet loaded)
         let cal = apiTotalCalories
-        let time = apiTotalMinutes
-        
+        let dist = apiTotalDistance
+
         UIView.transition(with: bigStatLabel, duration: 0.3, options: .transitionCrossDissolve) {
-            self.bigStatLabel.text = self.showCalories ? "\(cal)" : "\(time)"
-            self.subStatLabel.text = self.showCalories ? "Calories Burned" : "Minutes Ran"
+            self.bigStatLabel.text = self.showCalories ? "\(cal)" : String(format: "%.1f", dist)
+            self.subStatLabel.text = self.showCalories ? "Calories Burned" : "Distance (km)"
             self.subStatLabel.textColor = self.showCalories ? .neonPink : .neonYellow
         }
-        
-        // Ring progress based on daily targets
+
+        // Ring progress — outer: calories, inner: distance
         let calProgress = apiDailyTargetCalories > 0 ? min(CGFloat(cal) / CGFloat(apiDailyTargetCalories), 1.0) : 0.0
-        let timeProgress = apiDailyTargetDistance > 0 ? min(CGFloat(time) / CGFloat(apiDailyTargetDistance * 10), 1.0) : 0.0
+        let distProgress = apiDailyTargetDistance > 0 ? min(CGFloat(dist) / CGFloat(apiDailyTargetDistance), 1.0) : 0.0
         outerRing.strokeEnd = calProgress
-        innerRing.strokeEnd = timeProgress
+        innerRing.strokeEnd = distProgress
         outerRing.opacity = showCalories ? 1.0 : 0.2
         innerRing.opacity = showCalories ? 0.2 : 1.0
-        
+
         // Last Run card
-        if let lastDur = apiLastSessionDuration, let lastCal = apiLastSessionCalories {
-            lastTimeLabel.text = "\(lastDur) min"
+        if let lastDist = apiLastSessionDistance, let lastCal = apiLastSessionCalories {
+            lastTimeLabel.text = String(format: "%.1f km", lastDist)
             lastCalLabel.text = "\(lastCal) cal"
         } else {
-            lastTimeLabel.text = "-- min"
+            lastTimeLabel.text = "-- km"
             lastCalLabel.text = "-- cal"
         }
-        
+
         // Personal Best card
-        if let bestDur = apiBestSessionDuration, let bestCal = apiBestSessionCalories {
-            bestTimeLabel.text = "\(bestDur) min"
+        if let bestDist = apiBestSessionDistance, let bestCal = apiBestSessionCalories {
+            bestTimeLabel.text = String(format: "%.1f km", bestDist)
             bestCalLabel.text = "\(bestCal) cal"
         } else {
-            bestTimeLabel.text = "-- min"
+            bestTimeLabel.text = "-- km"
             bestCalLabel.text = "-- cal"
         }
-        
-        // Weight & streak (keep existing logic for now)
-        weightBar.progress = 0.6
-        bubbleLabel.text = "75.0"
+
+        // Weight goal from user profile
+        if let current = apiCurrentWeight, let target = apiTargetWeight, target > 0 {
+            weightStartLabel.text = String(format: "%.0f kg", current)
+            weightEndLabel.text = String(format: "%.0f kg", target)
+            let diff = current - target
+            if diff > 0 {
+                weightMsg.text = String(format: "%.1f kg to go!", diff)
+            } else if diff == 0 {
+                weightMsg.text = "Goal reached!"
+            } else {
+                weightMsg.text = String(format: "%.1f kg below target!", abs(diff))
+            }
+            // Progress: 1.0 when current == target, 0.0 when far away
+            let maxDiff = max(current, target) * 0.2 // 20% of max as reference range
+            let progress = maxDiff > 0 ? Float(1.0 - min(abs(diff) / maxDiff, 1.0)) : 0
+            weightBar.progress = max(progress, 0.05)
+            bubbleLabel.text = String(format: "%.1f", current)
+        } else {
+            weightStartLabel.text = "-- kg"
+            weightEndLabel.text = "-- kg"
+            weightMsg.text = "Tap edit to set your weight goal"
+            weightBar.progress = 0
+            bubbleLabel.text = "--"
+        }
         moveBubble()
+
+        // Update streak label with real streak from user profile
+        streakCountLabel?.text = "\(apiCurrentStreak) Day Streak!"
     }
     
     @objc func clickedCal() {
@@ -739,6 +801,83 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         animateToggle(b: calBtn, on: false, c: .gray)
         animateToggle(b: timeBtn, on: true, c: .neonYellow)
         refreshUI()
+    }
+
+    // MARK: - Edit Weight
+    @objc func editWeightTapped() {
+        let alert = UIAlertController(title: "Update Weight", message: "Enter your current and target weight (kg)", preferredStyle: .alert)
+        alert.addTextField { tf in
+            tf.placeholder = "Current weight (kg)"
+            tf.keyboardType = .decimalPad
+            if let w = self.apiCurrentWeight { tf.text = String(format: "%.1f", w) }
+        }
+        alert.addTextField { tf in
+            tf.placeholder = "Target weight (kg)"
+            tf.keyboardType = .decimalPad
+            if let w = self.apiTargetWeight { tf.text = String(format: "%.1f", w) }
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
+            guard let currentText = alert.textFields?[0].text, let current = Double(currentText), current > 0,
+                  let targetText = alert.textFields?[1].text, let target = Double(targetText), target > 0 else {
+                return
+            }
+            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+            Task {
+                do {
+                    let payload: [String: Any] = ["current_weight": current, "target_weight": target]
+                    let _ = try await APIManager.shared.updateUser(userId: userId, payload: payload)
+                    DispatchQueue.main.async {
+                        self.apiCurrentWeight = current
+                        self.apiTargetWeight = target
+                        self.refreshUI()
+                    }
+                } catch {
+                    print("❌ Failed to update weight: \(error)")
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+
+    // MARK: - Edit Targets
+    @objc func editTargetsTapped() {
+        let alert = UIAlertController(title: "Update Daily Targets", message: "Set your daily fitness goals", preferredStyle: .alert)
+        alert.addTextField { tf in
+            tf.placeholder = "Daily target calories (kcal)"
+            tf.keyboardType = .numberPad
+            tf.text = "\(self.apiDailyTargetCalories)"
+        }
+        alert.addTextField { tf in
+            tf.placeholder = "Daily target distance (km)"
+            tf.keyboardType = .decimalPad
+            tf.text = String(format: "%.1f", self.apiDailyTargetDistance)
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
+            guard let calText = alert.textFields?[0].text, let cal = Int(calText), cal > 0,
+                  let distText = alert.textFields?[1].text, let dist = Double(distText), dist > 0 else {
+                return
+            }
+            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+            Task {
+                do {
+                    let payload: [String: Any] = [
+                        "daily_target_calories": cal,
+                        "daily_target_distance": dist
+                    ]
+                    let _ = try await APIManager.shared.updateUser(userId: userId, payload: payload)
+                    DispatchQueue.main.async {
+                        self.apiDailyTargetCalories = cal
+                        self.apiDailyTargetDistance = dist
+                        self.refreshUI()
+                    }
+                } catch {
+                    print("❌ Failed to update targets: \(error)")
+                }
+            }
+        })
+        present(alert, animated: true)
     }
 
     func styleTabBar() {

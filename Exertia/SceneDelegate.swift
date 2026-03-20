@@ -27,15 +27,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
-        // Called when the scene has moved from an inactive state to an active state.
-        // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
         Task {
-                await SupabaseManager.shared.setUserOnline()
-                // Also set online in Django
-                if let userId = UserDefaults.standard.string(forKey: "djangoUserID") {
-                    try? await APIManager.shared.setUserOnline(userId: userId)
-                }
+            await SupabaseManager.shared.setUserOnline()
+            // Only set Django online if user has valid tokens (splash screen handles auth)
+            if TokenManager.shared.hasTokens,
+               let userId = UserDefaults.standard.string(forKey: "djangoUserID") {
+                try? await APIManager.shared.setUserOnline(userId: userId)
             }
+        }
     }
 
     func sceneWillResignActive(_ scene: UIScene) {

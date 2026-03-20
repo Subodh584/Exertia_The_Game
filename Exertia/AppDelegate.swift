@@ -13,19 +13,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        
+
+        // Migrate tokens from UserDefaults to Keychain (one-time)
+        TokenManager.shared.migrateFromUserDefaultsIfNeeded()
+
         // FORCE WAKE UP
         print("⚡️ APP LAUNCHED. WAKING UP SUPABASE...")
         _ = SupabaseManager.shared
-        
-        // Set user online in Django if logged in
-        if let userId = UserDefaults.standard.string(forKey: "djangoUserID") {
-            Task {
-                try? await APIManager.shared.setUserOnline(userId: userId)
-                print("✅ User marked online in Django on app launch")
-            }
-        }
-        
+
+        // NOTE: Do NOT call setUserOnline here — the splash screen handles auth first.
+        // Calling authenticated API here races with token refresh and can blacklist the refresh token.
+
         return true
     }
 
