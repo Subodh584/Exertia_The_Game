@@ -124,6 +124,14 @@ class TrackSelectionViewController: UIViewController {
             self.present(profileVC, animated: true, completion: nil)
         }
     @IBAction func startButtonTapped(_ sender: UIButton) {
+        // Store selected track so the game session can record it
+        let trackIds = ["track_001", "track_002", "track_003"]
+        let displayNames = ["Earth's Twin", "Mars Colony", "Destroyer"]
+        DifficultySettings.shared.setSelectedTrack(
+            id: trackIds[currentIndex],
+            displayName: displayNames[currentIndex]
+        )
+
         let difficultyVC = DifficultySelectionViewController()
         let navController = UINavigationController(rootViewController: difficultyVC)
         navController.setNavigationBarHidden(true, animated: false)

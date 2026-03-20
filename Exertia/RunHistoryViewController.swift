@@ -57,9 +57,16 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
                         durationMinutes: s.durationMinutes ?? 0,
                         caloriesBurned: s.caloriesBurned ?? 0,
                         trackName: s.trackId?.replacingOccurrences(of: "track_", with: "").replacingOccurrences(of: "_", with: " ").capitalized ?? "Unknown",
-                        totalJumps: 0,
-                        totalCrouches: 0,
-                        characterImageName: "character1"
+                        trackId: s.trackId ?? "track_001",
+                        characterId: s.characterId ?? "p1",
+                        totalJumps: s.totalJumps ?? 0,
+                        totalCrouches: s.totalCrouches ?? 0,
+                        totalLeftLeans: s.totalLeftLeans ?? 0,
+                        totalRightLeans: s.totalRightLeans ?? 0,
+                        distanceCovered: s.distanceCovered ?? 0,
+                        averageSpeed: s.averageSpeed,
+                        characterImageName: "character1",
+                        completionStatus: s.completionStatus ?? "completed"
                     )
                 }
                 
