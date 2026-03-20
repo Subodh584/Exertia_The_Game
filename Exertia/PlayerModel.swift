@@ -122,6 +122,22 @@ class GameData {
 // MARK: - HACKATHON FIX: API MANAGER IN SAME FILE
 // MARK: - ==========================================
 
+// MARK: - Login Error Types
+enum LoginError: Error {
+    case emptyUsername
+    case emptyPassword
+    case invalidCredentials  // 401 from server
+    case userNotFound        // username doesn't exist
+    case networkError        // connectivity / server down
+}
+
+// MARK: - Login Response (JWT)
+struct LoginResponse: Codable {
+    let access: String
+    let refresh: String
+    let user: DjangoUser
+}
+
 struct PaginatedUserResponse: Codable {
     let count: Int
     let next: String?
@@ -132,20 +148,61 @@ struct PaginatedUserResponse: Codable {
 struct DjangoUser: Codable {
     let id: String
     let username: String
+    let email: String?
     let displayName: String?
-    let dailyTargetMins: Int?
+    let dailyTargetDistance: Double?
     let dailyTargetCalories: Int?
+    let currentWeight: Double?
+    let targetWeight: Double?
+    let currentStreak: Int?
+    let longestStreak: Int?
     let isOnline: Bool?
     let lastSeen: String?
-    
+    let lastStreakDate: String?
+
     enum CodingKeys: String, CodingKey {
         case id
         case username
+        case email
         case displayName = "display_name"
-        case dailyTargetMins = "daily_target_mins"
+        case dailyTargetDistance = "daily_target_distance"
         case dailyTargetCalories = "daily_target_calories"
+        case currentWeight = "current_weight"
+        case targetWeight = "target_weight"
+        case currentStreak = "current_streak"
+        case longestStreak = "longest_streak"
         case isOnline = "is_online"
         case lastSeen = "last_seen"
+        case lastStreakDate = "last_streak_date"
+    }
+}
+
+// MARK: - JWT Token Manager
+class TokenManager {
+    static let shared = TokenManager()
+    private init() {}
+
+    private let accessKey = "jwt_access_token"
+    private let refreshKey = "jwt_refresh_token"
+
+    var accessToken: String? {
+        get { UserDefaults.standard.string(forKey: accessKey) }
+        set { UserDefaults.standard.set(newValue, forKey: accessKey) }
+    }
+
+    var refreshToken: String? {
+        get { UserDefaults.standard.string(forKey: refreshKey) }
+        set { UserDefaults.standard.set(newValue, forKey: refreshKey) }
+    }
+
+    func save(access: String, refresh: String) {
+        accessToken = access
+        refreshToken = refresh
+    }
+
+    func clear() {
+        UserDefaults.standard.removeObject(forKey: accessKey)
+        UserDefaults.standard.removeObject(forKey: refreshKey)
     }
 }
 
@@ -226,49 +283,101 @@ class APIManager {
     
     private init() {}
     
-    private func makeRequest<T: Codable>(endpoint: String, method: String, body: Data? = nil, responseType: T.Type) async throws -> T {
+    private func makeRequest<T: Codable>(endpoint: String, method: String, body: Data? = nil, requiresAuth: Bool = true, responseType: T.Type) async throws -> T {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else { throw URLError(.badURL) }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        
+
+        if requiresAuth, let token = TokenManager.shared.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
         if let body = body { request.httpBody = body }
-        
+
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        
+
         if !(200...299).contains(httpResponse.statusCode) {
             let errorString = String(data: data, encoding: .utf8) ?? "Unknown Error"
             print("❌ API Error [\(httpResponse.statusCode)]: \(errorString)")
             throw URLError(.badServerResponse)
         }
-        
+
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    func createUser(username: String, displayName: String) async throws -> DjangoUser {
-        let payload: [String: Any] = [
+    func createUser(username: String, displayName: String,
+                    email: String = "", password: String = "") async throws -> DjangoUser {
+        var payload: [String: Any] = [
             "username": username,
             "display_name": displayName,
-            "daily_target_mins": 60,
-            "daily_target_calories": 300,
-            "is_online": true
+            "daily_target_distance": 5.0,
+            "daily_target_calories": 300
         ]
+        if !email.isEmpty    { payload["email"]    = email }
+        if !password.isEmpty { payload["password"] = password }
         let body = try JSONSerialization.data(withJSONObject: payload)
-        return try await makeRequest(endpoint: "/users/", method: "POST", body: body, responseType: DjangoUser.self)
+        return try await makeRequest(endpoint: "/users/", method: "POST", body: body, requiresAuth: false, responseType: DjangoUser.self)
     }
     
+    // MARK: - Raw request that returns (Data, HTTPURLResponse) for custom status handling
+    private func makeRequestRaw(endpoint: String, method: String, body: Data? = nil, requiresAuth: Bool = false) async throws -> (Data, HTTPURLResponse) {
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if requiresAuth, let token = TokenManager.shared.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        if let body = body { request.httpBody = body }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        return (data, httpResponse)
+    }
+
+    // MARK: - Login with Username + Password → JWT (uses /api/auth/login/)
+    func loginWithCredentials(username: String, password: String) async throws -> DjangoUser {
+        let payload: [String: Any] = ["username": username, "password": password]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+
+        do {
+            let (data, httpResponse) = try await makeRequestRaw(endpoint: "/auth/login/", method: "POST", body: body)
+
+            switch httpResponse.statusCode {
+            case 200...299:
+                let loginResp = try JSONDecoder().decode(LoginResponse.self, from: data)
+                TokenManager.shared.save(access: loginResp.access, refresh: loginResp.refresh)
+                print("🔑 JWT tokens saved. Access: \(loginResp.access.prefix(20))…")
+                return loginResp.user
+            case 401:
+                throw LoginError.invalidCredentials
+            case 404:
+                throw LoginError.userNotFound
+            default:
+                let msg = String(data: data, encoding: .utf8) ?? ""
+                print("❌ Login HTTP \(httpResponse.statusCode): \(msg)")
+                throw LoginError.invalidCredentials
+            }
+        } catch let e as LoginError {
+            throw e
+        } catch {
+            throw LoginError.networkError
+        }
+    }
+
     func loginUser(username: String) async throws -> DjangoUser? {
             // 1. Fetch the list of users from Django
-            let response = try await makeRequest(endpoint: "/users/", method: "GET", responseType: PaginatedUserResponse.self)
-            
+            let response = try await makeRequest(endpoint: "/users/", method: "GET", requiresAuth: true, responseType: PaginatedUserResponse.self)
+
             // 2. Search the list for the matching username (case-insensitive to be safe)
             if let user = response.results.first(where: { $0.username.lowercased() == username.lowercased() }) {
                 return user
             }
-            
+
             return nil // Return nil if the user doesn't exist
         }
     

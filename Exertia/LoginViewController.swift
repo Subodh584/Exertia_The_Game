@@ -23,50 +23,103 @@ class LoginViewController: UIViewController {
     }
 
     // MARK: - ACTIONS
-    
+
     @objc func signInTapped() {
-            // We use emailField.text here, but treat it as the username!
-            guard let username = emailField.text, !username.isEmpty else {
-                print("⚠️ Please enter your username")
-                return
-            }
+        let username = emailField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let password = passwordField.text ?? ""
 
-            print("🔍 Searching Django for user: \(username)...")
+        // ── Field validation ──────────────────────────────────────────
+        guard !username.isEmpty else {
+            showAlert(title: "Username Required",
+                      message: "Please enter your username to continue.")
+            shakeField(emailField)
+            return
+        }
+        guard !password.isEmpty else {
+            showAlert(title: "Password Required",
+                      message: "Please enter your password to continue.")
+            shakeField(passwordField)
+            return
+        }
 
-            Task {
-                do {
-                    // 1. Ask APIManager to find the user
-                    if let foundUser = try await APIManager.shared.loginUser(username: username) {
-                        
-                        print("✅ LOGIN SUCCESS! Found user ID: \(foundUser.id)")
-                        
-                        // 2. Save their ID to the phone
-                        UserDefaults.standard.set(foundUser.id, forKey: "djangoUserID")
-                        
-                        // 3. Mark them as online
-                        try? await APIManager.shared.setUserOnline(userId: foundUser.id)
-                        
-                        // 4. Send them directly to the Home screen
-                        DispatchQueue.main.async {
-                            let sb = UIStoryboard(name: "Main", bundle: nil)
-                            // Make sure the ID below matches your storyboard perfectly
-                            if let homeVC = sb.instantiateViewController(withIdentifier: "HomeViewController") as? UIViewController {
-                                homeVC.modalPresentationStyle = .fullScreen
-                                homeVC.modalTransitionStyle = .crossDissolve
-                                self.present(homeVC, animated: true)
-                            } else {
-                                print("❌ ERROR: Could not find 'HomeViewController' in Main.storyboard")
-                            }
-                        }
-                        
-                    } else {
-                        print("❌ LOGIN FAILED: Username not found in database.")
-                    }
-                } catch {
-                    print("❌ API ERROR: \(error.localizedDescription)")
+        // ── Show loading state ─────────────────────────────────────────
+        setSignInLoading(true)
+        print("🔐 Attempting login for: \(username)…")
+
+        Task {
+            defer { DispatchQueue.main.async { self.setSignInLoading(false) } }
+
+            do {
+                let foundUser = try await APIManager.shared.loginWithCredentials(
+                    username: username,
+                    password: password
+                )
+
+                print("✅ LOGIN SUCCESS! User ID: \(foundUser.id)")
+                UserDefaults.standard.set(foundUser.id, forKey: "djangoUserID")
+                try? await APIManager.shared.setUserOnline(userId: foundUser.id)
+
+                DispatchQueue.main.async {
+                    let sb = UIStoryboard(name: "Main", bundle: nil)
+                    let homeVC = sb.instantiateViewController(withIdentifier: "HomeViewController")
+                    homeVC.modalPresentationStyle = .fullScreen
+                    homeVC.modalTransitionStyle = .crossDissolve
+                    self.present(homeVC, animated: true)
+                }
+
+            } catch LoginError.invalidCredentials {
+                print("❌ LOGIN FAILED: Wrong password.")
+                DispatchQueue.main.async {
+                    self.showAlert(title: "Incorrect Password",
+                                   message: "The password you entered is wrong. Please try again.")
+                    self.shakeField(self.passwordField)
+                    self.passwordField.text = ""
+                }
+            } catch LoginError.userNotFound {
+                print("❌ LOGIN FAILED: Username not found.")
+                DispatchQueue.main.async {
+                    self.showAlert(title: "User Not Found",
+                                   message: "No account with that username exists. Please check the spelling or register.")
+                    self.shakeField(self.emailField)
+                }
+            } catch LoginError.networkError {
+                print("❌ LOGIN FAILED: Network error.")
+                DispatchQueue.main.async {
+                    self.showAlert(title: "Connection Error",
+                                   message: "Could not reach the server. Please check your internet connection and try again.")
+                }
+            } catch {
+                print("❌ LOGIN FAILED: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.showAlert(title: "Login Failed",
+                                   message: "Something went wrong. Please try again.")
                 }
             }
         }
+    }
+
+    // MARK: - Alert Helper
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
+    // MARK: - Shake Animation (iOS-style wrong-field feedback)
+    private func shakeField(_ field: UITextField) {
+        let animation = CAKeyframeAnimation(keyPath: "transform.translation.x")
+        animation.timingFunction = CAMediaTimingFunction(name: .linear)
+        animation.duration = 0.5
+        animation.values = [-10, 10, -8, 8, -5, 5, -2, 2, 0]
+        field.layer.add(animation, forKey: "shake")
+    }
+
+    // MARK: - Loading State
+    private func setSignInLoading(_ loading: Bool) {
+        signInButton.isEnabled = !loading
+        signInButton.setTitle(loading ? "Signing in…" : "Sign in", for: .normal)
+        signInButton.alpha = loading ? 0.7 : 1.0
+    }
     
     @objc func registerTapped() {
             print("📲 Navigating to Register Screen...")
@@ -254,15 +307,18 @@ class LoginViewController: UIViewController {
         textField.placeholder = placeholder
         textField.isSecureTextEntry = isSecure
         textField.textColor = .black
-        
+        textField.autocapitalizationType = .none
+        textField.autocorrectionType = .no
+        textField.spellCheckingType = .no
+
         let iconView = UIImageView(image: UIImage(systemName: icon))
         iconView.tintColor = .darkGray
         iconView.contentMode = .scaleAspectFit
-        
+
         let leftContainer = UIView(frame: CGRect(x: 0, y: 0, width: 40, height: 50))
         iconView.frame = CGRect(x: 12, y: 15, width: 20, height: 20)
         leftContainer.addSubview(iconView)
-        
+
         textField.leftView = leftContainer
         textField.leftViewMode = .always
         textField.translatesAutoresizingMaskIntoConstraints = false

@@ -37,30 +37,62 @@ class RegisterViewController: UIViewController {
     // MARK: - ACTIONS
     
     @objc func signUpTapped() {
-        guard let email = emailField.text, !email.isEmpty,
-              let password = passwordField.text, !password.isEmpty,
-              let firstName = firstNameField.text, !firstName.isEmpty else {
-            print("⚠️ Please fill in all required fields")
+        let firstName = firstNameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let lastName  = lastNameField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let email     = emailField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let password  = passwordField.text ?? ""
+
+        // ── Validation ─────────────────────────────────────────────────
+        guard !firstName.isEmpty else {
+            showAlert(title: "First Name Required", message: "Please enter your first name.")
             return
         }
-        
-        let lastName = lastNameField.text ?? ""
-        let fullName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
-        let username = email.components(separatedBy: "@").first ?? "player\(Int.random(in: 1000...9999))"
+        guard !email.isEmpty else {
+            showAlert(title: "Email Required", message: "Please enter your email address.")
+            return
+        }
+        guard email.contains("@") else {
+            showAlert(title: "Invalid Email", message: "Please enter a valid email address.")
+            return
+        }
+        guard !password.isEmpty else {
+            showAlert(title: "Password Required", message: "Please choose a password.")
+            return
+        }
+        guard password.count >= 6 else {
+            showAlert(title: "Password Too Short", message: "Your password must be at least 6 characters.")
+            return
+        }
 
-        print("🚀 Sending new user to Django Backend on Render...")
+        let fullName  = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+        // Derive username from the part before @ — e.g. "john" from "john@example.com"
+        let username  = email.components(separatedBy: "@").first?.lowercased() ?? "player\(Int.random(in: 1000...9999))"
+
+        signUpButton.isEnabled = false
+        signUpButton.setTitle("Creating account…", for: .normal)
+        signUpButton.alpha = 0.7
+
+        print("🚀 Sending new user to Django: username=\(username), email=\(email)…")
 
         Task {
+            defer {
+                DispatchQueue.main.async {
+                    self.signUpButton.isEnabled = true
+                    self.signUpButton.setTitle("Sign Up", for: .normal)
+                    self.signUpButton.alpha = 1.0
+                }
+            }
+
             do {
                 let newUser = try await APIManager.shared.createUser(
                     username: username,
-                    displayName: fullName
+                    displayName: fullName,
+                    email: email,
+                    password: password
                 )
-                
-                // SAVE ID LOCALLY
+
                 UserDefaults.standard.set(newUser.id, forKey: "djangoUserID")
-                
-                print("✅ REAL DATA INSERTED IN DJANGO! User ID: \(newUser.id)")
+                print("✅ DJANGO INSERT SUCCESS! User ID: \(newUser.id), username: \(username)")
 
                 DispatchQueue.main.async {
                     let otpVC = OTPViewController()
@@ -68,11 +100,22 @@ class RegisterViewController: UIViewController {
                     otpVC.modalTransitionStyle = .crossDissolve
                     self.present(otpVC, animated: true)
                 }
-                
+
             } catch {
                 print("❌ DJANGO INSERT FAILED: \(error)")
+                DispatchQueue.main.async {
+                    self.showAlert(title: "Registration Failed",
+                                   message: "Could not create your account. The username may already be taken, or the server is unreachable. Please try again.")
+                }
             }
         }
+    }
+
+    // MARK: - Alert Helper
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
     
     @objc func loginSwitchTapped() {
@@ -137,10 +180,10 @@ class RegisterViewController: UIViewController {
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(subtitleLabel)
         
-        styleTextField(firstNameField, placeholder: "First Name", icon: "person")
-        styleTextField(lastNameField, placeholder: "Last Name (Optional)", icon: "person")
-        styleTextField(emailField, placeholder: "Email", icon: "envelope")
-        styleTextField(passwordField, placeholder: "Password", icon: "lock", isSecure: true)
+        styleTextField(firstNameField, placeholder: "First Name",  icon: "person",   capitalization: .words)
+        styleTextField(lastNameField,  placeholder: "Last Name (Optional)", icon: "person", capitalization: .words)
+        styleTextField(emailField,     placeholder: "Email",      icon: "envelope", keyboardType: .emailAddress)
+        styleTextField(passwordField,  placeholder: "Password",   icon: "lock",     isSecure: true)
         
         glassCard.addSubview(firstNameField)
         glassCard.addSubview(lastNameField)
@@ -214,21 +257,27 @@ class RegisterViewController: UIViewController {
         ])
     }
 
-    func styleTextField(_ textField: UITextField, placeholder: String, icon: String, isSecure: Bool = false) {
+    func styleTextField(_ textField: UITextField, placeholder: String, icon: String,
+                        isSecure: Bool = false, keyboardType: UIKeyboardType = .default,
+                        capitalization: UITextAutocapitalizationType = .none) {
         textField.backgroundColor = .white
         textField.layer.cornerRadius = 10
         textField.placeholder = placeholder
         textField.isSecureTextEntry = isSecure
         textField.textColor = .black
-        
+        textField.autocapitalizationType = capitalization
+        textField.autocorrectionType = .no
+        textField.spellCheckingType = .no
+        textField.keyboardType = keyboardType
+
         let iconView = UIImageView(image: UIImage(systemName: icon))
         iconView.tintColor = .darkGray
         iconView.contentMode = .scaleAspectFit
-        
+
         let leftContainer = UIView(frame: CGRect(x: 0, y: 0, width: 40, height: 50))
         iconView.frame = CGRect(x: 12, y: 15, width: 20, height: 20)
         leftContainer.addSubview(iconView)
-        
+
         textField.leftView = leftContainer
         textField.leftViewMode = .always
         textField.translatesAutoresizingMaskIntoConstraints = false

@@ -82,7 +82,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var apiBestSessionDuration: Int? = nil
     private var apiBestSessionCalories: Int? = nil
     private var apiDailyTargetCalories: Int = 500
-    private var apiDailyTargetMins: Int = 60
+    private var apiDailyTargetDistance: Double = 5.0
     
     func fetchRealUserName() {
             guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
@@ -93,7 +93,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                     DispatchQueue.main.async {
                         self.nameLabel.text = user.displayName ?? user.username
                         self.apiDailyTargetCalories = user.dailyTargetCalories ?? 500
-                        self.apiDailyTargetMins = user.dailyTargetMins ?? 60
+                        self.apiDailyTargetDistance = user.dailyTargetDistance ?? 5.0
                     }
                 } catch {
                     print("❌ Failed to fetch user name for stats page: \(error)")
@@ -698,7 +698,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         
         // Ring progress based on daily targets
         let calProgress = apiDailyTargetCalories > 0 ? min(CGFloat(cal) / CGFloat(apiDailyTargetCalories), 1.0) : 0.0
-        let timeProgress = apiDailyTargetMins > 0 ? min(CGFloat(time) / CGFloat(apiDailyTargetMins), 1.0) : 0.0
+        let timeProgress = apiDailyTargetDistance > 0 ? min(CGFloat(time) / CGFloat(apiDailyTargetDistance * 10), 1.0) : 0.0
         outerRing.strokeEnd = calProgress
         innerRing.strokeEnd = timeProgress
         outerRing.opacity = showCalories ? 1.0 : 0.2

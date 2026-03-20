@@ -43,8 +43,8 @@ class OnboardingProfileViewController: UIViewController {
             return
         }
 
-        guard let minText = targetMinutesField.text, let minutes = Int(minText), minutes > 0 else {
-            showAlert(title: "Invalid Minutes", message: "Please enter a valid daily minutes target.")
+        guard let minText = targetMinutesField.text, let distance = Double(minText), distance > 0 else {
+            showAlert(title: "Invalid Distance", message: "Please enter a valid daily distance target (km).")
             return
         }
 
@@ -65,11 +65,11 @@ class OnboardingProfileViewController: UIViewController {
                 let payload: [String: Any] = [
                     "username": username,
                     "daily_target_calories": calories,
-                    "daily_target_mins": minutes
+                    "daily_target_distance": distance
                 ]
 
                 let updatedUser = try await APIManager.shared.updateUser(userId: userId, payload: payload)
-                print("✅ Profile updated! Username: \(updatedUser.username), Calories: \(updatedUser.dailyTargetCalories ?? 0), Mins: \(updatedUser.dailyTargetMins ?? 0)")
+                print("✅ Profile updated! Username: \(updatedUser.username), Calories: \(updatedUser.dailyTargetCalories ?? 0), Distance: \(updatedUser.dailyTargetDistance ?? 0) km")
 
                 DispatchQueue.main.async {
                     self.navigateToHome()
