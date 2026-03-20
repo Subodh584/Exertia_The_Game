@@ -13,8 +13,10 @@ struct DBUser: Codable {
     let id: UUID
     let username: String
     let display_name: String
-    let daily_target_mins: Int
+    let daily_target_distance: Double
     let daily_target_calories: Int
+    let current_streak: Int
+    let longest_streak: Int
     let is_online: Bool
 }
 
