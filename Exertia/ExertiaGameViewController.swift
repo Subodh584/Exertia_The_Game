@@ -764,21 +764,147 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         playerNode = SCNNode()
         playerNode.name = "Player"
         
-        let capsule = SCNCapsule(capRadius: 0.8, height: 3.0)
-        let material = SCNMaterial()
-        material.diffuse.contents = UIColor.systemBlue
-        material.specular.contents = UIColor.white
-        material.shininess = 0.7
-        material.reflective.contents = UIColor(white: 0.3, alpha: 1.0)
-        capsule.materials = [material]
+        // Load the character model directly from the SceneKit catalog
+        // SceneKit can load .dae files perfectly! But sometimes Xcode compiles them into .scn files
+        var characterScene = SCNScene(named: "Character.scnassets/Idle.dae")
+        if characterScene == nil {
+            print("❌ GameViewController: Failed to find Idle.dae, trying Idle.scn instead...")
+            characterScene = SCNScene(named: "Character.scnassets/Idle.scn")
+        }
         
-        let capsuleNode = SCNNode(geometry: capsule)
-        capsuleNode.position.y = 4.0
-        capsuleNode.castsShadow = true
-        playerNode.addChildNode(capsuleNode)
+        if let characterScene = characterScene {
+            print("✅ GameViewController: Successfully loaded the 3D Character!")
+            
+            let characterContainerNode = SCNNode()
+            characterContainerNode.name = "CharacterContainer"
+            
+            // Add all nodes from the parsed DAE file to a container node WITHOUT cloning!
+            // Cloning a skinned mesh in SceneKit breaks the skeleton and leaves the skin behind at the start line.
+            for child in characterScene.rootNode.childNodes {
+                characterContainerNode.addChildNode(child)
+            }
+            
+            // We removed the custom character light because the global moonLight & fillLight in setupLighting() are enough.
+            
+            // Adjust character positioning and scale
+            // If the head is barely poking out, the model's origin is likely at its center of mass, not its feet.
+            characterContainerNode.position.y = 2.8 // Lifted out of the track!
+            
+            // Mixamo & Blender exports use centimeters, SceneKit uses meters. We must shrink it 100x!
+            characterContainerNode.scale = SCNVector3(x: 0.01, y: 0.01, z: 0.01)
+            
+            // In SceneKit, imported characters often face the screen. Rotate them 180 degrees to face forward!
+            characterContainerNode.eulerAngles = SCNVector3(x: 0, y: Float.pi, z: 0)
+            
+            // Critical Fix: Strip ALL default animations (like the Idle loop) from the DAE
+            // If we don't do this, SceneKit will mathematically blend your Idle and Running animations
+            // together at the same time, causing the character's limbs to twist and move weirdly!
+            characterContainerNode.removeAllAnimations()
+            
+            // Critical Fix: Force-stop any embedded animations recursively. Mixamo adds T-Pose and Idle tracks everywhere.
+            characterContainerNode.enumerateChildNodes { (node, _) in
+                node.castsShadow = true
+                for key in node.animationKeys {
+                    node.removeAnimation(forKey: key, blendOutDuration: 0.0)
+                }
+                node.removeAllAnimations()
+                
+                // DAE exports from Blender lose their PBR/Metallic nodes. Let's restore them!
+                if let materials = node.geometry?.materials {
+                    for material in materials {
+                        material.lightingModel = .physicallyBased
+                        material.metalness.contents = 0.8 // High metal finish
+                        material.roughness.contents = 0.2 // Smooth reflection
+                        material.isDoubleSided = true
+                    }
+                }
+            }
+                   // Map missing bone animations perfectly
+            applyBoneAnimations(fromFile: "Character.scnassets/Running-2.dae", toNode: characterContainerNode, animKey: "run", repeats: true)
+            applyBoneAnimations(fromFile: "Character.scnassets/Jumping-2.dae", toNode: characterContainerNode, animKey: "jump", repeats: false)
+            applyBoneAnimations(fromFile: "Character.scnassets/Stand To Roll.dae", toNode: characterContainerNode, animKey: "roll", repeats: false)
+            
+            // Start running immediately!
+            playBoneAnimation(key: "run", onNode: characterContainerNode)
+            
+            playerNode.addChildNode(characterContainerNode)
+        } else {
+            print("⚠️ GameViewController: CRITICAL WARNING - Could not find the 3D Character in Character.scnassets. Falling back to the blue capsule.")
+            // Fallback capsule if the DAE file is missing/fails to load
+            let capsule = SCNCapsule(capRadius: 0.8, height: 3.0)
+            let material = SCNMaterial()
+            material.diffuse.contents = UIColor.systemBlue
+            material.specular.contents = UIColor.white
+            material.shininess = 0.7
+            material.reflective.contents = UIColor(white: 0.3, alpha: 1.0)
+            capsule.materials = [material]
+            
+            let capsuleNode = SCNNode(geometry: capsule)
+            capsuleNode.position.y = 4.0
+            capsuleNode.castsShadow = true
+            playerNode.addChildNode(capsuleNode)
+        }
         
         playerNode.position = SCNVector3(x: 0, y: 0, z: 0)
         scene.rootNode.addChildNode(playerNode)
+    }
+    
+    // MARK: - Animation System
+    func applyBoneAnimations(fromFile fileName: String, toNode rootNode: SCNNode, animKey: String, repeats: Bool) {
+        let scnName = fileName.replacingOccurrences(of: ".dae", with: ".scn")
+        guard let animScene = SCNScene(named: fileName) ?? SCNScene(named: scnName) else { 
+            print("❌ Failed to load animation scene: \(fileName)")
+            return 
+        }
+        
+        animScene.rootNode.enumerateChildNodes { srcNode, _ in
+            if let boneName = srcNode.name, !srcNode.animationKeys.isEmpty {
+                if let targetBone = rootNode.childNode(withName: boneName, recursively: true) {
+                    for key in srcNode.animationKeys {
+                        if let player = srcNode.animationPlayer(forKey: key) {
+                            // Adjust blending and speed for maximum snappiness
+                            if animKey == "roll" {
+                                player.animation.blendInDuration = 0.05 // extremely fast transition
+                                player.animation.blendOutDuration = 0.2
+                                player.speed = 1.35 // 35% faster animation playback
+                            } else if animKey == "jump" {
+                                player.animation.blendInDuration = 0.1
+                                player.animation.blendOutDuration = 0.2
+                                player.speed = 1.1 
+                            } else {
+                                player.animation.blendInDuration = 0.2
+                                player.animation.blendOutDuration = 0.2
+                                player.speed = 1.0
+                            }
+                            
+                            if repeats {
+                                player.animation.repeatCount = .greatestFiniteMagnitude
+                            } else {
+                                player.animation.repeatCount = 1
+                                player.animation.isRemovedOnCompletion = false
+                            }
+                            targetBone.addAnimationPlayer(player, forKey: animKey)
+                            player.stop() // loaded but halted
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    func playBoneAnimation(key: String, onNode rootNode: SCNNode) {
+        let allKeys = ["run", "jump", "roll"]
+        rootNode.enumerateChildNodes { node, _ in
+            for k in allKeys {
+                if let player = node.animationPlayer(forKey: k) {
+                    if k == key {
+                        player.play()
+                    } else {
+                        player.stop(withBlendOutDuration: 0.2)
+                    }
+                }
+            }
+        }
     }
     
     func setupRoadManager() {
@@ -1240,11 +1366,15 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var jumpForwardBoostRemaining: Float = 0  // Remaining forward boost to apply
     
     func playerJump() {
-        guard !isJumping else { return }
-        totalJumps += 1
+        guard isGameRunning, !isJumping else { return }
         isJumping = true
         isJumpingUp = true
         isLanding = false
+        
+        // Play jump animation and blend out the running loop
+        if let characterNode = playerNode.childNode(withName: "CharacterContainer", recursively: true) {
+            playBoneAnimation(key: "jump", onNode: characterNode)
+        }
         
         // Record the ground level at jump start
         jumpStartY = getGroundY()
@@ -1260,6 +1390,8 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
     /// Get current ground Y position based on road
     func getGroundY() -> Float {
+        guard isGameRunning, roadManager != nil else { return 0.0 }
+        
         if let roadY = roadManager.getCurrentRoadYPosition(atZ: playerZPosition) {
             var yOffset: Float = 0.0
             if let roadType = roadManager.getCurrentRoadType(atZ: playerZPosition) {
@@ -1308,6 +1440,11 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
             isLanding = false
             jumpVelocityY = 0
             jumpForwardBoostRemaining = 0  // Clear any remaining boost on landing
+            
+            // Resume running animation immediately
+            if let characterNode = playerNode.childNode(withName: "CharacterContainer", recursively: true) {
+                playBoneAnimation(key: "run", onNode: characterNode)
+            }
         }
         
         playerNode.position.y = newY
@@ -1324,11 +1461,24 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         
         originalScaleY = playerNode.scale.y
         
+        // Play roll animation
+        if let characterNode = playerNode.childNode(withName: "CharacterContainer", recursively: true) {
+            playBoneAnimation(key: "roll", onNode: characterNode)
+        }
+        
         // Smooth dive animation using SCNTransaction for better control
         SCNTransaction.begin()
         SCNTransaction.animationDuration = TimeInterval(diveSquashDuration)
         SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeOut)
         playerNode.scale = SCNVector3(1.0, diveSquashScale, 1.0)
+        
+        // Counter-scale the visual 3D model so it doesn't get flattened or sunk into the ground!
+        if let characterNode = playerNode.childNode(withName: "CharacterContainer", recursively: true) {
+            let invScale = 1.0 / diveSquashScale
+            characterNode.scale = SCNVector3(0.01, 0.01 * invScale, 0.01)
+            characterNode.position.y = 2.8 * invScale
+        }
+        
         SCNTransaction.commit()
         
         // Schedule restore after hold duration
@@ -1339,8 +1489,19 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
             SCNTransaction.animationDuration = TimeInterval(self.diveRestoreDuration)
             SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeIn)
             self.playerNode.scale = SCNVector3(1.0, 1.0, 1.0)
+            
+            // Restore visual 3D model scale
+            if let characterNode = self.playerNode.childNode(withName: "CharacterContainer", recursively: true) {
+                characterNode.scale = SCNVector3(0.01, 0.01, 0.01)
+                characterNode.position.y = 2.8
+            }
             SCNTransaction.completionBlock = {
                 self.isDiving = false
+                
+                // Resume running animation immediately
+                if let characterNode = self.playerNode.childNode(withName: "CharacterContainer", recursively: true) {
+                    self.playBoneAnimation(key: "run", onNode: characterNode)
+                }
             }
             SCNTransaction.commit()
         }
