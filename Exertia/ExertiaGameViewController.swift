@@ -796,6 +796,16 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                     node.removeAnimation(forKey: key, blendOutDuration: 0.0)
                 }
                 node.removeAllAnimations()
+                
+                // DAE exports from Blender lose their PBR/Metallic nodes. Let's restore them!
+                if let materials = node.geometry?.materials {
+                    for material in materials {
+                        material.lightingModel = .physicallyBased
+                        material.metalness.contents = 0.8 // High metal finish
+                        material.roughness.contents = 0.2 // Smooth reflection
+                        material.isDoubleSided = true
+                    }
+                }
             }
                    // Map missing bone animations perfectly
             applyBoneAnimations(fromFile: "Character.scnassets/Running-2.dae", toNode: characterContainerNode, animKey: "run", repeats: true)
@@ -840,8 +850,21 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                 if let targetBone = rootNode.childNode(withName: boneName, recursively: true) {
                     for key in srcNode.animationKeys {
                         if let player = srcNode.animationPlayer(forKey: key) {
-                            player.animation.blendInDuration = 0.2
-                            player.animation.blendOutDuration = 0.2
+                            // Adjust blending and speed for maximum snappiness
+                            if animKey == "roll" {
+                                player.animation.blendInDuration = 0.05 // extremely fast transition
+                                player.animation.blendOutDuration = 0.2
+                                player.speed = 1.35 // 35% faster animation playback
+                            } else if animKey == "jump" {
+                                player.animation.blendInDuration = 0.1
+                                player.animation.blendOutDuration = 0.2
+                                player.speed = 1.1 
+                            } else {
+                                player.animation.blendInDuration = 0.2
+                                player.animation.blendOutDuration = 0.2
+                                player.speed = 1.0
+                            }
+                            
                             if repeats {
                                 player.animation.repeatCount = .greatestFiniteMagnitude
                             } else {
@@ -1433,6 +1456,14 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         SCNTransaction.animationDuration = TimeInterval(diveSquashDuration)
         SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeOut)
         playerNode.scale = SCNVector3(1.0, diveSquashScale, 1.0)
+        
+        // Counter-scale the visual 3D model so it doesn't get flattened or sunk into the ground!
+        if let characterNode = playerNode.childNode(withName: "CharacterContainer", recursively: true) {
+            let invScale = 1.0 / diveSquashScale
+            characterNode.scale = SCNVector3(0.01, 0.01 * invScale, 0.01)
+            characterNode.position.y = 2.8 * invScale
+        }
+        
         SCNTransaction.commit()
         
         // Schedule restore after hold duration
@@ -1443,6 +1474,12 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
             SCNTransaction.animationDuration = TimeInterval(self.diveRestoreDuration)
             SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeIn)
             self.playerNode.scale = SCNVector3(1.0, 1.0, 1.0)
+            
+            // Restore visual 3D model scale
+            if let characterNode = self.playerNode.childNode(withName: "CharacterContainer", recursively: true) {
+                characterNode.scale = SCNVector3(0.01, 0.01, 0.01)
+                characterNode.position.y = 2.8
+            }
             SCNTransaction.completionBlock = {
                 self.isDiving = false
                 
