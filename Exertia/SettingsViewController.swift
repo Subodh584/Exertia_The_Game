@@ -129,10 +129,11 @@ class SettingsViewController: UIViewController {
                 }
             }
             
-            // 2. Delete the Django User ID from the phone's memory
+            // 2. Clear JWT tokens and Django User ID
+            TokenManager.shared.clear()
             UserDefaults.standard.removeObject(forKey: "djangoUserID")
-            print("✅ Cleared local user data.")
-            
+            print("✅ Cleared local user data and JWT tokens.")
+
             // 3. Go back to the Login Screen
             DispatchQueue.main.async {
                 self.navigateToLogin()
@@ -154,7 +155,8 @@ class SettingsViewController: UIViewController {
                     // Try to delete from Supabase
                     try? await SupabaseManager.shared.deleteAccount()
                     
-                    // Clear local data
+                    // Clear local data and JWT tokens
+                    TokenManager.shared.clear()
                     UserDefaults.standard.removeObject(forKey: "djangoUserID")
                     
                     // Go back to the login screen

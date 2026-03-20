@@ -165,8 +165,8 @@ class OnboardingProfileViewController: UIViewController {
         styleTextField(usernameField, placeholder: "Username", icon: "at")
         styleTextField(targetCaloriesField, placeholder: "Daily Target Calories (e.g. 500)", icon: "flame")
         targetCaloriesField.keyboardType = .numberPad
-        styleTextField(targetMinutesField, placeholder: "Daily Target Minutes (e.g. 45)", icon: "clock")
-        targetMinutesField.keyboardType = .numberPad
+        styleTextField(targetMinutesField, placeholder: "Daily Target Distance in km (e.g. 5.0)", icon: "figure.run")
+        targetMinutesField.keyboardType = .decimalPad
 
         glassCard.addSubview(usernameField)
         glassCard.addSubview(targetCaloriesField)

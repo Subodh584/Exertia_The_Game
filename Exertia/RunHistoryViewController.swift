@@ -27,9 +27,8 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         super.viewDidLoad()
         view.backgroundColor = UIColor.black.withAlphaComponent(0.6)
         
-        // Start with local history as fallback
-        history = GameData.shared.gameHistory.sorted(by: { $0.date > $1.date })
-        if selectedSession == nil { selectedSession = history.first }
+        // Start with empty history, will be populated from API
+        history = []
         
         setupUI()
         updateHeroView(with: selectedSession)
@@ -61,8 +60,8 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
                         characterId: s.characterId ?? "p1",
                         totalJumps: s.totalJumps ?? 0,
                         totalCrouches: s.totalCrouches ?? 0,
-                        totalLeftLeans: s.totalLeftLeans ?? 0,
-                        totalRightLeans: s.totalRightLeans ?? 0,
+                        totalLeftLeans: 0,
+                        totalRightLeans: 0,
                         distanceCovered: s.distanceCovered ?? 0,
                         averageSpeed: s.averageSpeed,
                         characterImageName: "character1",

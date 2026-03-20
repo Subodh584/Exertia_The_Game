@@ -94,6 +94,12 @@ class RegisterViewController: UIViewController {
                 UserDefaults.standard.set(newUser.id, forKey: "djangoUserID")
                 print("✅ DJANGO INSERT SUCCESS! User ID: \(newUser.id), username: \(username)")
 
+                // Auto-login to get JWT tokens
+                let _ = try await APIManager.shared.loginWithCredentials(
+                    username: username, password: password
+                )
+                print("🔑 Auto-login after registration successful!")
+
                 DispatchQueue.main.async {
                     let otpVC = OTPViewController()
                     otpVC.modalPresentationStyle = .fullScreen
