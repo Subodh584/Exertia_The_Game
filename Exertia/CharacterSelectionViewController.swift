@@ -362,12 +362,15 @@ extension CharacterSelectionViewController: UICollectionViewDelegate, UICollecti
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "CharacterCellID", for: indexPath) as? CharacterCell else { return UICollectionViewCell() }
         let player = gameData.players[indexPath.row]
-        let isCurrentlyViewing = (indexPath.row == currentViewingIndex)
-        cell.configure(player: player, isSelected: isCurrentlyViewing)
+        let isLocked = indexPath.row > 0          // only the first character is unlocked for now
+        let isCurrentlyViewing = (indexPath.row == currentViewingIndex) && !isLocked
+        cell.configure(player: player, isSelected: isCurrentlyViewing, isLocked: isLocked)
         return cell
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        // Locked characters are non-interactive — silently ignore taps on them
+        guard indexPath.row == 0 else { return }
         currentViewingIndex = indexPath.row
         updateMainDisplay(index: currentViewingIndex)
         collectionView.reloadData()

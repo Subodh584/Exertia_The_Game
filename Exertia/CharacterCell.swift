@@ -46,37 +46,66 @@ class CharacterCell: UICollectionViewCell {
         glossLayer.cornerCurve = .continuous
     }
 
-    func configure(player: Player, isSelected: Bool) {
-        thumbImageView.image = UIImage(named: player.thumbnailImageName)
-
+    func configure(player: Player, isSelected: Bool, isLocked: Bool = false) {
+        // Always clean up previous state first
         containerView.subviews.filter { $0 is UIVisualEffectView }.forEach { $0.removeFromSuperview() }
+        containerView.subviews.filter { $0.tag == 902 }.forEach { $0.removeFromSuperview() }
         glossLayer.removeFromSuperlayer()
 
-        let blurStyle: UIBlurEffect.Style = isSelected ? .systemMaterialLight : .systemUltraThinMaterialDark
-        let blurEffect = UIBlurEffect(style: blurStyle)
-        let blurView = UIVisualEffectView(effect: blurEffect)
-        blurView.frame = containerView.bounds
-        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        if isLocked {
+            // Character is completely hidden — just a solid dark cell
+            thumbImageView.isHidden = true
+            containerView.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.12, alpha: 1)
 
-        containerView.insertSubview(blurView, at: 0)
-        containerView.layer.insertSublayer(glossLayer, at: 1)
-        if isSelected {
-            containerView.layer.borderWidth = 2
-            containerView.layer.borderColor = UIColor.cyan.cgColor
+            // Lock icon — golden colour matching the character name label ("GLITCH" yellow)
+            let gold = UIColor(red: 0.96, green: 0.83, blue: 0.38, alpha: 1)
+            let cfg  = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
+            let lockImg = UIImageView(image: UIImage(systemName: "lock.fill", withConfiguration: cfg))
+            lockImg.tag = 902
+            lockImg.tintColor = gold
+            lockImg.contentMode = .scaleAspectFit
+            lockImg.translatesAutoresizingMaskIntoConstraints = false
+            containerView.addSubview(lockImg)
+            NSLayoutConstraint.activate([
+                lockImg.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+                lockImg.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+                lockImg.widthAnchor.constraint(equalToConstant: 28),
+                lockImg.heightAnchor.constraint(equalToConstant: 28)
+            ])
 
-            self.layer.shadowColor = UIColor.cyan.cgColor
-            self.layer.shadowRadius = 10
-            self.layer.shadowOpacity = 0.6
-
-            animateSelection()
-            
-        } else {
             containerView.layer.borderWidth = 1.0
-            containerView.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+            containerView.layer.borderColor = UIColor.white.withAlphaComponent(0.08).cgColor
+            self.layer.shadowColor   = UIColor.black.cgColor
+            self.layer.shadowRadius  = 4
+            self.layer.shadowOpacity = 0.2
 
-            self.layer.shadowColor = UIColor.black.cgColor
-            self.layer.shadowRadius = 5
-            self.layer.shadowOpacity = 0.3
+        } else {
+            // Character is visible
+            thumbImageView.isHidden = false
+            thumbImageView.image = UIImage(named: player.thumbnailImageName)
+            containerView.backgroundColor = .clear
+
+            let blurStyle: UIBlurEffect.Style = isSelected ? .systemMaterialLight : .systemUltraThinMaterialDark
+            let blurView = UIVisualEffectView(effect: UIBlurEffect(style: blurStyle))
+            blurView.frame = containerView.bounds
+            blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            containerView.insertSubview(blurView, at: 0)
+            containerView.layer.insertSublayer(glossLayer, at: 1)
+
+            if isSelected {
+                containerView.layer.borderWidth = 2
+                containerView.layer.borderColor = UIColor.cyan.cgColor
+                self.layer.shadowColor   = UIColor.cyan.cgColor
+                self.layer.shadowRadius  = 10
+                self.layer.shadowOpacity = 0.6
+                animateSelection()
+            } else {
+                containerView.layer.borderWidth = 1.0
+                containerView.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+                self.layer.shadowColor   = UIColor.black.cgColor
+                self.layer.shadowRadius  = 5
+                self.layer.shadowOpacity = 0.3
+            }
         }
     }
 
