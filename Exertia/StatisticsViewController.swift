@@ -89,6 +89,20 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var apiTotalDistance: Double = 0
     private var apiTotalMinutes: Int = 0
     private var apiCompletedSessions: Int = 0
+    // TODAY (IST) — used for the ring progress + big stat number
+    private var apiTodayCalories: Int = 0
+    private var apiTodayDistance: Double = 0
+
+    private static let istCalendar: Calendar = {
+        var c = Calendar.current
+        c.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        return c
+    }()
+    private static let isoParser: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
     private var apiLastSessionDuration: Int? = nil
     private var apiLastSessionCalories: Int? = nil
     private var apiLastSessionDistance: Double? = nil
@@ -146,6 +160,17 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 let sessions = try await APIManager.shared.getUserSessions(userId: userId)
                 let completed = sessions.filter { $0.completionStatus == "completed" }
                 self.allCompletedSessions = completed   // stored for calendar day-stats
+
+                // Compute TODAY (IST) totals for the ring / big stat label
+                let todaySessions = completed.filter { s in
+                    guard let raw = s.createdAt,
+                          let ts  = Self.isoParser.date(from: raw) else { return false }
+                    return Self.istCalendar.isDateInToday(ts)
+                }
+                self.apiTodayCalories = todaySessions.compactMap { $0.caloriesBurned  }.reduce(0, +)
+                self.apiTodayDistance = todaySessions.compactMap { $0.distanceCovered }.reduce(0, +)
+                print("📊 Stats today (IST): \(self.apiTodayCalories) cal, \(String(format: "%.2f", self.apiTodayDistance)) km (\(todaySessions.count) sessions)")
+
                 let sorted = completed.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
 
                 if let lastSession = sorted.first {
@@ -825,8 +850,9 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     func refreshUI() {
-        let cal = apiTotalCalories
-        let dist = apiTotalDistance
+        // Ring + big label show TODAY's (IST) progress vs daily target
+        let cal  = apiTodayCalories
+        let dist = apiTodayDistance
 
         UIView.transition(with: bigStatLabel, duration: 0.3, options: .transitionCrossDissolve) {
             self.bigStatLabel.text = self.showCalories ? "\(cal)" : String(format: "%.1f", dist)
@@ -837,9 +863,9 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 : String(format: "Target: %.1f km", self.apiDailyTargetDistance)
         }
 
-        // Ring progress — outer: calories, inner: distance
-        let calProgress = apiDailyTargetCalories > 0 ? min(CGFloat(cal) / CGFloat(apiDailyTargetCalories), 1.0) : 0.0
-        let distProgress = apiDailyTargetDistance > 0 ? min(CGFloat(dist) / CGFloat(apiDailyTargetDistance), 1.0) : 0.0
+        // Ring progress — today's value vs daily target
+        let calProgress  = apiDailyTargetCalories > 0  ? min(CGFloat(cal)  / CGFloat(apiDailyTargetCalories),  1.0) : 0.0
+        let distProgress = apiDailyTargetDistance > 0  ? min(CGFloat(dist) / CGFloat(apiDailyTargetDistance), 1.0) : 0.0
         outerRing.strokeEnd = calProgress
         innerRing.strokeEnd = distProgress
         outerRing.opacity = showCalories ? 1.0 : 0.2
