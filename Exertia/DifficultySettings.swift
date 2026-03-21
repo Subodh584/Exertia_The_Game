@@ -50,6 +50,9 @@ class DifficultySettings {
     /// Selected track info, forwarded to ExertiaGameViewController for session recording
     private(set) var selectedTrackId: String = "track_001"
     private(set) var selectedTrackDisplayName: String = "Earth's Twin"
+
+    /// Distance goal (km) chosen on the Track Selection screen
+    private(set) var selectedDistanceKm: Double = 1.0
     
     // MARK: - Difficulty Values
     
@@ -118,6 +121,12 @@ class DifficultySettings {
         selectedTrackId = id
         selectedTrackDisplayName = displayName
         print("🎮 Track selected: \(displayName) (\(id))")
+    }
+
+    /// Set the distance goal chosen on the Track Selection screen (km)
+    func setDistanceTarget(km: Double) {
+        selectedDistanceKm = km
+        print("🎮 Distance target: \(String(format: "%.1f", km)) km (~\(Int((km * 70).rounded())) kcal)")
     }
 }
 
