@@ -53,15 +53,29 @@ class TrackSelectionViewController: UIViewController {
     private let distField = UITextField()
     private let calField  = UITextField()
 
+    // Flag so the ellipse scan only runs once after layout is real
+    private var navEllipsesHidden = false
+
     // MARK: — Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+
+        // Snapshot storyboard subviews BEFORE we add our programmatic controls.
+        // Used in hideStoryboardGoalBox() to identify the original container.
+        let storyboardSubviews = Set(view.subviews)
+
         styleNavArea()
         setupTrackDesign()
         setupPortalAnimation()
         buildGoalControls()
         updateTrackUI()
-        fixStoryboardLabels()   // rename Duration→Distance, hide Minimum Calories storyboard label
+        fixStoryboardLabels()
+        hideStoryboardGoalBox(excluding: storyboardSubviews)
+
+        // MARK: Single-map mode — hide prev/next until map 2 ships.
+        // To re-enable: delete these two lines. No storyboard changes needed.
+        prevTrackTapped.isHidden = true
+        nextTrackTapped.isHidden = true
     }
 
     override func viewDidLayoutSubviews() {
@@ -71,6 +85,37 @@ class TrackSelectionViewController: UIViewController {
         profileButton.clipsToBounds      = true
         backButton.layer.cornerRadius    = backButton.frame.height / 2
         backButton.clipsToBounds         = true
+        hideNavArrowEllipses()
+    }
+
+    /// Hides only the small Ellipse droplet UIImageViews at the left/right edges.
+    /// Key guard: droplets are narrow (<30 % of screen width); the background image
+    /// spans the full width and is therefore never touched.
+    private func hideNavArrowEllipses() {
+        guard !navEllipsesHidden, view.bounds.width > 0 else { return }
+        navEllipsesHidden = true
+
+        let maxDropletWidth = view.bounds.width * 0.30   // droplets are small pill shapes
+
+        func scan(_ root: UIView) {
+            for sub in root.subviews {
+                if let img = sub as? UIImageView, img !== portalBaseView {
+                    // Never touch image views that live inside a UIButton (e.g. back button chevron)
+                    let insideButton = sequence(first: img.superview, next: { $0?.superview })
+                        .compactMap { $0 }
+                        .contains { $0 is UIButton }
+                    guard !insideButton else { scan(sub); continue }
+
+                    let f = view.convert(img.bounds, from: img)
+                    let isNarrow    = f.width < maxDropletWidth
+                    let onLeftEdge  = f.minX < 80
+                    let onRightEdge = f.maxX > view.bounds.width - 80
+                    if isNarrow && (onLeftEdge || onRightEdge) { img.isHidden = true }
+                }
+                scan(sub)
+            }
+        }
+        scan(view)
     }
 
     // MARK: — Nav styling  (matches Statistics page exactly)
@@ -313,7 +358,26 @@ class TrackSelectionViewController: UIViewController {
         calField.text  = "\(minCalories) kcal"
     }
 
-    // MARK: — Storyboard label cleanup
+    // MARK: — Storyboard junk cleanup
+
+    /// Hides the storyboard UIView container that held the original Duration/Calories controls.
+    /// We pass the pre-programmatic snapshot so we only look at storyboard-era subviews.
+    /// Only plain UIView containers are hidden — UILabel, UIButton, UIImageView are left alone.
+    private func hideStoryboardGoalBox(excluding storyboardSubviews: Set<UIView>) {
+        let knownOutlets: Set<UIView> = [
+            trackTitleName, portalBaseView, videoContainerView,
+            backButton, profileButton, prevTrackTapped, nextTrackTapped, startButton
+        ]
+        for sub in storyboardSubviews {
+            guard !knownOutlets.contains(sub) else { continue }
+            // Hide any plain UIView or UIStackView — these are storyboard containers we no
+            // longer need. Labels, buttons, and image views are excluded so content stays.
+            if type(of: sub) == UIView.self || sub is UIStackView {
+                sub.isHidden = true
+            }
+        }
+    }
+
     /// Renames the storyboard "Duration" label to "Distance" and hides "Minimum Calories".
     private func fixStoryboardLabels() {
         allLabels(in: view).forEach { lbl in
