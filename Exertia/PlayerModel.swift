@@ -193,7 +193,7 @@ struct LoginResponse: Codable {
 // MARK: - Token Refresh Response
 struct TokenRefreshResponse: Codable {
     let access: String
-    let refresh: String
+    let refresh: String?   // optional — present when ROTATE_REFRESH_TOKENS=True
 }
 
 struct PaginatedUserResponse: Codable {
@@ -409,6 +409,37 @@ struct DjangoFriendship: Codable {
     }
 }
 
+// MARK: - Badge Models
+struct DjangoBadge: Codable {
+    let id: String
+    let name: String
+    let description: String
+    let icon: String
+    let badgeType: String
+    let targetValue: Double
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, icon
+        case badgeType = "badge_type"
+        case targetValue = "target_value"
+    }
+}
+
+struct DjangoUserBadge: Codable {
+    let id: String
+    let badge: DjangoBadge
+    let currentProgress: Double
+    let isCompleted: Bool
+    let completedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, badge
+        case currentProgress = "current_progress"
+        case isCompleted = "is_completed"
+        case completedAt = "completed_at"
+    }
+}
+
 struct PaginatedFriendshipResponse: Codable {
     let count: Int
     let next: String?
@@ -486,7 +517,9 @@ class APIManager {
 
             if (200...299).contains(httpResponse.statusCode) {
                 let tokenResp = try JSONDecoder().decode(TokenRefreshResponse.self, from: data)
-                TokenManager.shared.save(access: tokenResp.access, refresh: tokenResp.refresh)
+                // If backend rotated the refresh token, save the new one; otherwise keep existing
+                let newRefresh = tokenResp.refresh ?? refreshToken
+                TokenManager.shared.save(access: tokenResp.access, refresh: newRefresh)
                 print("🔄 JWT tokens refreshed successfully")
                 return true
             } else {
@@ -514,11 +547,6 @@ class APIManager {
                 window.makeKeyAndVisible()
             }
         }
-    }
-
-    // MARK: - Auth Check (GET /auth/me/) — validates access token
-    func getMe() async throws -> DjangoUser {
-        return try await makeRequest(endpoint: "/auth/me/", method: "GET", responseType: DjangoUser.self)
     }
 
     // MARK: - Create User (registration — no auth required)
@@ -619,6 +647,11 @@ class APIManager {
     // MARK: - User Stats
     func getUserStats(userId: String) async throws -> DjangoUserStats {
         return try await makeRequest(endpoint: "/users/\(userId)/stats/", method: "GET", responseType: DjangoUserStats.self)
+    }
+
+    // MARK: - User Badges
+    func getUserBadges(userId: String) async throws -> [DjangoUserBadge] {
+        return try await makeRequest(endpoint: "/users/\(userId)/badges/", method: "GET", responseType: [DjangoUserBadge].self)
     }
 
     // MARK: - User Sessions

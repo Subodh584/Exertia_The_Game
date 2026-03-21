@@ -54,6 +54,9 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var calBtn: UIButton!
     private var timeBtn: UIButton!
 
+    // Target label below the big stat
+    private let targetLabel = UILabel()
+
     // Dynamic weight labels
     private let weightStartLabel = UILabel()
     private let weightEndLabel = UILabel()
@@ -331,13 +334,17 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         bigStatLabel.font = .systemFont(ofSize: 48, weight: .bold)
         bigStatLabel.textColor = .white
         bigStatLabel.textAlignment = .center
-        
+
         subStatLabel.font = .systemFont(ofSize: 14, weight: .medium)
         subStatLabel.textAlignment = .center
-        
-        let textStack = UIStackView(arrangedSubviews: [bigStatLabel, subStatLabel])
+
+        targetLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        targetLabel.textColor = .white.withAlphaComponent(0.45)
+        targetLabel.textAlignment = .center
+
+        let textStack = UIStackView(arrangedSubviews: [bigStatLabel, subStatLabel, targetLabel])
         textStack.axis = .vertical
-        textStack.spacing = 0
+        textStack.spacing = 2
         textStack.translatesAutoresizingMaskIntoConstraints = false
         
         let ringBox = UIView()
@@ -680,8 +687,8 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         let top = UIStackView(arrangedSubviews: [l, UIView(), img])
         top.distribution = .fill
         
-        let r1 = makeRow(icon: "clock", c: .neonYellow, l: tLabel)
-        let r2 = makeRow(icon: "fire", c: .neonPink, l: cLabel)
+        let r1 = makeRow(icon: "Running", label: "Distance", c: .neonYellow, l: tLabel)
+        let r2 = makeRow(icon: "fire", label: "Calories", c: .neonPink, l: cLabel)
         
         let box = UIStackView(arrangedSubviews: [top, r1, r2])
         box.axis = .vertical
@@ -695,15 +702,15 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         ])
     }
     
-    func makeRow(icon: String, c: UIColor, l: UILabel) -> UIStackView {
+    func makeRow(icon: String, label: String, c: UIColor, l: UILabel) -> UIStackView {
         let i = UIImageView(image: UIImage(named: icon))
         i.tintColor = c
         i.contentMode = .scaleAspectFit
         i.widthAnchor.constraint(equalToConstant: 16).isActive = true
         i.heightAnchor.constraint(equalToConstant: 16).isActive = true
-        
+
         let t = UILabel()
-        t.text = (icon == "clock") ? "Duration" : "Calories"
+        t.text = label
         t.font = .systemFont(ofSize: 12)
         t.textColor = .lightGray
         l.font = .systemFont(ofSize: 14, weight: .bold)
@@ -732,6 +739,9 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             self.bigStatLabel.text = self.showCalories ? "\(cal)" : String(format: "%.1f", dist)
             self.subStatLabel.text = self.showCalories ? "Calories Burned" : "Distance (km)"
             self.subStatLabel.textColor = self.showCalories ? .neonPink : .neonYellow
+            self.targetLabel.text = self.showCalories
+                ? "Target: \(self.apiDailyTargetCalories) cal"
+                : String(format: "Target: %.1f km", self.apiDailyTargetDistance)
         }
 
         // Ring progress — outer: calories, inner: distance
@@ -805,24 +815,30 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
     // MARK: - Edit Weight
     @objc func editWeightTapped() {
-        let alert = UIAlertController(title: "Update Weight", message: "Enter your current and target weight (kg)", preferredStyle: .alert)
-        alert.addTextField { tf in
-            tf.placeholder = "Current weight (kg)"
-            tf.keyboardType = .decimalPad
-            if let w = self.apiCurrentWeight { tf.text = String(format: "%.1f", w) }
-        }
-        alert.addTextField { tf in
-            tf.placeholder = "Target weight (kg)"
-            tf.keyboardType = .decimalPad
-            if let w = self.apiTargetWeight { tf.text = String(format: "%.1f", w) }
-        }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
-            guard let currentText = alert.textFields?[0].text, let current = Double(currentText), current > 0,
-                  let targetText = alert.textFields?[1].text, let target = Double(targetText), target > 0 else {
-                return
-            }
-            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        let modal = GlassEditModalController(
+            title: "Update Weight",
+            subtitle: "Track your weight journey",
+            icon: "scalemass.fill",
+            accentColor: .neonPink,
+            fields: [
+                GlassEditModalController.FieldConfig(
+                    placeholder: "Current weight (kg)",
+                    icon: "figure.stand",
+                    keyboard: .decimalPad,
+                    value: apiCurrentWeight.map { String(format: "%.1f", $0) } ?? ""
+                ),
+                GlassEditModalController.FieldConfig(
+                    placeholder: "Target weight (kg)",
+                    icon: "target",
+                    keyboard: .decimalPad,
+                    value: apiTargetWeight.map { String(format: "%.1f", $0) } ?? ""
+                )
+            ]
+        ) { [weak self] values in
+            guard let self = self,
+                  let current = Double(values[0]), current > 0,
+                  let target = Double(values[1]), target > 0,
+                  let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
             Task {
                 do {
                     let payload: [String: Any] = ["current_weight": current, "target_weight": target]
@@ -836,30 +852,38 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                     print("❌ Failed to update weight: \(error)")
                 }
             }
-        })
-        present(alert, animated: true)
+        }
+        modal.modalPresentationStyle = .overCurrentContext
+        modal.modalTransitionStyle = .crossDissolve
+        present(modal, animated: true)
     }
 
     // MARK: - Edit Targets
     @objc func editTargetsTapped() {
-        let alert = UIAlertController(title: "Update Daily Targets", message: "Set your daily fitness goals", preferredStyle: .alert)
-        alert.addTextField { tf in
-            tf.placeholder = "Daily target calories (kcal)"
-            tf.keyboardType = .numberPad
-            tf.text = "\(self.apiDailyTargetCalories)"
-        }
-        alert.addTextField { tf in
-            tf.placeholder = "Daily target distance (km)"
-            tf.keyboardType = .decimalPad
-            tf.text = String(format: "%.1f", self.apiDailyTargetDistance)
-        }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Save", style: .default) { _ in
-            guard let calText = alert.textFields?[0].text, let cal = Int(calText), cal > 0,
-                  let distText = alert.textFields?[1].text, let dist = Double(distText), dist > 0 else {
-                return
-            }
-            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        let modal = GlassEditModalController(
+            title: "Daily Targets",
+            subtitle: "Set your daily fitness goals",
+            icon: "flame.fill",
+            accentColor: .neonYellow,
+            fields: [
+                GlassEditModalController.FieldConfig(
+                    placeholder: "Target calories (kcal)",
+                    icon: "flame",
+                    keyboard: .numberPad,
+                    value: "\(apiDailyTargetCalories)"
+                ),
+                GlassEditModalController.FieldConfig(
+                    placeholder: "Target distance (km)",
+                    icon: "figure.run",
+                    keyboard: .decimalPad,
+                    value: String(format: "%.1f", apiDailyTargetDistance)
+                )
+            ]
+        ) { [weak self] values in
+            guard let self = self,
+                  let cal = Int(values[0]), cal > 0,
+                  let dist = Double(values[1]), dist > 0,
+                  let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
             Task {
                 do {
                     let payload: [String: Any] = [
@@ -876,8 +900,10 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                     print("❌ Failed to update targets: \(error)")
                 }
             }
-        })
-        present(alert, animated: true)
+        }
+        modal.modalPresentationStyle = .overCurrentContext
+        modal.modalTransitionStyle = .crossDissolve
+        present(modal, animated: true)
     }
 
     func styleTabBar() {
@@ -1012,5 +1038,313 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 self.tabLabels[idx].alpha = selected ? 1.0 : 0.5
             }
         }
+    }
+}
+
+// MARK: - Glass Edit Modal Controller
+class GlassEditModalController: UIViewController {
+
+    struct FieldConfig {
+        let placeholder: String
+        let icon: String
+        let keyboard: UIKeyboardType
+        let value: String
+    }
+
+    private let modalTitle: String
+    private let subtitle: String
+    private let iconName: String
+    private let accentColor: UIColor
+    private let fields: [FieldConfig]
+    private let onSave: ([String]) -> Void
+
+    private let dimView = UIView()
+    private let cardView = UIView()
+    private var textFields: [UITextField] = []
+    private var cardBottomConstraint: NSLayoutConstraint!
+
+    init(title: String, subtitle: String, icon: String, accentColor: UIColor, fields: [FieldConfig], onSave: @escaping ([String]) -> Void) {
+        self.modalTitle = title
+        self.subtitle = subtitle
+        self.iconName = icon
+        self.accentColor = accentColor
+        self.fields = fields
+        self.onSave = onSave
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        setupDim()
+        setupCard()
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide), name: UIResponder.keyboardWillHideNotification, object: nil)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        animateIn()
+    }
+
+    private func setupDim() {
+        dimView.backgroundColor = UIColor.black.withAlphaComponent(0.0)
+        dimView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(dimView)
+        NSLayoutConstraint.activate([
+            dimView.topAnchor.constraint(equalTo: view.topAnchor),
+            dimView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            dimView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            dimView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
+        let tap = UITapGestureRecognizer(target: self, action: #selector(cancelTapped))
+        dimView.addGestureRecognizer(tap)
+    }
+
+    private func setupCard() {
+        // Card container
+        cardView.backgroundColor = UIColor(red: 20/255, green: 12/255, blue: 40/255, alpha: 0.98)
+        cardView.layer.cornerRadius = 28
+        cardView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        cardView.layer.borderWidth = 1
+        cardView.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(cardView)
+
+        cardBottomConstraint = cardView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: 500)
+        NSLayoutConstraint.activate([
+            cardView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            cardView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            cardBottomConstraint
+        ])
+
+        // Drag handle
+        let handle = UIView()
+        handle.backgroundColor = UIColor.white.withAlphaComponent(0.25)
+        handle.layer.cornerRadius = 2.5
+        handle.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(handle)
+
+        // Icon circle
+        let iconCircle = UIView()
+        iconCircle.backgroundColor = accentColor.withAlphaComponent(0.15)
+        iconCircle.layer.cornerRadius = 28
+        iconCircle.layer.borderWidth = 1
+        iconCircle.layer.borderColor = accentColor.withAlphaComponent(0.3).cgColor
+        iconCircle.translatesAutoresizingMaskIntoConstraints = false
+
+        let iconImg = UIImageView(image: UIImage(systemName: iconName))
+        iconImg.tintColor = accentColor
+        iconImg.contentMode = .scaleAspectFit
+        iconImg.translatesAutoresizingMaskIntoConstraints = false
+        iconCircle.addSubview(iconImg)
+        cardView.addSubview(iconCircle)
+
+        // Title
+        let titleLbl = UILabel()
+        titleLbl.text = modalTitle
+        titleLbl.font = .systemFont(ofSize: 22, weight: .bold)
+        titleLbl.textColor = .white
+        titleLbl.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(titleLbl)
+
+        // Subtitle
+        let subLbl = UILabel()
+        subLbl.text = subtitle
+        subLbl.font = .systemFont(ofSize: 13, weight: .medium)
+        subLbl.textColor = UIColor.white.withAlphaComponent(0.45)
+        subLbl.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(subLbl)
+
+        // Fields stack
+        let fieldsStack = UIStackView()
+        fieldsStack.axis = .vertical
+        fieldsStack.spacing = 14
+        fieldsStack.translatesAutoresizingMaskIntoConstraints = false
+
+        for config in fields {
+            let (container, tf) = makeGlassField(config: config)
+            textFields.append(tf)
+            fieldsStack.addArrangedSubview(container)
+        }
+        cardView.addSubview(fieldsStack)
+
+        // Buttons
+        let cancelBtn = makeActionButton(title: "Cancel", filled: false)
+        cancelBtn.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+
+        let saveBtn = makeActionButton(title: "Save", filled: true)
+        saveBtn.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
+
+        let btnStack = UIStackView(arrangedSubviews: [cancelBtn, saveBtn])
+        btnStack.spacing = 12
+        btnStack.distribution = .fillEqually
+        btnStack.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(btnStack)
+
+        NSLayoutConstraint.activate([
+            handle.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 12),
+            handle.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            handle.widthAnchor.constraint(equalToConstant: 40),
+            handle.heightAnchor.constraint(equalToConstant: 5),
+
+            iconCircle.topAnchor.constraint(equalTo: handle.bottomAnchor, constant: 24),
+            iconCircle.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            iconCircle.widthAnchor.constraint(equalToConstant: 56),
+            iconCircle.heightAnchor.constraint(equalToConstant: 56),
+            iconImg.centerXAnchor.constraint(equalTo: iconCircle.centerXAnchor),
+            iconImg.centerYAnchor.constraint(equalTo: iconCircle.centerYAnchor),
+            iconImg.widthAnchor.constraint(equalToConstant: 24),
+            iconImg.heightAnchor.constraint(equalToConstant: 24),
+
+            titleLbl.topAnchor.constraint(equalTo: iconCircle.bottomAnchor, constant: 16),
+            titleLbl.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+
+            subLbl.topAnchor.constraint(equalTo: titleLbl.bottomAnchor, constant: 4),
+            subLbl.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+
+            fieldsStack.topAnchor.constraint(equalTo: subLbl.bottomAnchor, constant: 28),
+            fieldsStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 28),
+            fieldsStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -28),
+
+            btnStack.topAnchor.constraint(equalTo: fieldsStack.bottomAnchor, constant: 28),
+            btnStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 28),
+            btnStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -28),
+            btnStack.heightAnchor.constraint(equalToConstant: 50),
+            btnStack.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -40)
+        ])
+    }
+
+    private func makeGlassField(config: FieldConfig) -> (UIView, UITextField) {
+        let container = UIView()
+        container.backgroundColor = UIColor.white.withAlphaComponent(0.06)
+        container.layer.cornerRadius = 14
+        container.layer.borderWidth = 1
+        container.layer.borderColor = UIColor.white.withAlphaComponent(0.1).cgColor
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.heightAnchor.constraint(equalToConstant: 54).isActive = true
+
+        let icon = UIImageView(image: UIImage(systemName: config.icon))
+        icon.tintColor = accentColor.withAlphaComponent(0.7)
+        icon.contentMode = .scaleAspectFit
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        let tf = UITextField()
+        tf.text = config.value
+        tf.attributedPlaceholder = NSAttributedString(
+            string: config.placeholder,
+            attributes: [.foregroundColor: UIColor.white.withAlphaComponent(0.3)]
+        )
+        tf.textColor = .white
+        tf.font = .systemFont(ofSize: 16, weight: .medium)
+        tf.keyboardType = config.keyboard
+        tf.tintColor = accentColor
+        tf.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(icon)
+        container.addSubview(tf)
+
+        NSLayoutConstraint.activate([
+            icon.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            icon.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 20),
+            icon.heightAnchor.constraint(equalToConstant: 20),
+            tf.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 12),
+            tf.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            tf.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        ])
+
+        return (container, tf)
+    }
+
+    private func makeActionButton(title: String, filled: Bool) -> UIButton {
+        let btn = UIButton(type: .system)
+        btn.setTitle(title, for: .normal)
+        btn.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+        btn.layer.cornerRadius = 14
+
+        if filled {
+            btn.backgroundColor = accentColor
+            btn.setTitleColor(UIColor(red: 13/255, green: 5/255, blue: 26/255, alpha: 1.0), for: .normal)
+        } else {
+            btn.backgroundColor = UIColor.white.withAlphaComponent(0.06)
+            btn.setTitleColor(.white.withAlphaComponent(0.7), for: .normal)
+            btn.layer.borderWidth = 1
+            btn.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
+        }
+        return btn
+    }
+
+    // MARK: - Animations
+    private func animateIn() {
+        view.layoutIfNeeded()
+        cardBottomConstraint.constant = 0
+        UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0.5, options: .curveEaseOut) {
+            self.dimView.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            self.textFields.first?.becomeFirstResponder()
+        }
+    }
+
+    private func animateOut(completion: (() -> Void)? = nil) {
+        view.endEditing(true)
+        cardBottomConstraint.constant = 500
+        UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseIn) {
+            self.dimView.backgroundColor = UIColor.black.withAlphaComponent(0.0)
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            self.dismiss(animated: false, completion: completion)
+        }
+    }
+
+    @objc private func cancelTapped() {
+        animateOut()
+    }
+
+    @objc private func saveTapped() {
+        let values = textFields.map { $0.text ?? "" }
+        // Validate all fields are non-empty
+        guard values.allSatisfy({ !$0.isEmpty }) else {
+            shakeCard()
+            return
+        }
+        animateOut { [weak self] in
+            self?.onSave(values)
+        }
+    }
+
+    private func shakeCard() {
+        let anim = CAKeyframeAnimation(keyPath: "transform.translation.x")
+        anim.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        anim.duration = 0.4
+        anim.values = [-12, 12, -8, 8, -4, 4, 0]
+        cardView.layer.add(anim, forKey: "shake")
+
+        // Flash border red
+        let origColor = cardView.layer.borderColor
+        cardView.layer.borderColor = UIColor.systemRed.withAlphaComponent(0.6).cgColor
+        UIView.animate(withDuration: 0.4, delay: 0.3) {
+            self.cardView.layer.borderColor = origColor
+        }
+    }
+
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+              let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else { return }
+        cardBottomConstraint.constant = -keyboardFrame.height
+        UIView.animate(withDuration: duration) { self.view.layoutIfNeeded() }
+    }
+
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        guard let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else { return }
+        cardBottomConstraint.constant = 0
+        UIView.animate(withDuration: duration) { self.view.layoutIfNeeded() }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 }
