@@ -1,16 +1,47 @@
 import UIKit
 
+// MARK: - Filter Period
+private enum FilterPeriod: Int, CaseIterable {
+    case all, sevenDays, thirtyDays, ninetyDays
+
+    var title: String {
+        switch self {
+        case .all:        return "All"
+        case .sevenDays:  return "7 Days"
+        case .thirtyDays: return "30 Days"
+        case .ninetyDays: return "90 Days"
+        }
+    }
+    var days: Int? {
+        switch self {
+        case .all:        return nil
+        case .sevenDays:  return 7
+        case .thirtyDays: return 30
+        case .ninetyDays: return 90
+        }
+    }
+}
+
 // MARK: - Run History — styled to exactly match StatisticsViewController
 class RunHistoryViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
 
-    var history: [GameSession] = []
-    private var bestSessionIndex: Int? = nil
+    /// Set to true when launched from the Personal Best card — will auto-scroll to best row
+    var scrollToBest: Bool = false
+
+    private var allHistory: [GameSession] = []
+    private var filteredHistory: [GameSession] = []
+    private var bestIndexInFiltered: Int? = nil
+    private var activeFilter: FilterPeriod = .all
 
     // Nav — mirrors Stats page
-    private let navBar      = UIView()
-    private let backBtn     = UIButton()
-    private let titleLabel  = UILabel()
+    private let navBar       = UIView()
+    private let backBtn      = UIButton()
+    private let titleLabel   = UILabel()
     private let gradientView = UIView()
+
+    // Filter bar
+    private var filterButtons: [UIButton] = []
+    private let filterScroll  = UIScrollView()
 
     private let tableView  = UITableView()
     private let emptyLabel = UILabel()
@@ -27,6 +58,7 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         view.backgroundColor = UIColor(red: 13/255, green: 5/255, blue: 26/255, alpha: 1.0)
         addGradient()
         configureNavBar()
+        configureFilterBar()
         configureTable()
         fetchSessionsFromAPI()
     }
@@ -74,7 +106,6 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
 
         navBar.addSubview(backBtn)
         navBar.addSubview(titleLabel)
-
         backBtn.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -92,6 +123,102 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
             titleLabel.centerXAnchor.constraint(equalTo: navBar.centerXAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: navBar.centerYAnchor)
         ])
+    }
+
+    // MARK: Filter chip bar
+    private func configureFilterBar() {
+        filterScroll.showsHorizontalScrollIndicator = false
+        filterScroll.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(filterScroll)
+
+        let chipStack = UIStackView()
+        chipStack.axis    = .horizontal
+        chipStack.spacing = 10
+        chipStack.translatesAutoresizingMaskIntoConstraints = false
+        filterScroll.addSubview(chipStack)
+
+        for (i, period) in FilterPeriod.allCases.enumerated() {
+            let btn = UIButton()
+            btn.setTitle(period.title, for: .normal)
+            btn.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+            btn.contentEdgeInsets = UIEdgeInsets(top: 7, left: 16, bottom: 7, right: 16)
+            btn.layer.cornerRadius = 14
+            btn.tag = i
+            btn.addTarget(self, action: #selector(filterTapped(_:)), for: .touchUpInside)
+            styleChip(btn, selected: i == 0)
+            filterButtons.append(btn)
+            chipStack.addArrangedSubview(btn)
+        }
+
+        NSLayoutConstraint.activate([
+            filterScroll.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
+            filterScroll.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            filterScroll.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            filterScroll.heightAnchor.constraint(equalToConstant: 36),
+
+            chipStack.topAnchor.constraint(equalTo: filterScroll.topAnchor),
+            chipStack.bottomAnchor.constraint(equalTo: filterScroll.bottomAnchor),
+            chipStack.leadingAnchor.constraint(equalTo: filterScroll.leadingAnchor),
+            chipStack.trailingAnchor.constraint(equalTo: filterScroll.trailingAnchor),
+            chipStack.heightAnchor.constraint(equalTo: filterScroll.heightAnchor)
+        ])
+    }
+
+    private func styleChip(_ btn: UIButton, selected: Bool) {
+        if selected {
+            btn.backgroundColor = UIColor.neonPink.withAlphaComponent(0.22)
+            btn.layer.borderColor = UIColor.neonPink.withAlphaComponent(0.8).cgColor
+            btn.layer.borderWidth = 1
+            btn.setTitleColor(.white, for: .normal)
+        } else {
+            btn.backgroundColor = UIColor.white.withAlphaComponent(0.08)
+            btn.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
+            btn.layer.borderWidth = 1
+            btn.setTitleColor(UIColor.white.withAlphaComponent(0.5), for: .normal)
+        }
+    }
+
+    @objc private func filterTapped(_ sender: UIButton) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        activeFilter = FilterPeriod.allCases[sender.tag]
+        filterButtons.enumerated().forEach { i, btn in styleChip(btn, selected: i == sender.tag) }
+        applyFilter(animate: true)
+    }
+
+    // MARK: Apply filter to history list
+    private func applyFilter(animate: Bool) {
+        let cutoff: Date?
+        if let days = activeFilter.days {
+            var cal = Calendar.current
+            cal.timeZone = Self.istTZ
+            cutoff = cal.date(byAdding: .day, value: -days, to: Date())
+        } else {
+            cutoff = nil
+        }
+
+        filteredHistory = cutoff == nil
+            ? allHistory
+            : allHistory.filter { $0.date >= cutoff! }
+
+        bestIndexInFiltered = filteredHistory.indices.max {
+            filteredHistory[$0].distanceCovered < filteredHistory[$1].distanceCovered
+        }
+
+        let isEmpty = filteredHistory.isEmpty
+        emptyLabel.isHidden = !isEmpty
+        tableView.isHidden  = isEmpty
+        tableView.reloadData()
+
+        if animate { animateCells() }
+
+        // Scroll to best once if launched from the Personal Best card
+        if scrollToBest, let idx = bestIndexInFiltered, !isEmpty {
+            scrollToBest = false   // only auto-scroll once
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                self.tableView.scrollToRow(at: IndexPath(row: idx, section: 0),
+                                           at: .middle, animated: true)
+            }
+        }
     }
 
     // MARK: Table
@@ -116,7 +243,7 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         view.addSubview(emptyLabel)
 
         NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
+            tableView.topAnchor.constraint(equalTo: filterScroll.bottomAnchor, constant: 10),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -160,15 +287,9 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
                     )
                 }.sorted { $0.date > $1.date }
 
-                let bestIdx = converted.indices.max { converted[$0].distanceCovered < converted[$1].distanceCovered }
-
                 DispatchQueue.main.async {
-                    self.history     = converted
-                    self.bestSessionIndex = bestIdx
-                    self.emptyLabel.isHidden = !converted.isEmpty
-                    self.tableView.isHidden  = converted.isEmpty
-                    self.tableView.reloadData()
-                    self.animateCells()
+                    self.allHistory = converted
+                    self.applyFilter(animate: true)
                 }
             } catch { print("❌ Run history fetch: \(error)") }
         }
@@ -188,32 +309,35 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
 
     @objc private func goBack() { dismiss(animated: true) }
 
-    // MARK: Table data source / delegate
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { history.count }
+    // MARK: UITableViewDataSource / Delegate
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        filteredHistory.count
+    }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "Row", for: indexPath) as! HistoryRowCell
-        cell.configure(session: history[indexPath.row],
+        cell.configure(session: filteredHistory[indexPath.row],
                        isLatest: indexPath.row == 0,
-                       isBest:   indexPath.row == bestSessionIndex,
+                       isBest:   indexPath.row == bestIndexInFiltered,
                        dateFmt:  Self.cellDateFmt)
         return cell
     }
 
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { 90 }
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { 100 }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         if let cell = tableView.cellForRow(at: indexPath) {
-            UIView.animate(withDuration: 0.1, animations: { cell.transform = CGAffineTransform(scaleX: 0.97, y: 0.97) }) { _ in
+            UIView.animate(withDuration: 0.1,
+                           animations: { cell.transform = CGAffineTransform(scaleX: 0.97, y: 0.97) }) { _ in
                 UIView.animate(withDuration: 0.1) { cell.transform = .identity }
             }
         }
-        let s = history[indexPath.row]
+        let s = filteredHistory[indexPath.row]
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             let vc = SessionDetailViewController()
             vc.session = s
-            vc.isBest  = indexPath.row == self.bestSessionIndex
+            vc.isBest  = indexPath.row == self.bestIndexInFiltered
             vc.modalPresentationStyle = .fullScreen
             vc.modalTransitionStyle   = .crossDissolve
             self.present(vc, animated: true)
@@ -224,14 +348,17 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
 // MARK: - History Row Cell — glass card matching Stats page style
 class HistoryRowCell: UITableViewCell {
 
-    private let blurView  = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-    private let dateLbl   = UILabel()
-    private let trackLbl  = UILabel()
-    private let distLbl   = UILabel()
-    private let calLbl    = UILabel()
-    private let newBadge  = BadgePill(text: "NEW",  color: .systemPink)
-    private let bestBadge = BadgePill(text: "BEST", color: UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1))
-    private let arrowImg  = UIImageView()
+    private let blurView   = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+    private let dateLbl    = UILabel()
+    private let trackLbl   = UILabel()
+    private let distLbl    = UILabel()
+    private let calLbl     = UILabel()
+    private let arrowImg   = UIImageView()
+
+    // Badge stack — both pinned to the left, collapsed when both hidden
+    private let badgeStack = UIStackView()
+    private let newBadge   = BadgePill(text: "NEW",  color: .systemPink)
+    private let bestBadge  = BadgePill(text: "BEST", color: UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1))
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -241,8 +368,8 @@ class HistoryRowCell: UITableViewCell {
     required init?(coder: NSCoder) { fatalError() }
 
     private func buildUI() {
-        // Glass card — exact same spec as Stats glassCard()
-        blurView.layer.cornerRadius = 24
+        // Glass card
+        blurView.layer.cornerRadius = 20
         blurView.clipsToBounds = true
         blurView.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
         blurView.layer.borderWidth = 1
@@ -278,12 +405,6 @@ class HistoryRowCell: UITableViewCell {
         calLbl.translatesAutoresizingMaskIntoConstraints = false
         blurView.contentView.addSubview(calLbl)
 
-        // Badges
-        newBadge.translatesAutoresizingMaskIntoConstraints  = false
-        bestBadge.translatesAutoresizingMaskIntoConstraints = false
-        blurView.contentView.addSubview(newBadge)
-        blurView.contentView.addSubview(bestBadge)
-
         // Arrow
         arrowImg.image = UIImage(systemName: "chevron.right")
         arrowImg.tintColor = UIColor.white.withAlphaComponent(0.25)
@@ -291,14 +412,23 @@ class HistoryRowCell: UITableViewCell {
         arrowImg.translatesAutoresizingMaskIntoConstraints = false
         blurView.contentView.addSubview(arrowImg)
 
+        // Badge stack — horizontal, both anchored to leading edge
+        badgeStack.axis      = .horizontal
+        badgeStack.spacing   = 6
+        badgeStack.alignment = .center
+        badgeStack.addArrangedSubview(newBadge)
+        badgeStack.addArrangedSubview(bestBadge)
+        badgeStack.translatesAutoresizingMaskIntoConstraints = false
+        blurView.contentView.addSubview(badgeStack)
+
         NSLayoutConstraint.activate([
-            // Card fills cell with small vertical margin
+            // Card fills cell with vertical margin
             blurView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
             blurView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
             blurView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             blurView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
 
-            // Arrow — far right
+            // Arrow — far right, vertically centered
             arrowImg.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -16),
             arrowImg.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
             arrowImg.widthAnchor.constraint(equalToConstant: 12),
@@ -306,29 +436,26 @@ class HistoryRowCell: UITableViewCell {
 
             // Distance — top right, left of arrow
             distLbl.trailingAnchor.constraint(equalTo: arrowImg.leadingAnchor, constant: -8),
-            distLbl.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: 16),
+            distLbl.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: 18),
 
             // Calories — below distance
             calLbl.trailingAnchor.constraint(equalTo: distLbl.trailingAnchor),
-            calLbl.topAnchor.constraint(equalTo: distLbl.bottomAnchor, constant: 2),
+            calLbl.topAnchor.constraint(equalTo: distLbl.bottomAnchor, constant: 3),
 
             // Date — top left
             dateLbl.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 18),
-            dateLbl.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: 16),
+            dateLbl.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: 18),
             dateLbl.trailingAnchor.constraint(lessThanOrEqualTo: distLbl.leadingAnchor, constant: -8),
 
-            // Track — below date, must not overlap distance
+            // Track — below date
             trackLbl.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 18),
-            trackLbl.topAnchor.constraint(equalTo: dateLbl.bottomAnchor, constant: 3),
+            trackLbl.topAnchor.constraint(equalTo: dateLbl.bottomAnchor, constant: 2),
             trackLbl.trailingAnchor.constraint(lessThanOrEqualTo: distLbl.leadingAnchor, constant: -8),
 
-            // Badges — below track
-            newBadge.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 18),
-            newBadge.topAnchor.constraint(equalTo: trackLbl.bottomAnchor, constant: 6),
-            newBadge.bottomAnchor.constraint(lessThanOrEqualTo: blurView.contentView.bottomAnchor, constant: -12),
-
-            bestBadge.leadingAnchor.constraint(equalTo: newBadge.trailingAnchor, constant: 6),
-            bestBadge.centerYAnchor.constraint(equalTo: newBadge.centerYAnchor)
+            // Badges — always pinned to the LEFT, directly below track name
+            badgeStack.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 18),
+            badgeStack.topAnchor.constraint(equalTo: trackLbl.bottomAnchor, constant: 7),
+            badgeStack.bottomAnchor.constraint(lessThanOrEqualTo: blurView.contentView.bottomAnchor, constant: -10)
         ])
     }
 
@@ -337,8 +464,10 @@ class HistoryRowCell: UITableViewCell {
         trackLbl.text = session.trackName
         distLbl.text  = String(format: "%.1f km", session.distanceCovered)
         calLbl.text   = "\(session.caloriesBurned) kcal"
-        newBadge.isHidden  = !isLatest
-        bestBadge.isHidden = !isBest
+
+        newBadge.isHidden   = !isLatest
+        bestBadge.isHidden  = !isBest
+        badgeStack.isHidden = !isLatest && !isBest
 
         let gold = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1)
         blurView.layer.borderColor = isBest

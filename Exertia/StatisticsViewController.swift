@@ -102,6 +102,8 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var apiCurrentStreak: Int = 0
     // Dates from streak-calendar API where the daily target was met
     private var activeDateStrings: Set<String> = []
+    // All completed sessions — used to build day-by-day stats for the calendar
+    private var allCompletedSessions: [DjangoSession] = []
     
     func fetchRealUserName() {
             guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
@@ -143,6 +145,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 // Fetch all sessions to find last run
                 let sessions = try await APIManager.shared.getUserSessions(userId: userId)
                 let completed = sessions.filter { $0.completionStatus == "completed" }
+                self.allCompletedSessions = completed   // stored for calendar day-stats
                 let sorted = completed.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
 
                 if let lastSession = sorted.first {
@@ -454,11 +457,11 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         bestCard = glassCard(h: 130)
         fillSmallCard(view: bestCard!, title: "Personal Best", tLabel: bestTimeLabel, cLabel: bestCalLabel)
         
-        let t1 = UITapGestureRecognizer(target: self, action: #selector(openHistory))
+        let t1 = UITapGestureRecognizer(target: self, action: #selector(openHistoryNormal))
         runCard?.addGestureRecognizer(t1)
         runCard?.isUserInteractionEnabled = true
-        
-        let t2 = UITapGestureRecognizer(target: self, action: #selector(openHistory))
+
+        let t2 = UITapGestureRecognizer(target: self, action: #selector(openHistoryBest))
         bestCard?.addGestureRecognizer(t2)
         bestCard?.isUserInteractionEnabled = true
         
@@ -634,19 +637,40 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             }
         }
     
-    @objc func openHistory() {
+    @objc func openHistoryNormal() { openHistory(scrollToBest: false) }
+    @objc func openHistoryBest()   { openHistory(scrollToBest: true)  }
+
+    private func openHistory(scrollToBest: Bool) {
         let vc = RunHistoryViewController()
+        vc.scrollToBest = scrollToBest
         vc.modalPresentationStyle = .fullScreen
-        vc.modalTransitionStyle = .crossDissolve
+        vc.modalTransitionStyle   = .crossDissolve
         present(vc, animated: true)
     }
-    
+
     @objc func openCalendar() {
         let vc = FullCalendarViewController()
-        vc.activeDateStrings = activeDateStrings   // pass real medal dates
-        vc.modalPresentationStyle = .overCurrentContext
-        vc.modalTransitionStyle = .crossDissolve
+        vc.activeDateStrings = activeDateStrings
+        vc.sessionsByDate    = buildSessionsByDate()
+        vc.modalPresentationStyle = .fullScreen
+        vc.modalTransitionStyle   = .crossDissolve
         present(vc, animated: true)
+    }
+
+    private func buildSessionsByDate() -> [String: [DjangoSession]] {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let istFmt = DateFormatter()
+        istFmt.dateFormat = "yyyy-MM-dd"
+        istFmt.timeZone   = TimeZone(identifier: "Asia/Kolkata")!
+        var dict: [String: [DjangoSession]] = [:]
+        for s in allCompletedSessions {
+            if let raw = s.createdAt, let ts = iso.date(from: raw) {
+                let key = istFmt.string(from: ts)
+                dict[key, default: []].append(s)
+            }
+        }
+        return dict
     }
     
     @objc func goToToday() {
