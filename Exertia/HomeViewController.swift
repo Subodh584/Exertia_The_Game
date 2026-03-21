@@ -129,7 +129,7 @@ class HomeViewController: UIViewController {
             tabBarStackView.trailingAnchor.constraint(equalTo: tabBarContainer.trailingAnchor, constant: -10)
         ])
         
-        let items = [("home2", "Home"), ("multiplayer2", "Multiplayer"), ("customize2", "Customize"), ("statistics2", "Statistics")]
+        let items = [("home2", "Home"), ("customize2", "Customize"), ("statistics2", "Statistics")]
         
         for (index, (iconName, title)) in items.enumerated() {
             let containerStack = UIStackView()
@@ -185,22 +185,17 @@ class HomeViewController: UIViewController {
         moveIndicator(to: tabWrappers[index], animated: true)
         
         switch index {
-        case 0: break
+        case 0: break  // Already on Home
         case 1:
-            let sb = UIStoryboard(name: "Main", bundle: nil)
-            if let vc = sb.instantiateViewController(withIdentifier: "MultiplayerViewController") as? MultiplayerViewController {
-                vc.modalPresentationStyle = .fullScreen
-                vc.modalTransitionStyle = .crossDissolve
-                self.present(vc, animated: true)
-            }
-        case 2:
+            // Customize
             let sb = UIStoryboard(name: "Main", bundle: nil)
             if let vc = sb.instantiateViewController(withIdentifier: "CharacterSelectionViewController") as? CharacterSelectionViewController {
                 vc.modalPresentationStyle = .fullScreen
                 vc.modalTransitionStyle = .crossDissolve
                 self.present(vc, animated: true)
             }
-        case 3:
+        case 2:
+            // Statistics
             let sb = UIStoryboard(name: "Main", bundle: nil)
             if let vc = sb.instantiateViewController(withIdentifier: "StatisticsViewController") as? StatisticsViewController {
                 vc.modalPresentationStyle = .fullScreen

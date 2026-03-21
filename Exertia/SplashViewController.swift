@@ -101,13 +101,11 @@ class SplashViewController: UIViewController {
         }
 
         Task {
-            // Use the refresh token to get a fresh access token.
-            // This validates the refresh token is still alive (≤30 days old).
-            let refreshed = await APIManager.shared.attemptTokenRefresh()
+            let result = await APIManager.shared.refreshTokenResult()
 
-            if refreshed {
-                // Refresh succeeded → still logged in.
-                // Also fetch the user profile so we have an up-to-date userId.
+            switch result {
+            case .success:
+                // Token refreshed — fetch latest user profile and go home
                 if let userId = UserDefaults.standard.string(forKey: "djangoUserID") {
                     if let user = try? await APIManager.shared.getUser(userId: userId) {
                         UserDefaults.standard.set(user.id, forKey: "djangoUserID")
@@ -115,13 +113,21 @@ class SplashViewController: UIViewController {
                     }
                 }
                 DispatchQueue.main.async { self.goToHome() }
-            } else {
-                print("❌ Refresh token expired — going to login")
+
+            case .expired:
+                // Token is definitively invalid (401/403) — must log in again
+                print("🔐 Refresh token expired — must log in again")
                 DispatchQueue.main.async {
                     TokenManager.shared.clear()
                     UserDefaults.standard.removeObject(forKey: "djangoUserID")
                     self.goToLogin()
                 }
+
+            case .serverError:
+                // Server unreachable / cold-starting — tokens are likely still valid.
+                // Go home; individual screens will retry API calls on 401 automatically.
+                print("⚠️ Server unreachable during refresh — proceeding to home (tokens kept)")
+                DispatchQueue.main.async { self.goToHome() }
             }
         }
     }

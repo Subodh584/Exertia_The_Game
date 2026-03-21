@@ -172,7 +172,7 @@ class MultiplayerViewController: UIViewController, UITableViewDataSource, UITabl
             tabBarStackView.trailingAnchor.constraint(equalTo: tabBarContainer.trailingAnchor, constant: -10)
         ])
         
-        let items = [("home2", "Home"), ("multiplayer2", "Multiplayer"), ("customize2", "Customize"), ("statistics2", "Statistics")]
+        let items = [("home2", "Home"), ("customize2", "Customize"), ("statistics2", "Statistics")]
         
         for (index, (iconName, title)) in items.enumerated() {
             let containerStack = UIStackView()

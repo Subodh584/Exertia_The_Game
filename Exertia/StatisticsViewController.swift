@@ -81,6 +81,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         initTabs()
         fetchRealUserName()
         fetchStatsData()
+        fetchStreakCalendar()
     }
     
     // MARK: - Cached API data for display
@@ -99,6 +100,8 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var apiCurrentWeight: Double? = nil
     private var apiTargetWeight: Double? = nil
     private var apiCurrentStreak: Int = 0
+    // Dates from streak-calendar API where the daily target was met
+    private var activeDateStrings: Set<String> = []
     
     func fetchRealUserName() {
             guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
@@ -164,15 +167,71 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         }
     }
     
+    func fetchStreakCalendar() {
+        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        Task {
+            do {
+                // Fetch streak calendar for target_met info AND sessions for IST-accurate timestamps.
+                // The backend stores dates in UTC, so "2026-03-20T19:33Z" (UTC) = "2026-03-21 01:03 IST".
+                // Using created_at timestamps converted to IST gives the correct IST calendar date.
+                async let calFetch  = APIManager.shared.getStreakCalendar(userId: userId, days: 90)
+                async let sessFetch = APIManager.shared.getUserSessions(userId: userId)
+                let (records, sessions) = try await (calFetch, sessFetch)
+
+                // Build a set of UTC date strings where target was met (from streak-calendar API)
+                let targetMetUTCDates = Set(records.filter { $0.targetMet }.map { $0.date })
+
+                // Convert each completed session's created_at to IST date string
+                let iso = ISO8601DateFormatter()
+                iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                let istFmt = DateFormatter()
+                istFmt.dateFormat = "yyyy-MM-dd"
+                istFmt.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+
+                // Also build a UTC date → IST date mapping from sessions
+                var utcToIST: [String: String] = [:]
+                for s in sessions where s.completionStatus == "completed" {
+                    if let raw = s.createdAt, let ts = iso.date(from: raw) {
+                        let utcFmt = DateFormatter()
+                        utcFmt.dateFormat = "yyyy-MM-dd"
+                        utcFmt.timeZone = TimeZone(abbreviation: "UTC")
+                        let utcDate = utcFmt.string(from: ts)
+                        let istDate = istFmt.string(from: ts)
+                        utcToIST[utcDate] = istDate
+                    }
+                }
+
+                // Map target-met UTC dates → IST dates
+                var active: Set<String> = []
+                for utcDate in targetMetUTCDates {
+                    if let istDate = utcToIST[utcDate] {
+                        active.insert(istDate)
+                    } else {
+                        // Fallback: treat the date string as-is (won't cross midnight boundary)
+                        active.insert(utcDate)
+                    }
+                }
+
+                DispatchQueue.main.async {
+                    self.activeDateStrings = active
+                    self.streakCollection.reloadData()
+                    print("✅ Streak calendar: \(active.count) target-met days (IST-corrected)")
+                }
+            } catch {
+                print("❌ Failed to fetch streak calendar: \(error)")
+            }
+        }
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         backBtn.layer.cornerRadius = backBtn.frame.height / 2
         profileImg.layer.cornerRadius = profileImg.frame.height / 2
         moveBubble()
-        
+
         tabContainer.layoutIfNeeded()
-        if tabWrappers.indices.contains(3) {
-            moveIndicator(to: tabWrappers[3], animated: false)
+        if tabWrappers.indices.contains(2) {
+            moveIndicator(to: tabWrappers[2], animated: false)
         }
     }
     
@@ -182,7 +241,8 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     func loadDates() {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone(identifier: "Asia/Kolkata")!
         let today = Date()
         dates = (-180...180).compactMap { i in
             calendar.date(byAdding: .day, value: i, to: today)
@@ -576,13 +636,14 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     
     @objc func openHistory() {
         let vc = RunHistoryViewController()
-        vc.modalPresentationStyle = .overCurrentContext
+        vc.modalPresentationStyle = .fullScreen
         vc.modalTransitionStyle = .crossDissolve
         present(vc, animated: true)
     }
     
     @objc func openCalendar() {
         let vc = FullCalendarViewController()
+        vc.activeDateStrings = activeDateStrings   // pass real medal dates
         vc.modalPresentationStyle = .overCurrentContext
         vc.modalTransitionStyle = .crossDissolve
         present(vc, animated: true)
@@ -599,11 +660,19 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath) as! CalendarDayCell
         let date = dates[indexPath.item]
-        let isToday = Calendar.current.isDateInToday(date)
-        // Only show activity for past dates within the current streak
-        let daysSince = Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 99
-        let active = (date <= Date()) && (daysSince >= 0 && daysSince < apiCurrentStreak)
-        cell.configure(date: date, isToday: isToday, hasActivity: active)
+        // Use IST calendar so "today" matches the backend's date storage
+        var istCalendar = Calendar.current
+        istCalendar.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        let isToday = istCalendar.isDateInToday(date)
+
+        // Format date as "yyyy-MM-dd" in IST to match backend date strings
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        fmt.timeZone = TimeZone(identifier: "Asia/Kolkata")
+        let dateKey = fmt.string(from: date)
+
+        let targetMet = activeDateStrings.contains(dateKey)
+        cell.configure(date: date, isToday: isToday, targetMet: targetMet)
         return cell
     }
 
@@ -947,7 +1016,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             tabStack.leadingAnchor.constraint(equalTo: tabContainer.leadingAnchor, constant: 10),
             tabStack.trailingAnchor.constraint(equalTo: tabContainer.trailingAnchor, constant: -10)
         ])
-        let list = [("home2", "Home"), ("multiplayer2", "Multiplayer"), ("customize2", "Customize"), ("statistics2", "Statistics")]
+        let list = [("home2", "Home"), ("customize2", "Customize"), ("statistics2", "Statistics")]
         for (i, (icon, txt)) in list.enumerated() {
             let stack = UIStackView()
             stack.axis = .vertical
@@ -996,6 +1065,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         
         switch i {
         case 0:
+            // Go back to Home
             var check = self.presentingViewController
             while check != nil {
                 if check is HomeViewController {
@@ -1006,20 +1076,14 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             }
             self.dismiss(animated: true, completion: nil)
         case 1:
-            let sb = UIStoryboard(name: "Main", bundle: nil)
-            if let vc = sb.instantiateViewController(withIdentifier: "MultiplayerViewController") as? MultiplayerViewController {
-                vc.modalPresentationStyle = .fullScreen
-                vc.modalTransitionStyle = .crossDissolve
-                self.present(vc, animated: true)
-            }
-        case 2:
+            // Customize
             let sb = UIStoryboard(name: "Main", bundle: nil)
             if let vc = sb.instantiateViewController(withIdentifier: "CharacterSelectionViewController") as? CharacterSelectionViewController {
                 vc.modalPresentationStyle = .fullScreen
                 vc.modalTransitionStyle = .crossDissolve
                 self.present(vc, animated: true)
             }
-        case 3: break
+        case 2: break  // Already on Statistics
         default: break
         }
     }

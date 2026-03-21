@@ -5,6 +5,17 @@ class FullCalendarViewController: UIViewController, UICollectionViewDataSource, 
     let monthLabel = UILabel()
     var currentMonthDate = Date()
     var collectionView: UICollectionView!
+    var activeDateStrings: Set<String> = []   // injected from StatisticsViewController
+
+    // IST timezone — backend stores dates in IST
+    private static let istTimeZone = TimeZone(identifier: "Asia/Kolkata")!
+
+    private let dateKeyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        return f
+    }()
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -116,13 +127,13 @@ class FullCalendarViewController: UIViewController, UICollectionViewDataSource, 
     }
 
     @objc func prevMonth() {
-        currentMonthDate = Calendar.current.date(byAdding: .month, value: -1, to: currentMonthDate) ?? Date()
+        currentMonthDate = istCalendar.date(byAdding: .month, value: -1, to: currentMonthDate) ?? Date()
         updateMonthLabel()
         collectionView.reloadData()
     }
-    
+
     @objc func nextMonth() {
-        currentMonthDate = Calendar.current.date(byAdding: .month, value: 1, to: currentMonthDate) ?? Date()
+        currentMonthDate = istCalendar.date(byAdding: .month, value: 1, to: currentMonthDate) ?? Date()
         updateMonthLabel()
         collectionView.reloadData()
     }
@@ -149,30 +160,59 @@ class FullCalendarViewController: UIViewController, UICollectionViewDataSource, 
         } else {
             cell.isHidden = false
             let day = indexPath.item - firstDayIndex + 1
-            if let date = Calendar.current.date(byAdding: .day, value: day - 1, to: startOfMonth(date: currentMonthDate)) {
-                let isToday = Calendar.current.isDateInToday(date)
-                let hasActivity = (day % 2 == 0) && date < Date()
-                cell.configure(date: date, isToday: isToday, hasActivity: hasActivity)
-                let formatter = DateFormatter()
-                formatter.dateFormat = "d"
-                cell.dayLabel.text = formatter.string(from: date)
+            var istCal = Calendar.current
+            istCal.timeZone = Self.istTimeZone
+            if let date = istCal.date(byAdding: .day, value: day - 1, to: startOfMonth(date: currentMonthDate)) {
+                let isToday = istCal.isDateInToday(date)
+                let dateKey = dateKeyFormatter.string(from: date)
+                let targetMet = activeDateStrings.contains(dateKey)
+                cell.configure(date: date, isToday: isToday, targetMet: targetMet)
+                // dateLabel is handled inside configure(), dayLabel is overridden here
+                // to show just the numeric day for the grid calendar view
+                let numFmt = DateFormatter()
+                numFmt.dateFormat = "d"
+                numFmt.timeZone = Self.istTimeZone
+                cell.dayLabel.text = istCal.component(.weekday, from: date).weekdayAbbr
+                cell.dateLabel.text = numFmt.string(from: date)
             }
         }
         return cell
     }
     
+    private var istCalendar: Calendar {
+        var cal = Calendar.current
+        cal.timeZone = Self.istTimeZone
+        return cal
+    }
+
     func daysInMonth(date: Date) -> Int {
-        return Calendar.current.range(of: .day, in: .month, for: date)?.count ?? 30
+        return istCalendar.range(of: .day, in: .month, for: date)?.count ?? 30
     }
-    
+
     func firstWeekday(date: Date) -> Int {
-        let components = Calendar.current.dateComponents([.year, .month], from: date)
-        let startOfMonth = Calendar.current.date(from: components)!
-        return Calendar.current.component(.weekday, from: startOfMonth)
+        let components = istCalendar.dateComponents([.year, .month], from: date)
+        let som = istCalendar.date(from: components)!
+        return istCalendar.component(.weekday, from: som)
     }
-    
+
     func startOfMonth(date: Date) -> Date {
-        let components = Calendar.current.dateComponents([.year, .month], from: date)
-        return Calendar.current.date(from: components)!
+        let components = istCalendar.dateComponents([.year, .month], from: date)
+        return istCalendar.date(from: components)!
+    }
+}
+
+private extension Int {
+    /// Converts Calendar.weekday (1=Sun … 7=Sat) to short abbreviation
+    var weekdayAbbr: String {
+        switch self {
+        case 1: return "SUN"
+        case 2: return "MON"
+        case 3: return "TUE"
+        case 4: return "WED"
+        case 5: return "THU"
+        case 6: return "FRI"
+        case 7: return "SAT"
+        default: return ""
+        }
     }
 }
