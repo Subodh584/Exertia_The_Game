@@ -727,6 +727,28 @@ class APIManager {
         _ = try await updateUser(userId: userId, payload: ["display_name": displayName])
     }
 
+    // MARK: - Change Password
+    /// POSTs to /auth/change-password/ with old + new password (requires JWT).
+    /// Throws with the server's error message on failure (e.g. wrong current password).
+    func changePassword(currentPassword: String, newPassword: String) async throws {
+        let payload: [String: Any] = [
+            "old_password": currentPassword,
+            "new_password": newPassword
+        ]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let (data, response) = try await executeRequest(
+            endpoint: "/auth/change-password/",
+            method: "POST",
+            body: body,
+            requiresAuth: true
+        )
+        guard (200...299).contains(response.statusCode) else {
+            let serverMsg = String(data: data, encoding: .utf8) ?? "Password change failed."
+            throw NSError(domain: "ChangePassword", code: response.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: serverMsg])
+        }
+    }
+
     // MARK: - Friend Requests
     func sendFriendRequest(requesterId: String, receiverId: String) async throws -> DjangoFriendship {
         let payload = ["requester": requesterId, "receiver": receiverId]
