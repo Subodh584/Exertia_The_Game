@@ -702,6 +702,11 @@ class APIManager {
         return try await makeRequest(endpoint: "/users/\(userId)/badges/", method: "GET", responseType: [DjangoUserBadge].self)
     }
 
+    // MARK: - All Badges (catalogue — no auth needed)
+    func getAllBadges() async throws -> [DjangoBadge] {
+        return try await makeRequest(endpoint: "/badges/", method: "GET", requiresAuth: false, responseType: [DjangoBadge].self)
+    }
+
     // MARK: - Streak Calendar (last 90 days)
     func getStreakCalendar(userId: String, days: Int = 90) async throws -> [DailyProgress] {
         return try await makeRequest(endpoint: "/users/\(userId)/streak-calendar/?days=\(days)", method: "GET", responseType: [DailyProgress].self)
