@@ -754,6 +754,32 @@ class APIManager {
         }
     }
 
+    // MARK: - Delete Account
+    /// POSTs password to /auth/delete-account/ for server-side verification + deletion (requires JWT).
+    /// Throws with the server's error message on failure (e.g. wrong password).
+    func deleteUserAccount(password: String) async throws {
+        let payload: [String: Any] = ["password": password]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let (data, response) = try await executeRequest(
+            endpoint: "/auth/delete-account/",
+            method: "DELETE",
+            body: body,
+            requiresAuth: true
+        )
+        guard (200...299).contains(response.statusCode) else {
+            let raw = String(data: data, encoding: .utf8) ?? ""
+            // Try to extract a readable message from JSON {"detail": "..."} or {"error": "..."}
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg  = json["detail"] as? String ?? json["error"] as? String {
+                throw NSError(domain: "DeleteAccount", code: response.statusCode,
+                              userInfo: [NSLocalizedDescriptionKey: msg])
+            }
+            let fallback = raw.isEmpty ? "Could not delete account. Please try again." : raw
+            throw NSError(domain: "DeleteAccount", code: response.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: fallback])
+        }
+    }
+
     // MARK: - Friend Requests
     func sendFriendRequest(requesterId: String, receiverId: String) async throws -> DjangoFriendship {
         let payload = ["requester": requesterId, "receiver": receiverId]
