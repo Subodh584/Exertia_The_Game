@@ -723,6 +723,10 @@ class APIManager {
         return try await makeRequest(endpoint: "/users/\(userId)/", method: "PATCH", body: body, responseType: DjangoUser.self)
     }
 
+    func updateDisplayName(userId: String, displayName: String) async throws {
+        _ = try await updateUser(userId: userId, payload: ["display_name": displayName])
+    }
+
     // MARK: - Friend Requests
     func sendFriendRequest(requesterId: String, receiverId: String) async throws -> DjangoFriendship {
         let payload = ["requester": requesterId, "receiver": receiverId]

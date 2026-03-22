@@ -18,8 +18,9 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     private let titleLabel = UILabel()
 
     private let avatarImageView = UIImageView()
-    private let editLabel = UILabel()
-    private let nameLabel = UILabel()
+    private let editLabel  = UILabel()
+    private let editButton = UIButton()          // transparent overlay on avatar + edit label
+    private let nameLabel  = UILabel()
     private let emailLabel = UILabel()
     private let idPillView = UIView()
     private let idLabel = UILabel()
@@ -215,10 +216,15 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         avatarImageView.layer.borderWidth = 2
         avatarImageView.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
         avatarImageView.translatesAutoresizingMaskIntoConstraints = false
-        editLabel.text = "Edit"
+
+        editLabel.text = "Edit Profile"
         editLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        editLabel.textColor = .lightGray
+        editLabel.textColor = UIColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 1)
         editLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        editButton.backgroundColor = .clear
+        editButton.translatesAutoresizingMaskIntoConstraints = false
+        editButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
         nameLabel.text = ""
         nameLabel.font = .systemFont(ofSize: 22, weight: .bold)
         nameLabel.textColor = .white
@@ -250,21 +256,28 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
 
         view.addSubview(avatarImageView)
         view.addSubview(editLabel)
+        view.addSubview(editButton)
         view.addSubview(nameLabel)
         view.addSubview(emailLabel)
         view.addSubview(idPillView)
         idPillView.addSubview(idLabel)
         idPillView.addSubview(copyIcon)
         idPillView.addSubview(copyButton)   // on top — catches all taps on the pill
-        
+
         NSLayoutConstraint.activate([
             avatarImageView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 10),
             avatarImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             avatarImageView.widthAnchor.constraint(equalToConstant: 100),
             avatarImageView.heightAnchor.constraint(equalToConstant: 100),
-            
+
             editLabel.topAnchor.constraint(equalTo: avatarImageView.bottomAnchor, constant: 8),
             editLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            // Edit button covers the avatar + edit label so the whole area is tappable
+            editButton.topAnchor.constraint(equalTo: avatarImageView.topAnchor),
+            editButton.bottomAnchor.constraint(equalTo: editLabel.bottomAnchor),
+            editButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            editButton.widthAnchor.constraint(equalToConstant: 120),
             
             nameLabel.topAnchor.constraint(equalTo: editLabel.bottomAnchor, constant: 8),
             nameLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -374,6 +387,59 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         present(settingsVC, animated: true)
     }
     
+    @objc func editProfileTapped() {
+        let currentName     = nameLabel.text ?? ""
+        let rawUsername     = emailLabel.text ?? ""
+        let currentUsername = rawUsername.hasPrefix("@") ? String(rawUsername.dropFirst()) : rawUsername
+        let purple          = UIColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 1)
+
+        let modal = GlassEditModalController(
+            title: "Edit Profile",
+            subtitle: "Update your name and username",
+            icon: "person.fill",
+            accentColor: purple,
+            fields: [
+                GlassEditModalController.FieldConfig(
+                    placeholder: "Display Name",
+                    icon: "person.fill",
+                    keyboard: .default,
+                    value: currentName
+                ),
+                GlassEditModalController.FieldConfig(
+                    placeholder: "Username",
+                    icon: "at",
+                    keyboard: .default,
+                    value: currentUsername
+                )
+            ]
+        ) { [weak self] values in
+            guard let self = self else { return }
+            let newName     = values.count > 0 ? values[0].trimmingCharacters(in: .whitespaces) : ""
+            let newUsername = values.count > 1 ? values[1].trimmingCharacters(in: .whitespaces) : ""
+
+            if !newName.isEmpty     { self.nameLabel.text  = newName }
+            if !newUsername.isEmpty { self.emailLabel.text = "@\(newUsername)" }
+
+            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+            Task {
+                do {
+                    var payload: [String: Any] = [:]
+                    if !newName.isEmpty     { payload["display_name"] = newName }
+                    if !newUsername.isEmpty { payload["username"]     = newUsername }
+                    guard !payload.isEmpty else { return }
+                    _ = try await APIManager.shared.updateUser(userId: userId, payload: payload)
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    print("✅ Profile updated — name: \(newName), username: \(newUsername)")
+                } catch {
+                    print("❌ Failed to update profile: \(error)")
+                }
+            }
+        }
+        modal.modalPresentationStyle = .overFullScreen
+        modal.modalTransitionStyle   = .crossDissolve
+        present(modal, animated: true)
+    }
+
     @objc func copyIDTapped() {
         let idToCopy = realUserId.isEmpty ? (UserDefaults.standard.string(forKey: "djangoUserID") ?? "123456") : realUserId
         UIPasteboard.general.string = idToCopy
