@@ -941,16 +941,20 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             accentColor: .neonPink,
             fields: [
                 GlassEditModalController.FieldConfig(
-                    placeholder: "Current weight (kg)",
+                    placeholder: "e.g. 70.0",
                     icon: "figure.stand",
                     keyboard: .decimalPad,
-                    value: apiCurrentWeight.map { String(format: "%.1f", $0) } ?? ""
+                    value: apiCurrentWeight.map { String(format: "%.1f", $0) } ?? "",
+                    label: "Current Weight",
+                    unit: "kg"
                 ),
                 GlassEditModalController.FieldConfig(
-                    placeholder: "Target weight (kg)",
+                    placeholder: "e.g. 65.0",
                     icon: "target",
                     keyboard: .decimalPad,
-                    value: apiTargetWeight.map { String(format: "%.1f", $0) } ?? ""
+                    value: apiTargetWeight.map { String(format: "%.1f", $0) } ?? "",
+                    label: "Target Weight",
+                    unit: "kg"
                 )
             ]
         ) { [weak self] values in
@@ -986,16 +990,20 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             accentColor: .neonYellow,
             fields: [
                 GlassEditModalController.FieldConfig(
-                    placeholder: "Target calories (kcal)",
+                    placeholder: "e.g. 300",
                     icon: "flame",
                     keyboard: .numberPad,
-                    value: "\(apiDailyTargetCalories)"
+                    value: "\(apiDailyTargetCalories)",
+                    label: "Calorie Target",
+                    unit: "kcal"
                 ),
                 GlassEditModalController.FieldConfig(
-                    placeholder: "Target distance (km)",
+                    placeholder: "e.g. 3.0",
                     icon: "figure.run",
                     keyboard: .decimalPad,
-                    value: String(format: "%.1f", apiDailyTargetDistance)
+                    value: String(format: "%.1f", apiDailyTargetDistance),
+                    label: "Distance Target",
+                    unit: "km"
                 )
             ]
         ) { [weak self] values in
@@ -1163,6 +1171,8 @@ class GlassEditModalController: UIViewController {
         let icon: String
         let keyboard: UIKeyboardType
         let value: String
+        var label: String = ""
+        var unit: String = ""
     }
 
     private let modalTitle: String
@@ -1332,13 +1342,17 @@ class GlassEditModalController: UIViewController {
     }
 
     private func makeGlassField(config: FieldConfig) -> (UIView, UITextField) {
+        let hasLabel = !config.label.isEmpty
+        let hasUnit  = !config.unit.isEmpty
+        let containerH: CGFloat = hasLabel ? 72 : 54
+
         let container = UIView()
         container.backgroundColor = UIColor.white.withAlphaComponent(0.06)
         container.layer.cornerRadius = 14
         container.layer.borderWidth = 1
         container.layer.borderColor = UIColor.white.withAlphaComponent(0.1).cgColor
         container.translatesAutoresizingMaskIntoConstraints = false
-        container.heightAnchor.constraint(equalToConstant: 54).isActive = true
+        container.heightAnchor.constraint(equalToConstant: containerH).isActive = true
 
         let icon = UIImageView(image: UIImage(systemName: config.icon))
         icon.tintColor = accentColor.withAlphaComponent(0.7)
@@ -1360,15 +1374,54 @@ class GlassEditModalController: UIViewController {
         container.addSubview(icon)
         container.addSubview(tf)
 
-        NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            icon.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 20),
-            icon.heightAnchor.constraint(equalToConstant: 20),
-            tf.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 12),
-            tf.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
-            tf.centerYAnchor.constraint(equalTo: container.centerYAnchor)
-        ])
+        if hasLabel {
+            let subLbl = UILabel()
+            subLbl.text = config.label
+            subLbl.font = .systemFont(ofSize: 11, weight: .semibold)
+            subLbl.textColor = UIColor.white.withAlphaComponent(0.4)
+            subLbl.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(subLbl)
+
+            NSLayoutConstraint.activate([
+                subLbl.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
+                subLbl.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+
+                icon.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+                icon.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -15),
+                icon.widthAnchor.constraint(equalToConstant: 18),
+                icon.heightAnchor.constraint(equalToConstant: 18),
+
+                tf.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
+                tf.centerYAnchor.constraint(equalTo: icon.centerYAnchor)
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                icon.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+                icon.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+                icon.widthAnchor.constraint(equalToConstant: 20),
+                icon.heightAnchor.constraint(equalToConstant: 20),
+
+                tf.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 12),
+                tf.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+            ])
+        }
+
+        if hasUnit {
+            let unitLbl = UILabel()
+            unitLbl.text = config.unit
+            unitLbl.font = .systemFont(ofSize: 14, weight: .semibold)
+            unitLbl.textColor = UIColor.white.withAlphaComponent(0.4)
+            unitLbl.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(unitLbl)
+
+            NSLayoutConstraint.activate([
+                unitLbl.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+                unitLbl.centerYAnchor.constraint(equalTo: tf.centerYAnchor),
+                tf.trailingAnchor.constraint(equalTo: unitLbl.leadingAnchor, constant: -8)
+            ])
+        } else {
+            tf.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16).isActive = true
+        }
 
         return (container, tf)
     }
