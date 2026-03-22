@@ -1,4 +1,8 @@
 import UIKit
+import ObjectiveC
+
+/// Key for objc_setAssociatedObject linking eye buttons to their UITextField.
+private var eyeBtnKey: UInt8 = 0
 
 class SettingsViewController: UIViewController {
 
@@ -463,17 +467,33 @@ class SettingsViewController: UIViewController {
         guard newPw == confirm else {
             showAlert("Passwords Don't Match", "New password and confirmation must match."); return
         }
-        guard newPw.count >= 8 else {
-            showAlert("Too Short", "Password must be at least 8 characters."); return
+        guard newPw.count >= 6 else {
+            showAlert("Too Short", "Password must be at least 6 characters."); return
         }
 
-        // TODO: APIManager.shared.changePassword(current: current, new: newPw)
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        showAlert("Password Updated", "Your password has been changed.") {
-            self.currentPwField.text = ""
-            self.newPwField.text     = ""
-            self.confirmPwField.text = ""
-            if self.pwExpanded { self.togglePasswordExpand() }
+        Task {
+            do {
+                try await APIManager.shared.changePassword(
+                    currentPassword: current,
+                    newPassword: newPw
+                )
+                await MainActor.run {
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    self.showAlert("Password Updated", "Your password has been changed successfully.") {
+                        self.currentPwField.text = ""
+                        self.newPwField.text     = ""
+                        self.confirmPwField.text = ""
+                        if self.pwExpanded { self.togglePasswordExpand() }
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    // Show the server's message (e.g. "Wrong current password")
+                    let msg = error.localizedDescription
+                    self.showAlert("Could Not Change Password", msg)
+                }
+            }
         }
     }
 
@@ -577,13 +597,37 @@ class SettingsViewController: UIViewController {
         let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: placeholderColor]
         tf.attributedPlaceholder = NSAttributedString(string: placeholder, attributes: attrs)
 
+        // Left padding
         let pad = UIView(frame: CGRect(x: 0, y: 0, width: 16, height: 1))
         tf.leftView     = pad
         tf.leftViewMode = .always
 
+        // Eye toggle button on the right
+        let eyeBtn = UIButton(type: .system)
+        let symCfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        eyeBtn.setImage(UIImage(systemName: "eye.slash", withConfiguration: symCfg), for: .normal)
+        eyeBtn.tintColor = UIColor.white.withAlphaComponent(0.4)
+        eyeBtn.frame = CGRect(x: 0, y: 0, width: 40, height: 46)
+        eyeBtn.addTarget(self, action: #selector(toggleEye(_:)), for: .touchUpInside)
+        // Store the linked text field in the button's tag via association
+        objc_setAssociatedObject(eyeBtn, &eyeBtnKey, tf, .OBJC_ASSOCIATION_ASSIGN)
+        tf.rightView     = eyeBtn
+        tf.rightViewMode = .always
+
         tf.translatesAutoresizingMaskIntoConstraints = false
         tf.heightAnchor.constraint(equalToConstant: 46).isActive = true
         return tf
+    }
+
+    @objc private func toggleEye(_ sender: UIButton) {
+        guard let tf = objc_getAssociatedObject(sender, &eyeBtnKey) as? UITextField else { return }
+        tf.isSecureTextEntry.toggle()
+        let symCfg  = UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        let iconName = tf.isSecureTextEntry ? "eye.slash" : "eye"
+        sender.setImage(UIImage(systemName: iconName, withConfiguration: symCfg), for: .normal)
+        sender.tintColor = tf.isSecureTextEntry
+            ? UIColor.white.withAlphaComponent(0.4)
+            : UIColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 1)
     }
 
     private func showAlert(_ title: String, _ message: String, completion: (() -> Void)? = nil) {

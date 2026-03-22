@@ -702,6 +702,11 @@ class APIManager {
         return try await makeRequest(endpoint: "/users/\(userId)/badges/", method: "GET", responseType: [DjangoUserBadge].self)
     }
 
+    // MARK: - All Badges (catalogue — no auth needed)
+    func getAllBadges() async throws -> [DjangoBadge] {
+        return try await makeRequest(endpoint: "/badges/", method: "GET", requiresAuth: false, responseType: [DjangoBadge].self)
+    }
+
     // MARK: - Streak Calendar (last 90 days)
     func getStreakCalendar(userId: String, days: Int = 90) async throws -> [DailyProgress] {
         return try await makeRequest(endpoint: "/users/\(userId)/streak-calendar/?days=\(days)", method: "GET", responseType: [DailyProgress].self)
@@ -725,6 +730,28 @@ class APIManager {
 
     func updateDisplayName(userId: String, displayName: String) async throws {
         _ = try await updateUser(userId: userId, payload: ["display_name": displayName])
+    }
+
+    // MARK: - Change Password
+    /// POSTs to /auth/change-password/ with old + new password (requires JWT).
+    /// Throws with the server's error message on failure (e.g. wrong current password).
+    func changePassword(currentPassword: String, newPassword: String) async throws {
+        let payload: [String: Any] = [
+            "old_password": currentPassword,
+            "new_password": newPassword
+        ]
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        let (data, response) = try await executeRequest(
+            endpoint: "/auth/change-password/",
+            method: "POST",
+            body: body,
+            requiresAuth: true
+        )
+        guard (200...299).contains(response.statusCode) else {
+            let serverMsg = String(data: data, encoding: .utf8) ?? "Password change failed."
+            throw NSError(domain: "ChangePassword", code: response.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: serverMsg])
+        }
     }
 
     // MARK: - Friend Requests

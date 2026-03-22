@@ -51,55 +51,61 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
 
         Task {
+            // ── 1. Profile header (must always succeed) ──────────────────────
             do {
-                async let userFetch = APIManager.shared.getUser(userId: userId)
-                async let badgesFetch = APIManager.shared.getUserBadges(userId: userId)
-
-                let (user, userBadges) = try await (userFetch, badgesFetch)
-
+                let user = try await APIManager.shared.getUser(userId: userId)
                 DispatchQueue.main.async {
-                    // Profile header
-                    self.nameLabel.text = user.displayName ?? user.username
+                    self.nameLabel.text  = user.displayName ?? user.username
                     self.emailLabel.text = "@\(user.username)"
                     let shortId = String(user.id.prefix(8)).uppercased()
                     self.idLabel.text = "ID: \(shortId)"
-                    self.realUserId = user.id
-
-                    // Map API badges → local Badge model
-                    self.inProgressBadges = userBadges
-                        .filter { !$0.isCompleted }
-                        .map { ub in
-                            let target = ub.badge.targetValue
-                            let progress = target > 0 ? Float(ub.currentProgress / target) : 0
-                            let progressText = self.formatProgress(ub.currentProgress, target: target, type: ub.badge.badgeType)
-                            return Badge(
-                                title: ub.badge.name,
-                                description: ub.badge.description,
-                                iconName: "badge1",
-                                progress: min(progress, 1.0),
-                                progressText: progressText,
-                                isLocked: false
-                            )
-                        }
-
-                    self.completedBadges = userBadges
-                        .filter { $0.isCompleted }
-                        .map { ub in
-                            Badge(
-                                title: ub.badge.name,
-                                description: ub.badge.description,
-                                iconName: "badge2",
-                                progress: 1.0,
-                                progressText: "Done",
-                                isLocked: false
-                            )
-                        }
-
-                    self.tableView.reloadData()
-                    print("✅ Profile badges loaded from API: \(userBadges.count) total")
+                    self.realUserId   = user.id
                 }
             } catch {
-                print("❌ Failed to fetch profile data: \(error)")
+                print("❌ Failed to fetch user profile: \(error)")
+            }
+
+            // ── 2. Badges (isolated — a missing endpoint won't break the header) ──
+            do {
+                async let userBadgesFetch = APIManager.shared.getUserBadges(userId: userId)
+                async let allBadgesFetch  = APIManager.shared.getAllBadges()
+                let (userBadges, allBadges) = try await (userBadgesFetch, allBadgesFetch)
+
+                // Build a lookup: badge id → UserBadge progress record
+                let progressMap = Dictionary(uniqueKeysWithValues: userBadges.map { ($0.badge.id, $0) })
+
+                var inProgress: [Badge] = []
+                var completed:  [Badge] = []
+
+                for badge in allBadges {
+                    let userBadge    = progressMap[badge.id]
+                    let isCompleted  = userBadge?.isCompleted ?? false
+                    let current      = userBadge?.currentProgress ?? 0
+                    let target       = badge.targetValue
+                    let progress     = target > 0 ? Float(current / target) : 0
+                    let progressText = self.formatProgress(current, target: target, type: badge.badgeType)
+
+                    let localBadge = Badge(
+                        title:        badge.name,
+                        description:  badge.description,
+                        iconName:     isCompleted ? "badge2" : "badge1",
+                        progress:     min(progress, 1.0),
+                        progressText: isCompleted ? "Done" : progressText,
+                        isLocked:     false
+                    )
+
+                    if isCompleted { completed.append(localBadge) }
+                    else           { inProgress.append(localBadge) }
+                }
+
+                DispatchQueue.main.async {
+                    self.inProgressBadges = inProgress
+                    self.completedBadges  = completed
+                    self.tableView.reloadData()
+                    print("✅ Badges: \(inProgress.count) in progress, \(completed.count) completed (catalogue: \(allBadges.count))")
+                }
+            } catch {
+                print("❌ Failed to fetch badges: \(error) — profile header still visible")
             }
         }
     }
