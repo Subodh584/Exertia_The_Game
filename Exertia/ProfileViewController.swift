@@ -240,11 +240,14 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         copyIcon.tintColor = .lightGray
         copyIcon.contentMode = .scaleAspectFit
         copyIcon.translatesAutoresizingMaskIntoConstraints = false
-        
-        let tap = UITapGestureRecognizer(target: self, action: #selector(copyIDTapped))
-        idPillView.addGestureRecognizer(tap)
-        idPillView.isUserInteractionEnabled = true
-        
+
+        // Transparent UIButton overlay — far more reliable than a tap gesture recogniser
+        // in complex scroll/table view hierarchies.
+        let copyButton = UIButton(type: .system)
+        copyButton.backgroundColor = .clear
+        copyButton.translatesAutoresizingMaskIntoConstraints = false
+        copyButton.addTarget(self, action: #selector(copyIDTapped), for: .touchUpInside)
+
         view.addSubview(avatarImageView)
         view.addSubview(editLabel)
         view.addSubview(nameLabel)
@@ -252,6 +255,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         view.addSubview(idPillView)
         idPillView.addSubview(idLabel)
         idPillView.addSubview(copyIcon)
+        idPillView.addSubview(copyButton)   // on top — catches all taps on the pill
         
         NSLayoutConstraint.activate([
             avatarImageView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 10),
@@ -280,7 +284,13 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
             copyIcon.trailingAnchor.constraint(equalTo: idPillView.trailingAnchor, constant: -12),
             copyIcon.centerYAnchor.constraint(equalTo: idPillView.centerYAnchor),
             copyIcon.widthAnchor.constraint(equalToConstant: 14),
-            copyIcon.heightAnchor.constraint(equalToConstant: 14)
+            copyIcon.heightAnchor.constraint(equalToConstant: 14),
+
+            // Copy button fills the entire pill
+            copyButton.topAnchor.constraint(equalTo: idPillView.topAnchor),
+            copyButton.bottomAnchor.constraint(equalTo: idPillView.bottomAnchor),
+            copyButton.leadingAnchor.constraint(equalTo: idPillView.leadingAnchor),
+            copyButton.trailingAnchor.constraint(equalTo: idPillView.trailingAnchor)
         ])
     }
     

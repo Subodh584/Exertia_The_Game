@@ -9,7 +9,6 @@ class HomeViewController: UIViewController {
     @IBOutlet weak var profileButton: UIButton!
     @IBOutlet weak var distanceLabel: UILabel!
     @IBOutlet weak var caloriesLabel: UILabel!
-    @IBOutlet weak var timeLabel: UILabel!
     
     
     
@@ -30,7 +29,7 @@ class HomeViewController: UIViewController {
         setupProfileDesign()
         updateUI()
     }
-    
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         tabBarContainer.layoutIfNeeded()
@@ -97,11 +96,9 @@ class HomeViewController: UIViewController {
                     if todaySessions.isEmpty {
                         self.distanceLabel.text = "0 km"
                         self.caloriesLabel.text  = "0 cal"
-                        self.timeLabel.text      = "0 km"
                     } else {
                         self.distanceLabel.text = String(format: "%.1f km", todayDistance)
                         self.caloriesLabel.text  = "\(todayCalories) cal"
-                        self.timeLabel.text      = String(format: "%.1f km", todayDistance)
                     }
                     print("✅ Home UI: today (IST) — \(String(format: "%.1f", todayDistance)) km, \(todayCalories) cal (\(todaySessions.count) sessions)")
                 }
@@ -288,7 +285,6 @@ class HomeViewController: UIViewController {
         streakLabel.text = "--"
         distanceLabel.text = "--"
         caloriesLabel.text = "-- cal"
-        timeLabel.text = "-- km"
     }
     
     @IBAction func playButtonTapped(_ sender: UIButton) {
