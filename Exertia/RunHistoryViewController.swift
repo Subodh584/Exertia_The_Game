@@ -1,384 +1,500 @@
 import UIKit
 
+// MARK: - Filter Period
+private enum FilterPeriod: Int, CaseIterable {
+    case all, sevenDays, thirtyDays, ninetyDays
+
+    var title: String {
+        switch self {
+        case .all:        return "All"
+        case .sevenDays:  return "7 Days"
+        case .thirtyDays: return "30 Days"
+        case .ninetyDays: return "90 Days"
+        }
+    }
+    var days: Int? {
+        switch self {
+        case .all:        return nil
+        case .sevenDays:  return 7
+        case .thirtyDays: return 30
+        case .ninetyDays: return 90
+        }
+    }
+}
+
+// MARK: - Run History — styled to exactly match StatisticsViewController
 class RunHistoryViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
 
-    var history: [GameSession] = []
-    var selectedSession: GameSession?
+    /// Set to true when launched from the Personal Best card — will auto-scroll to best row
+    var scrollToBest: Bool = false
 
-    private let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-    private let containerView = UIView()
-    private let closeButton = UIButton()
-    private let titleLabel = UILabel()
-    
-    private let heroContainer = UIView()
-    private let charImageView = UIImageView()
-    private let dateLabel = UILabel()
-    private let trackLabel = UILabel()
+    private var allHistory: [GameSession] = []
+    private var filteredHistory: [GameSession] = []
+    private var bestIndexInFiltered: Int? = nil
+    private var activeFilter: FilterPeriod = .all
 
-    private let bigCalLabel = UILabel()
-    private let bigTimeLabel = UILabel()
-    private let bigJumpLabel = UILabel()
-    private let bigCrouchLabel = UILabel()
+    // Nav — mirrors Stats page
+    private let navBar       = UIView()
+    private let backBtn      = UIButton()
+    private let titleLabel   = UILabel()
+    private let gradientView = UIView()
 
-    private let listTitleLabel = UILabel()
-    private let tableView = UITableView()
+    // Filter bar
+    private var filterButtons: [UIButton] = []
+    private let filterScroll  = UIScrollView()
 
+    private let tableView  = UITableView()
+    private let emptyLabel = UILabel()
+
+    // IST
+    private static let istTZ = TimeZone(identifier: "Asia/Kolkata")!
+    private static let cellDateFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "EEE, d MMM"; f.timeZone = istTZ; return f
+    }()
+
+    // MARK: Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor.black.withAlphaComponent(0.6)
-        
-        // Start with empty history, will be populated from API
-        history = []
-        
-        setupUI()
-        updateHeroView(with: selectedSession)
-        
-        // Fetch from API
+        view.backgroundColor = UIColor(red: 13/255, green: 5/255, blue: 26/255, alpha: 1.0)
+        addGradient()
+        configureNavBar()
+        configureFilterBar()
+        configureTable()
         fetchSessionsFromAPI()
     }
-    
-    func fetchSessionsFromAPI() {
-        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
-        
-        Task {
-            do {
-                let sessions = try await APIManager.shared.getUserSessions(userId: userId)
-                let completed = sessions.filter { $0.completionStatus == "completed" }
-                
-                // Convert DjangoSession -> GameSession for display
-                let dateFormatter = ISO8601DateFormatter()
-                dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                
-                let convertedHistory: [GameSession] = completed.compactMap { s in
-                    let date = dateFormatter.date(from: s.createdAt ?? "") ?? Date()
-                    return GameSession(
-                        date: date,
-                        durationMinutes: s.durationMinutes ?? 0,
-                        caloriesBurned: s.caloriesBurned ?? 0,
-                        trackName: s.trackId?.replacingOccurrences(of: "track_", with: "").replacingOccurrences(of: "_", with: " ").capitalized ?? "Unknown",
-                        trackId: s.trackId ?? "track_001",
-                        characterId: s.characterId ?? "p1",
-                        totalJumps: s.totalJumps ?? 0,
-                        totalCrouches: s.totalCrouches ?? 0,
-                        totalLeftLeans: 0,
-                        totalRightLeans: 0,
-                        distanceCovered: s.distanceCovered ?? 0,
-                        averageSpeed: s.averageSpeed,
-                        characterImageName: "character1",
-                        completionStatus: s.completionStatus ?? "completed"
-                    )
-                }
-                
-                DispatchQueue.main.async {
-                    if !convertedHistory.isEmpty {
-                        self.history = convertedHistory.sorted(by: { $0.date > $1.date })
-                        self.selectedSession = self.history.first
-                        self.updateHeroView(with: self.selectedSession)
-                        self.tableView.reloadData()
-                        print("✅ Run history hydrated from API! \(self.history.count) sessions loaded.")
-                    }
-                }
-            } catch {
-                print("❌ Failed to fetch sessions for history: \(error)")
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        backBtn.layer.cornerRadius = backBtn.frame.height / 2
+    }
+
+    // MARK: Background gradient — same as Stats page
+    private func addGradient() {
+        gradientView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(gradientView)
+        view.sendSubviewToBack(gradientView)
+        NSLayoutConstraint.activate([
+            gradientView.topAnchor.constraint(equalTo: view.topAnchor),
+            gradientView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            gradientView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            gradientView.heightAnchor.constraint(equalToConstant: 350)
+        ])
+        let layer = CAGradientLayer()
+        layer.colors = [UIColor.neonPink.withAlphaComponent(0.3).cgColor, UIColor.clear.cgColor]
+        layer.locations = [0.0, 1.0]
+        layer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 350)
+        gradientView.layer.addSublayer(layer)
+    }
+
+    // MARK: Nav bar — copied exactly from Stats page
+    private func configureNavBar() {
+        navBar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(navBar)
+
+        backBtn.backgroundColor = UIColor.white.withAlphaComponent(0.1)
+        backBtn.layer.borderWidth = 1
+        backBtn.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
+        let config = UIImage.SymbolConfiguration(weight: .bold)
+        backBtn.setImage(UIImage(systemName: "chevron.left", withConfiguration: config), for: .normal)
+        backBtn.tintColor = .white
+        backBtn.addTarget(self, action: #selector(goBack), for: .touchUpInside)
+
+        titleLabel.text = "Run History"
+        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLabel.textColor = .white
+        titleLabel.textAlignment = .center
+
+        navBar.addSubview(backBtn)
+        navBar.addSubview(titleLabel)
+        backBtn.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            navBar.heightAnchor.constraint(equalToConstant: 50),
+
+            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 20),
+            backBtn.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
+            backBtn.widthAnchor.constraint(equalToConstant: 40),
+            backBtn.heightAnchor.constraint(equalToConstant: 40),
+
+            titleLabel.centerXAnchor.constraint(equalTo: navBar.centerXAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: navBar.centerYAnchor)
+        ])
+    }
+
+    // MARK: Filter chip bar
+    private func configureFilterBar() {
+        filterScroll.showsHorizontalScrollIndicator = false
+        filterScroll.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(filterScroll)
+
+        let chipStack = UIStackView()
+        chipStack.axis    = .horizontal
+        chipStack.spacing = 10
+        chipStack.translatesAutoresizingMaskIntoConstraints = false
+        filterScroll.addSubview(chipStack)
+
+        for (i, period) in FilterPeriod.allCases.enumerated() {
+            let btn = UIButton()
+            btn.setTitle(period.title, for: .normal)
+            btn.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+            btn.contentEdgeInsets = UIEdgeInsets(top: 7, left: 16, bottom: 7, right: 16)
+            btn.layer.cornerRadius = 14
+            btn.tag = i
+            btn.addTarget(self, action: #selector(filterTapped(_:)), for: .touchUpInside)
+            styleChip(btn, selected: i == 0)
+            filterButtons.append(btn)
+            chipStack.addArrangedSubview(btn)
+        }
+
+        NSLayoutConstraint.activate([
+            filterScroll.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
+            filterScroll.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            filterScroll.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            filterScroll.heightAnchor.constraint(equalToConstant: 36),
+
+            chipStack.topAnchor.constraint(equalTo: filterScroll.topAnchor),
+            chipStack.bottomAnchor.constraint(equalTo: filterScroll.bottomAnchor),
+            chipStack.leadingAnchor.constraint(equalTo: filterScroll.leadingAnchor),
+            chipStack.trailingAnchor.constraint(equalTo: filterScroll.trailingAnchor),
+            chipStack.heightAnchor.constraint(equalTo: filterScroll.heightAnchor)
+        ])
+    }
+
+    private func styleChip(_ btn: UIButton, selected: Bool) {
+        if selected {
+            btn.backgroundColor = UIColor.neonPink.withAlphaComponent(0.22)
+            btn.layer.borderColor = UIColor.neonPink.withAlphaComponent(0.8).cgColor
+            btn.layer.borderWidth = 1
+            btn.setTitleColor(.white, for: .normal)
+        } else {
+            btn.backgroundColor = UIColor.white.withAlphaComponent(0.08)
+            btn.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
+            btn.layer.borderWidth = 1
+            btn.setTitleColor(UIColor.white.withAlphaComponent(0.5), for: .normal)
+        }
+    }
+
+    @objc private func filterTapped(_ sender: UIButton) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        activeFilter = FilterPeriod.allCases[sender.tag]
+        filterButtons.enumerated().forEach { i, btn in styleChip(btn, selected: i == sender.tag) }
+        applyFilter(animate: true)
+    }
+
+    // MARK: Apply filter to history list
+    private func applyFilter(animate: Bool) {
+        let cutoff: Date?
+        if let days = activeFilter.days {
+            var cal = Calendar.current
+            cal.timeZone = Self.istTZ
+            cutoff = cal.date(byAdding: .day, value: -days, to: Date())
+        } else {
+            cutoff = nil
+        }
+
+        filteredHistory = cutoff == nil
+            ? allHistory
+            : allHistory.filter { $0.date >= cutoff! }
+
+        bestIndexInFiltered = filteredHistory.indices.max {
+            filteredHistory[$0].distanceCovered < filteredHistory[$1].distanceCovered
+        }
+
+        let isEmpty = filteredHistory.isEmpty
+        emptyLabel.isHidden = !isEmpty
+        tableView.isHidden  = isEmpty
+        tableView.reloadData()
+
+        if animate { animateCells() }
+
+        // Scroll to best once if launched from the Personal Best card
+        if scrollToBest, let idx = bestIndexInFiltered, !isEmpty {
+            scrollToBest = false   // only auto-scroll once
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                self.tableView.scrollToRow(at: IndexPath(row: idx, section: 0),
+                                           at: .middle, animated: true)
             }
         }
     }
 
-    func setupUI() {
-        blurView.frame = view.bounds
-        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.addSubview(blurView)
-        
-        containerView.backgroundColor = UIColor(red: 0.05, green: 0.02, blue: 0.1, alpha: 0.98)
-        containerView.layer.cornerRadius = 32
-        containerView.layer.borderWidth = 1
-        containerView.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
-        containerView.layer.shadowColor = UIColor.black.cgColor
-        containerView.layer.shadowOpacity = 0.6
-        containerView.layer.shadowRadius = 30
-        containerView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(containerView)
-        
-        titleLabel.text = "Session Analysis"
-        titleLabel.font = .systemFont(ofSize: 24, weight: .bold)
-        titleLabel.textColor = .white
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        closeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        closeButton.tintColor = .white.withAlphaComponent(0.4)
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.addTarget(self, action: #selector(dismissModal), for: .touchUpInside)
-        
-        setupHeroCard()
-        
-        listTitleLabel.text = "HISTORY LOG"
-        listTitleLabel.font = .systemFont(ofSize: 12, weight: .bold)
-        listTitleLabel.textColor = .white.withAlphaComponent(0.5)
-        listTitleLabel.translatesAutoresizingMaskIntoConstraints = false
-        
+    // MARK: Table
+    private func configureTable() {
         tableView.backgroundColor = .clear
-        tableView.separatorStyle = .none
+        tableView.separatorStyle  = .none
         tableView.showsVerticalScrollIndicator = false
+        tableView.contentInset = UIEdgeInsets(top: 12, left: 0, bottom: 50, right: 0)
         tableView.dataSource = self
-        tableView.delegate = self
-        tableView.register(AestheticHistoryCell.self, forCellReuseIdentifier: "HistoryCell")
+        tableView.delegate   = self
+        tableView.register(HistoryRowCell.self, forCellReuseIdentifier: "Row")
         tableView.translatesAutoresizingMaskIntoConstraints = false
-        
-        containerView.addSubview(titleLabel)
-        containerView.addSubview(closeButton)
-        containerView.addSubview(heroContainer)
-        containerView.addSubview(listTitleLabel)
-        containerView.addSubview(tableView)
-        
+        view.addSubview(tableView)
+
+        emptyLabel.text = "No runs yet.\nPlay your first session!"
+        emptyLabel.numberOfLines = 0
+        emptyLabel.textAlignment = .center
+        emptyLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        emptyLabel.textColor = UIColor.white.withAlphaComponent(0.3)
+        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
+        emptyLabel.isHidden = true
+        view.addSubview(emptyLabel)
+
         NSLayoutConstraint.activate([
-            containerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            containerView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            containerView.widthAnchor.constraint(equalToConstant: 360),
-            containerView.heightAnchor.constraint(equalToConstant: 680),
-            
-            closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
-            closeButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
-            closeButton.widthAnchor.constraint(equalToConstant: 32),
-            closeButton.heightAnchor.constraint(equalToConstant: 32),
-            
-            titleLabel.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
-            titleLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 24),
-            
-            heroContainer.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 25),
-            heroContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
-            heroContainer.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
-            heroContainer.heightAnchor.constraint(equalToConstant: 220),
-            
-            listTitleLabel.topAnchor.constraint(equalTo: heroContainer.bottomAnchor, constant: 30),
-            listTitleLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 24),
-            
-            tableView.topAnchor.constraint(equalTo: listTitleLabel.bottomAnchor, constant: 10),
-            tableView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 15),
-            tableView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -15),
-            tableView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -20)
-        ])
-    }
-    
-    func setupHeroCard() {
-        heroContainer.backgroundColor = UIColor.white.withAlphaComponent(0.05)
-        heroContainer.layer.cornerRadius = 24
-        heroContainer.layer.borderWidth = 1
-        heroContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.1).cgColor
-        heroContainer.translatesAutoresizingMaskIntoConstraints = false
-        
-        charImageView.contentMode = .scaleAspectFit
-        charImageView.layer.cornerRadius = 30
-        charImageView.layer.borderWidth = 1
-        charImageView.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
-        charImageView.clipsToBounds = true
-        charImageView.translatesAutoresizingMaskIntoConstraints = false
-        
-        trackLabel.font = .systemFont(ofSize: 18, weight: .bold)
-        trackLabel.textColor = .white
-        
-        dateLabel.font = .systemFont(ofSize: 14, weight: .medium)
-        dateLabel.textColor = .gray
-        
-        let headerStack = UIStackView(arrangedSubviews: [trackLabel, dateLabel])
-        headerStack.axis = .vertical
-        headerStack.spacing = 2
-        headerStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        let row1 = createStatRow(icon1: "flame.fill", color1: .systemPink, label1: bigCalLabel,
-                                 icon2: "stopwatch.fill", color2: .systemCyan, label2: bigTimeLabel)
-        let row2 = createStatRow(icon1: "arrow.up.circle.fill", color1: .systemGreen, label1: bigJumpLabel,
-                                 icon2: "arrow.down.circle.fill", color2: .systemYellow, label2: bigCrouchLabel)
-        
-        let statsStack = UIStackView(arrangedSubviews: [row1, row2])
-        statsStack.axis = .vertical
-        statsStack.distribution = .fillEqually
-        statsStack.spacing = 15
-        statsStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        heroContainer.addSubview(charImageView)
-        heroContainer.addSubview(headerStack)
-        heroContainer.addSubview(statsStack)
-        
-        NSLayoutConstraint.activate([
-            charImageView.topAnchor.constraint(equalTo: heroContainer.topAnchor, constant: 20),
-            charImageView.trailingAnchor.constraint(equalTo: heroContainer.trailingAnchor, constant: -20),
-            charImageView.widthAnchor.constraint(equalToConstant: 60),
-            charImageView.heightAnchor.constraint(equalToConstant: 60),
-            
-            headerStack.topAnchor.constraint(equalTo: heroContainer.topAnchor, constant: 25),
-            headerStack.leadingAnchor.constraint(equalTo: heroContainer.leadingAnchor, constant: 20),
-            headerStack.trailingAnchor.constraint(equalTo: charImageView.leadingAnchor, constant: -10),
-            
-            statsStack.topAnchor.constraint(equalTo: charImageView.bottomAnchor, constant: 20),
-            statsStack.leadingAnchor.constraint(equalTo: heroContainer.leadingAnchor, constant: 20),
-            statsStack.trailingAnchor.constraint(equalTo: heroContainer.trailingAnchor, constant: -20),
-            statsStack.bottomAnchor.constraint(equalTo: heroContainer.bottomAnchor, constant: -20)
+            tableView.topAnchor.constraint(equalTo: filterScroll.bottomAnchor, constant: 10),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
 
-    func updateHeroView(with session: GameSession?) {
-        guard let s = session else { return }
-        
-        charImageView.image = UIImage(named: s.characterImageName)
-        trackLabel.text = s.trackName
-        
-        let df = DateFormatter()
-        df.dateFormat = "MMM d, yyyy • h:mm a"
-        dateLabel.text = df.string(from: s.date)
-        
-        bigCalLabel.text = "\(s.caloriesBurned) kcal"
-        bigTimeLabel.text = "\(s.durationMinutes) min"
-        bigJumpLabel.text = "\(s.totalJumps) Jumps"
-        bigCrouchLabel.text = "\(s.totalCrouches) Crouches"
-        
-        if let index = history.firstIndex(where: { $0.date == s.date }) {
-            tableView.selectRow(at: IndexPath(row: index, section: 0), animated: true, scrollPosition: .none)
+    // MARK: API
+    func fetchSessionsFromAPI() {
+        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        Task {
+            do {
+                let sessions = try await APIManager.shared.getUserSessions(userId: userId)
+                let completed = sessions.filter { $0.completionStatus == "completed" }
+                let iso = ISO8601DateFormatter()
+                iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+                let converted: [GameSession] = completed.compactMap { s in
+                    let date = iso.date(from: s.createdAt ?? "") ?? Date()
+                    let track = s.trackId?
+                        .replacingOccurrences(of: "track_", with: "")
+                        .replacingOccurrences(of: "_", with: " ")
+                        .capitalized ?? "Unknown"
+                    return GameSession(
+                        date: date,
+                        durationMinutes:  s.durationMinutes ?? 0,
+                        caloriesBurned:   s.caloriesBurned  ?? 0,
+                        trackName:        track,
+                        trackId:          s.trackId         ?? "track_001",
+                        characterId:      s.characterId     ?? "p1",
+                        totalJumps:       s.totalJumps      ?? 0,
+                        totalCrouches:    s.totalCrouches   ?? 0,
+                        totalLeftLeans:   0,
+                        totalRightLeans:  0,
+                        distanceCovered:  s.distanceCovered ?? 0,
+                        averageSpeed:     s.averageSpeed,
+                        characterImageName: "character1",
+                        completionStatus: s.completionStatus ?? "completed"
+                    )
+                }.sorted { $0.date > $1.date }
+
+                DispatchQueue.main.async {
+                    self.allHistory = converted
+                    self.applyFilter(animate: true)
+                }
+            } catch { print("❌ Run history fetch: \(error)") }
         }
     }
-    
-    func createStatRow(icon1: String, color1: UIColor, label1: UILabel, icon2: String, color2: UIColor, label2: UILabel) -> UIStackView {
-        func createItem(icon: String, color: UIColor, label: UILabel) -> UIStackView {
-            let img = UIImageView(image: UIImage(systemName: icon))
-            img.tintColor = color
-            img.contentMode = .scaleAspectFit
-            img.widthAnchor.constraint(equalToConstant: 20).isActive = true
-            
-            label.font = .systemFont(ofSize: 16, weight: .bold)
-            label.textColor = .white
-            
-            let s = UIStackView(arrangedSubviews: [img, label])
-            s.spacing = 10
-            return s
+
+    private func animateCells() {
+        tableView.visibleCells.enumerated().forEach { i, cell in
+            cell.alpha     = 0
+            cell.transform = CGAffineTransform(translationX: 0, y: 24)
+            UIView.animate(withDuration: 0.38, delay: Double(i) * 0.055,
+                           usingSpringWithDamping: 0.82, initialSpringVelocity: 0,
+                           options: .curveEaseOut) {
+                cell.alpha = 1; cell.transform = .identity
+            }
         }
-        let item1 = createItem(icon: icon1, color: color1, label: label1)
-        let item2 = createItem(icon: icon2, color: color2, label: label2)
-        let row = UIStackView(arrangedSubviews: [item1, item2])
-        row.distribution = .fillEqually
-        return row
     }
-    
-    @objc func dismissModal() { dismiss(animated: true) }
-    
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { return history.count }
-    
+
+    @objc private func goBack() { dismiss(animated: true) }
+
+    // MARK: UITableViewDataSource / Delegate
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        filteredHistory.count
+    }
+
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "HistoryCell", for: indexPath) as! AestheticHistoryCell
-        let session = history[indexPath.row]
-        let isLatest = (indexPath.row == 0)
-        let isPB = (session.caloriesBurned == GameData.shared.personalBest?.caloriesBurned)
-        cell.configure(session: session, isLatest: isLatest, isPB: isPB)
+        let cell = tableView.dequeueReusableCell(withIdentifier: "Row", for: indexPath) as! HistoryRowCell
+        cell.configure(session: filteredHistory[indexPath.row],
+                       isLatest: indexPath.row == 0,
+                       isBest:   indexPath.row == bestIndexInFiltered,
+                       dateFmt:  Self.cellDateFmt)
         return cell
     }
-    
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        selectedSession = history[indexPath.row]
-        updateHeroView(with: selectedSession)
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.impactOccurred()
-    }
-    
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { return 90 }
-}
 
-class AestheticHistoryCell: UITableViewCell {
-    
-    private let container = UIView()
-    private let dateLabel = UILabel()
-    private let statsLabel = UILabel()
-    private let badgeStack = UIStackView()
-    
-    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-        super.init(style: style, reuseIdentifier: reuseIdentifier)
-        backgroundColor = .clear
-        selectionStyle = .none
-        setupUI()
-    }
-    required init?(coder: NSCoder) { fatalError() }
-    
-    override func setSelected(_ selected: Bool, animated: Bool) {
-        super.setSelected(selected, animated: animated)
-        UIView.animate(withDuration: 0.2) {
-            self.container.layer.borderColor = selected ? UIColor.systemPink.cgColor : UIColor.white.withAlphaComponent(0.1).cgColor
-            self.container.layer.borderWidth = selected ? 1.5 : 1.0
-            self.container.backgroundColor = selected ? UIColor.systemPink.withAlphaComponent(0.15) : UIColor.white.withAlphaComponent(0.05)
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { 100 }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        if let cell = tableView.cellForRow(at: indexPath) {
+            UIView.animate(withDuration: 0.1,
+                           animations: { cell.transform = CGAffineTransform(scaleX: 0.97, y: 0.97) }) { _ in
+                UIView.animate(withDuration: 0.1) { cell.transform = .identity }
+            }
+        }
+        let s = filteredHistory[indexPath.row]
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            let vc = SessionDetailViewController()
+            vc.session = s
+            vc.isBest  = indexPath.row == self.bestIndexInFiltered
+            vc.modalPresentationStyle = .fullScreen
+            vc.modalTransitionStyle   = .crossDissolve
+            self.present(vc, animated: true)
         }
     }
-    
-    func setupUI() {
-        container.backgroundColor = UIColor.white.withAlphaComponent(0.05)
-        container.layer.cornerRadius = 18
-        container.layer.borderWidth = 1
-        container.layer.borderColor = UIColor.white.withAlphaComponent(0.1).cgColor
-        container.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(container)
-        
-        dateLabel.font = .systemFont(ofSize: 15, weight: .bold)
-        dateLabel.textColor = .white
-        dateLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        statsLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        statsLabel.textColor = .lightGray
-        statsLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        badgeStack.axis = .horizontal
-        badgeStack.spacing = 6
+}
+
+// MARK: - History Row Cell — glass card matching Stats page style
+class HistoryRowCell: UITableViewCell {
+
+    private let blurView   = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+    private let dateLbl    = UILabel()
+    private let trackLbl   = UILabel()
+    private let distLbl    = UILabel()
+    private let calLbl     = UILabel()
+    private let arrowImg   = UIImageView()
+
+    // Badge stack — both pinned to the left, collapsed when both hidden
+    private let badgeStack = UIStackView()
+    private let newBadge   = BadgePill(text: "NEW",  color: .systemPink)
+    private let bestBadge  = BadgePill(text: "BEST", color: UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1))
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = .clear; selectionStyle = .none
+        buildUI()
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func buildUI() {
+        // Glass card
+        blurView.layer.cornerRadius = 20
+        blurView.clipsToBounds = true
+        blurView.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        blurView.layer.borderWidth = 1
+        blurView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(blurView)
+
+        // Date
+        dateLbl.font = .systemFont(ofSize: 11, weight: .semibold)
+        dateLbl.textColor = UIColor.white.withAlphaComponent(0.45)
+        dateLbl.translatesAutoresizingMaskIntoConstraints = false
+        blurView.contentView.addSubview(dateLbl)
+
+        // Track name
+        trackLbl.font = .systemFont(ofSize: 16, weight: .bold)
+        trackLbl.textColor = .white
+        trackLbl.translatesAutoresizingMaskIntoConstraints = false
+        blurView.contentView.addSubview(trackLbl)
+
+        // Distance — neon pink, large
+        distLbl.font = .systemFont(ofSize: 20, weight: .heavy)
+        distLbl.textColor = .neonPink
+        distLbl.textAlignment = .right
+        distLbl.setContentHuggingPriority(.required, for: .horizontal)
+        distLbl.setContentCompressionResistancePriority(.required, for: .horizontal)
+        distLbl.translatesAutoresizingMaskIntoConstraints = false
+        blurView.contentView.addSubview(distLbl)
+
+        // Calories
+        calLbl.font = .systemFont(ofSize: 11, weight: .medium)
+        calLbl.textColor = UIColor.white.withAlphaComponent(0.4)
+        calLbl.textAlignment = .right
+        calLbl.setContentHuggingPriority(.required, for: .horizontal)
+        calLbl.translatesAutoresizingMaskIntoConstraints = false
+        blurView.contentView.addSubview(calLbl)
+
+        // Arrow
+        arrowImg.image = UIImage(systemName: "chevron.right")
+        arrowImg.tintColor = UIColor.white.withAlphaComponent(0.25)
+        arrowImg.contentMode = .scaleAspectFit
+        arrowImg.translatesAutoresizingMaskIntoConstraints = false
+        blurView.contentView.addSubview(arrowImg)
+
+        // Badge stack — horizontal, both anchored to leading edge
+        badgeStack.axis      = .horizontal
+        badgeStack.spacing   = 6
+        badgeStack.alignment = .center
+        badgeStack.addArrangedSubview(newBadge)
+        badgeStack.addArrangedSubview(bestBadge)
         badgeStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        container.addSubview(dateLabel)
-        container.addSubview(statsLabel)
-        container.addSubview(badgeStack)
-        
+        blurView.contentView.addSubview(badgeStack)
+
         NSLayoutConstraint.activate([
-            container.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 5),
-            container.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -5),
-            container.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
-            container.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
-            
-            dateLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
-            dateLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            
-            badgeStack.leadingAnchor.constraint(equalTo: dateLabel.trailingAnchor, constant: 10),
-            badgeStack.centerYAnchor.constraint(equalTo: dateLabel.centerYAnchor),
-            
-            statsLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -14),
-            statsLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            statsLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16)
+            // Card fills cell with vertical margin
+            blurView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
+            blurView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
+            blurView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            blurView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+
+            // Arrow — far right, vertically centered
+            arrowImg.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -16),
+            arrowImg.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
+            arrowImg.widthAnchor.constraint(equalToConstant: 12),
+            arrowImg.heightAnchor.constraint(equalToConstant: 12),
+
+            // Distance — top right, left of arrow
+            distLbl.trailingAnchor.constraint(equalTo: arrowImg.leadingAnchor, constant: -8),
+            distLbl.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: 18),
+
+            // Calories — below distance
+            calLbl.trailingAnchor.constraint(equalTo: distLbl.trailingAnchor),
+            calLbl.topAnchor.constraint(equalTo: distLbl.bottomAnchor, constant: 3),
+
+            // Date — top left
+            dateLbl.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 18),
+            dateLbl.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: 18),
+            dateLbl.trailingAnchor.constraint(lessThanOrEqualTo: distLbl.leadingAnchor, constant: -8),
+
+            // Track — below date
+            trackLbl.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 18),
+            trackLbl.topAnchor.constraint(equalTo: dateLbl.bottomAnchor, constant: 2),
+            trackLbl.trailingAnchor.constraint(lessThanOrEqualTo: distLbl.leadingAnchor, constant: -8),
+
+            // Badges — always pinned to the LEFT, directly below track name
+            badgeStack.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 18),
+            badgeStack.topAnchor.constraint(equalTo: trackLbl.bottomAnchor, constant: 7),
+            badgeStack.bottomAnchor.constraint(lessThanOrEqualTo: blurView.contentView.bottomAnchor, constant: -10)
         ])
     }
-    
-    func configure(session: GameSession, isLatest: Bool, isPB: Bool) {
-        let df = DateFormatter()
-        df.dateFormat = "MMM d"
-        dateLabel.text = df.string(from: session.date)
-        
-        statsLabel.text = "\(session.caloriesBurned) cal  |  \(session.durationMinutes) min"
-        
-        badgeStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
-        if isLatest { badgeStack.addArrangedSubview(createBadge(text: "NEW", color: .systemPink)) }
-        if isPB { badgeStack.addArrangedSubview(createBadge(text: "BEST", color: .systemYellow)) }
+
+    func configure(session: GameSession, isLatest: Bool, isBest: Bool, dateFmt: DateFormatter) {
+        dateLbl.text  = dateFmt.string(from: session.date)
+        trackLbl.text = session.trackName
+        distLbl.text  = String(format: "%.1f km", session.distanceCovered)
+        calLbl.text   = "\(session.caloriesBurned) kcal"
+
+        newBadge.isHidden   = !isLatest
+        bestBadge.isHidden  = !isBest
+        badgeStack.isHidden = !isLatest && !isBest
+
+        let gold = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1)
+        blurView.layer.borderColor = isBest
+            ? gold.withAlphaComponent(0.5).cgColor
+            : UIColor.white.withAlphaComponent(0.15).cgColor
+        blurView.layer.borderWidth = isBest ? 1.5 : 1.0
     }
-    
-    func createBadge(text: String, color: UIColor) -> UIView {
-        let v = UIView()
-        v.backgroundColor = color.withAlphaComponent(0.2)
-        v.layer.cornerRadius = 5
-        v.layer.borderWidth = 1
-        v.layer.borderColor = color.cgColor
-        
+}
+
+// MARK: - Reusable Badge Pill
+class BadgePill: UIView {
+    init(text: String, color: UIColor) {
+        super.init(frame: .zero)
+        backgroundColor    = color.withAlphaComponent(0.15)
+        layer.cornerRadius = 5
+        layer.borderWidth  = 1
+        layer.borderColor  = color.withAlphaComponent(0.6).cgColor
         let l = UILabel()
-        l.text = text
-        l.font = .systemFont(ofSize: 9, weight: .bold)
-        l.textColor = color
+        l.text = text; l.font = .systemFont(ofSize: 9, weight: .bold); l.textColor = color
         l.translatesAutoresizingMaskIntoConstraints = false
-        
-        v.addSubview(l)
+        addSubview(l)
         NSLayoutConstraint.activate([
-            l.topAnchor.constraint(equalTo: v.topAnchor, constant: 2),
-            l.bottomAnchor.constraint(equalTo: v.bottomAnchor, constant: -2),
-            l.leadingAnchor.constraint(equalTo: v.leadingAnchor, constant: 6),
-            l.trailingAnchor.constraint(equalTo: v.trailingAnchor, constant: -6)
+            l.topAnchor.constraint(equalTo: topAnchor, constant: 3),
+            l.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -3),
+            l.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7),
+            l.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -7)
         ])
-        return v
     }
+    required init?(coder: NSCoder) { fatalError() }
 }

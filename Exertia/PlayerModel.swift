@@ -193,7 +193,7 @@ struct LoginResponse: Codable {
 // MARK: - Token Refresh Response
 struct TokenRefreshResponse: Codable {
     let access: String
-    let refresh: String
+    let refresh: String?   // optional — present when ROTATE_REFRESH_TOKENS=True
 }
 
 struct PaginatedUserResponse: Codable {
@@ -409,6 +409,55 @@ struct DjangoFriendship: Codable {
     }
 }
 
+// MARK: - Streak Calendar Model
+struct DailyProgress: Codable {
+    let id: String
+    let date: String          // "2026-03-18"
+    let totalDistance: Double
+    let totalCalories: Int
+    let totalDurationMins: Int
+    let targetMet: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, date
+        case totalDistance = "total_distance"
+        case totalCalories = "total_calories"
+        case totalDurationMins = "total_duration_mins"
+        case targetMet = "target_met"
+    }
+}
+
+// MARK: - Badge Models
+struct DjangoBadge: Codable {
+    let id: String
+    let name: String
+    let description: String
+    let icon: String
+    let badgeType: String
+    let targetValue: Double
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, icon
+        case badgeType = "badge_type"
+        case targetValue = "target_value"
+    }
+}
+
+struct DjangoUserBadge: Codable {
+    let id: String
+    let badge: DjangoBadge
+    let currentProgress: Double
+    let isCompleted: Bool
+    let completedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, badge
+        case currentProgress = "current_progress"
+        case isCompleted = "is_completed"
+        case completedAt = "completed_at"
+    }
+}
+
 struct PaginatedFriendshipResponse: Codable {
     let count: Int
     let next: String?
@@ -471,9 +520,27 @@ class APIManager {
     }
 
     // MARK: - Token Refresh
+    // Returns: true=success, false=token genuinely expired (401/403), throws=server/network error
+    enum RefreshResult { case success, expired, serverError }
+
     func attemptTokenRefresh() async -> Bool {
-        guard !isRefreshing else { return false }
-        guard let refreshToken = TokenManager.shared.refreshToken else { return false }
+        switch await refreshTokenResult() {
+        case .success: return true
+        case .expired: return false
+        case .serverError: return false   // caller should NOT clear tokens on server error
+        }
+    }
+
+    /// Low-level refresh that distinguishes expired token from server errors.
+    /// Retries once on 5xx (Render free tier cold-start can take ~2s).
+    func refreshTokenResult(attempt: Int = 1) async -> RefreshResult {
+        guard !isRefreshing else {
+            // Another refresh is already in-flight — wait briefly then report server-side error
+            // so the caller (SplashVC) does NOT clear tokens
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            return .serverError
+        }
+        guard let refreshToken = TokenManager.shared.refreshToken else { return .expired }
         isRefreshing = true
         defer { isRefreshing = false }
 
@@ -484,18 +551,32 @@ class APIManager {
                 endpoint: "/auth/refresh/", method: "POST", body: body, requiresAuth: false
             )
 
-            if (200...299).contains(httpResponse.statusCode) {
+            switch httpResponse.statusCode {
+            case 200...299:
                 let tokenResp = try JSONDecoder().decode(TokenRefreshResponse.self, from: data)
-                TokenManager.shared.save(access: tokenResp.access, refresh: tokenResp.refresh)
+                let newRefresh = tokenResp.refresh ?? refreshToken
+                TokenManager.shared.save(access: tokenResp.access, refresh: newRefresh)
                 print("🔄 JWT tokens refreshed successfully")
-                return true
-            } else {
-                print("❌ Token refresh failed with status \(httpResponse.statusCode)")
-                return false
+                return .success
+
+            case 401, 403:
+                // Token is genuinely invalid/blacklisted — must log in again
+                print("❌ Refresh token rejected (status \(httpResponse.statusCode)) — token expired")
+                return .expired
+
+            default:
+                // 500/503 etc. — server error, possibly Render cold-start
+                print("⚠️ Refresh got status \(httpResponse.statusCode) (attempt \(attempt))")
+                if attempt < 3 {
+                    isRefreshing = false
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)  // wait 2.5s for server to wake
+                    return await refreshTokenResult(attempt: attempt + 1)
+                }
+                return .serverError
             }
         } catch {
-            print("❌ Token refresh error: \(error)")
-            return false
+            print("❌ Token refresh network error: \(error)")
+            return .serverError
         }
     }
 
@@ -514,11 +595,6 @@ class APIManager {
                 window.makeKeyAndVisible()
             }
         }
-    }
-
-    // MARK: - Auth Check (GET /auth/me/) — validates access token
-    func getMe() async throws -> DjangoUser {
-        return try await makeRequest(endpoint: "/auth/me/", method: "GET", responseType: DjangoUser.self)
     }
 
     // MARK: - Create User (registration — no auth required)
@@ -621,6 +697,16 @@ class APIManager {
         return try await makeRequest(endpoint: "/users/\(userId)/stats/", method: "GET", responseType: DjangoUserStats.self)
     }
 
+    // MARK: - User Badges
+    func getUserBadges(userId: String) async throws -> [DjangoUserBadge] {
+        return try await makeRequest(endpoint: "/users/\(userId)/badges/", method: "GET", responseType: [DjangoUserBadge].self)
+    }
+
+    // MARK: - Streak Calendar (last 90 days)
+    func getStreakCalendar(userId: String, days: Int = 90) async throws -> [DailyProgress] {
+        return try await makeRequest(endpoint: "/users/\(userId)/streak-calendar/?days=\(days)", method: "GET", responseType: [DailyProgress].self)
+    }
+
     // MARK: - User Sessions
     func getUserSessions(userId: String) async throws -> [DjangoSession] {
         return try await makeRequest(endpoint: "/users/\(userId)/sessions/", method: "GET", responseType: [DjangoSession].self)
@@ -635,6 +721,10 @@ class APIManager {
     func updateUser(userId: String, payload: [String: Any]) async throws -> DjangoUser {
         let body = try JSONSerialization.data(withJSONObject: payload)
         return try await makeRequest(endpoint: "/users/\(userId)/", method: "PATCH", body: body, responseType: DjangoUser.self)
+    }
+
+    func updateDisplayName(userId: String, displayName: String) async throws {
+        _ = try await updateUser(userId: userId, payload: ["display_name": displayName])
     }
 
     // MARK: - Friend Requests

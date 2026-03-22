@@ -47,8 +47,8 @@ class CharacterSelectionViewController: UIViewController {
             blur.frame = nextButton.bounds
         }
         tabBarContainer.layoutIfNeeded()
-        if tabWrappers.indices.contains(2) {
-            moveIndicator(to: tabWrappers[2], animated: false)
+        if tabWrappers.indices.contains(1) {
+            moveIndicator(to: tabWrappers[1], animated: false)
         }
     }
         func setupNextButton() {
@@ -232,7 +232,7 @@ class CharacterSelectionViewController: UIViewController {
         tabIcons.removeAll(); tabLabels.removeAll(); tabWrappers.removeAll()
         tabBarStackView.distribution = .fillEqually
         
-        let items = [("home2", "Home"), ("multiplayer2", "Multiplayer"), ("customize2", "Customize"), ("statistics2", "Statistics")]
+        let items = [("home2", "Home"), ("customize2", "Customize"), ("statistics2", "Statistics")]
         
         for (index, (iconName, title)) in items.enumerated() {
             let containerStack = UIStackView()
@@ -288,6 +288,7 @@ class CharacterSelectionViewController: UIViewController {
         
         switch index {
         case 0:
+            // Go back to Home
             var candidate = self.presentingViewController
             while candidate != nil {
                 if candidate is HomeViewController {
@@ -297,15 +298,9 @@ class CharacterSelectionViewController: UIViewController {
                 candidate = candidate?.presentingViewController
             }
             self.dismiss(animated: true, completion: nil)
-        case 1:
-            let sb = UIStoryboard(name: "Main", bundle: nil)
-            if let vc = sb.instantiateViewController(withIdentifier: "MultiplayerViewController") as? MultiplayerViewController {
-                vc.modalPresentationStyle = .fullScreen
-                vc.modalTransitionStyle = .crossDissolve
-                self.present(vc, animated: true)
-            }
-        case 2: break
-        case 3:
+        case 1: break  // Already on Customize
+        case 2:
+            // Statistics
             let sb = UIStoryboard(name: "Main", bundle: nil)
             if let vc = sb.instantiateViewController(withIdentifier: "StatisticsViewController") as? StatisticsViewController {
                 vc.modalPresentationStyle = .fullScreen
@@ -367,12 +362,15 @@ extension CharacterSelectionViewController: UICollectionViewDelegate, UICollecti
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "CharacterCellID", for: indexPath) as? CharacterCell else { return UICollectionViewCell() }
         let player = gameData.players[indexPath.row]
-        let isCurrentlyViewing = (indexPath.row == currentViewingIndex)
-        cell.configure(player: player, isSelected: isCurrentlyViewing)
+        let isLocked = indexPath.row > 0          // only the first character is unlocked for now
+        let isCurrentlyViewing = (indexPath.row == currentViewingIndex) && !isLocked
+        cell.configure(player: player, isSelected: isCurrentlyViewing, isLocked: isLocked)
         return cell
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        // Locked characters are non-interactive — silently ignore taps on them
+        guard indexPath.row == 0 else { return }
         currentViewingIndex = indexPath.row
         updateMainDisplay(index: currentViewingIndex)
         collectionView.reloadData()

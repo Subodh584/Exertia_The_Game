@@ -9,7 +9,6 @@ class HomeViewController: UIViewController {
     @IBOutlet weak var profileButton: UIButton!
     @IBOutlet weak var distanceLabel: UILabel!
     @IBOutlet weak var caloriesLabel: UILabel!
-    @IBOutlet weak var timeLabel: UILabel!
     
     
     
@@ -30,7 +29,7 @@ class HomeViewController: UIViewController {
         setupProfileDesign()
         updateUI()
     }
-    
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         tabBarContainer.layoutIfNeeded()
@@ -49,26 +48,59 @@ class HomeViewController: UIViewController {
         }
     }
     
+    // IST timezone — all "today" comparisons must use this
+    private static let istCalendar: Calendar = {
+        var c = Calendar.current
+        c.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        return c
+    }()
+    private static let isoParser: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
     func fetchHomeData() {
         guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
 
         Task {
             do {
-                let stats = try await APIManager.shared.getUserStats(userId: userId)
-                let user = try await APIManager.shared.getUser(userId: userId)
+                async let statsFetch = APIManager.shared.getUserStats(userId: userId)
+                async let userFetch  = APIManager.shared.getUser(userId: userId)
+                async let sessFetch  = APIManager.shared.getUserSessions(userId: userId)
+
+                let (stats, user, sessions) = try await (statsFetch, userFetch, sessFetch)
+
+                // Filter completed sessions whose createdAt falls on TODAY in IST
+                let todaySessions = sessions.filter { s in
+                    guard s.completionStatus == "completed",
+                          let raw = s.createdAt,
+                          let ts  = Self.isoParser.date(from: raw) else { return false }
+                    return Self.istCalendar.isDateInToday(ts)
+                }
+
+                let todayDistance = todaySessions.compactMap { $0.distanceCovered }.reduce(0, +)
+                let todayCalories = todaySessions.compactMap { $0.caloriesBurned  }.reduce(0, +)
 
                 // Update local GameData cache
-                self.gameData.stats.calories = stats.totalCalories
+                self.gameData.stats.calories       = stats.totalCalories
                 self.gameData.stats.runTimeMinutes = stats.totalMinutes
-                self.gameData.stats.currentStreak = user.currentStreak ?? 0
+                self.gameData.stats.currentStreak  = user.currentStreak ?? 0
 
                 DispatchQueue.main.async {
-                    self.currencyLabel.text = "\(stats.totalCalories)"
-                    self.caloriesLabel.text = "\(stats.totalCalories) cal"
-                    self.timeLabel.text = String(format: "%.1f km", stats.totalDistance)
-                    self.streakLabel.text = "\(user.currentStreak ?? 0)"
-                    self.distanceLabel.text = String(format: "%.1f km", stats.totalDistance)
-                    print("✅ Home UI hydrated with real API data!")
+                    // Top-left streak + TODAY's cal badges (resets at IST midnight)
+                    self.streakLabel.text   = "\(user.currentStreak ?? 0)"
+                    self.currencyLabel.text = "\(todayCalories)"
+
+                    // "Today's stats" row — IST-filtered, resets at IST midnight
+                    if todaySessions.isEmpty {
+                        self.distanceLabel.text = "0 km"
+                        self.caloriesLabel.text  = "0 cal"
+                    } else {
+                        self.distanceLabel.text = String(format: "%.1f km", todayDistance)
+                        self.caloriesLabel.text  = "\(todayCalories) cal"
+                    }
+                    print("✅ Home UI: today (IST) — \(String(format: "%.1f", todayDistance)) km, \(todayCalories) cal (\(todaySessions.count) sessions)")
                 }
             } catch {
                 print("❌ Failed to fetch home data: \(error)")
@@ -129,7 +161,7 @@ class HomeViewController: UIViewController {
             tabBarStackView.trailingAnchor.constraint(equalTo: tabBarContainer.trailingAnchor, constant: -10)
         ])
         
-        let items = [("home2", "Home"), ("multiplayer2", "Multiplayer"), ("customize2", "Customize"), ("statistics2", "Statistics")]
+        let items = [("home2", "Home"), ("customize2", "Customize"), ("statistics2", "Statistics")]
         
         for (index, (iconName, title)) in items.enumerated() {
             let containerStack = UIStackView()
@@ -185,22 +217,17 @@ class HomeViewController: UIViewController {
         moveIndicator(to: tabWrappers[index], animated: true)
         
         switch index {
-        case 0: break
+        case 0: break  // Already on Home
         case 1:
-            let sb = UIStoryboard(name: "Main", bundle: nil)
-            if let vc = sb.instantiateViewController(withIdentifier: "MultiplayerViewController") as? MultiplayerViewController {
-                vc.modalPresentationStyle = .fullScreen
-                vc.modalTransitionStyle = .crossDissolve
-                self.present(vc, animated: true)
-            }
-        case 2:
+            // Customize
             let sb = UIStoryboard(name: "Main", bundle: nil)
             if let vc = sb.instantiateViewController(withIdentifier: "CharacterSelectionViewController") as? CharacterSelectionViewController {
                 vc.modalPresentationStyle = .fullScreen
                 vc.modalTransitionStyle = .crossDissolve
                 self.present(vc, animated: true)
             }
-        case 3:
+        case 2:
+            // Statistics
             let sb = UIStoryboard(name: "Main", bundle: nil)
             if let vc = sb.instantiateViewController(withIdentifier: "StatisticsViewController") as? StatisticsViewController {
                 vc.modalPresentationStyle = .fullScreen
@@ -258,7 +285,6 @@ class HomeViewController: UIViewController {
         streakLabel.text = "--"
         distanceLabel.text = "--"
         caloriesLabel.text = "-- cal"
-        timeLabel.text = "-- km"
     }
     
     @IBAction func playButtonTapped(_ sender: UIButton) {

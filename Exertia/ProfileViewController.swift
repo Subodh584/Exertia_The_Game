@@ -18,8 +18,9 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     private let titleLabel = UILabel()
 
     private let avatarImageView = UIImageView()
-    private let editLabel = UILabel()
-    private let nameLabel = UILabel()
+    private let editLabel  = UILabel()
+    private let editButton = UIButton()          // transparent overlay on avatar + edit label
+    private let nameLabel  = UILabel()
     private let emailLabel = UILabel()
     private let idPillView = UIView()
     private let idLabel = UILabel()
@@ -47,62 +48,80 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
     
     func fetchRealProfileData() {
-            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
-            
-            Task {
-                do {
-                    let user = try await APIManager.shared.getUser(userId: userId)
-                    let stats = try await APIManager.shared.getUserStats(userId: userId)
-                    
-                    DispatchQueue.main.async {
-                        // 1. Set the Display Name
-                        self.nameLabel.text = user.displayName ?? user.username
-                        
-                        // 2. Use the Username with an '@' symbol
-                        self.emailLabel.text = "@\(user.username)"
-                        
-                        // 3. Show the first 8 characters of their real Django UUID
-                        let shortId = String(user.id.prefix(8)).uppercased()
-                        self.idLabel.text = "ID: \(shortId)"
-                        self.realUserId = user.id
-                        
-                        // 4. Update badges with real stats
-                        let totalCal = stats.totalCalories
-                        let totalDist = stats.totalDistance
-                        let totalSessions = stats.totalSessions
+        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
 
-                        self.inProgressBadges = [
-                            Badge(title: "Reactor Core", description: "Burn 500 active calories.", iconName: "badge1", progress: min(Float(totalCal) / 500.0, 1.0), progressText: "\(min(totalCal, 500))/500", isLocked: totalCal < 500),
-                            Badge(title: "Nebula Walker", description: "Cover 50 km total distance.", iconName: "badge1", progress: min(Float(totalDist) / 50.0, 1.0), progressText: String(format: "%.1f/50", min(totalDist, 50.0)), isLocked: totalDist < 50.0),
-                            Badge(title: "Titanium Lungs", description: "Complete 10 sessions.", iconName: "badge1", progress: min(Float(totalSessions) / 10.0, 1.0), progressText: "\(min(totalSessions, 10))/10", isLocked: totalSessions < 10)
-                        ]
-                        
-                        self.completedBadges = []
-                        if totalCal >= 500 {
-                            self.completedBadges.append(Badge(title: "Reactor Core", description: "Burn 500 active calories.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false))
+        Task {
+            do {
+                async let userFetch = APIManager.shared.getUser(userId: userId)
+                async let badgesFetch = APIManager.shared.getUserBadges(userId: userId)
+
+                let (user, userBadges) = try await (userFetch, badgesFetch)
+
+                DispatchQueue.main.async {
+                    // Profile header
+                    self.nameLabel.text = user.displayName ?? user.username
+                    self.emailLabel.text = "@\(user.username)"
+                    let shortId = String(user.id.prefix(8)).uppercased()
+                    self.idLabel.text = "ID: \(shortId)"
+                    self.realUserId = user.id
+
+                    // Map API badges → local Badge model
+                    self.inProgressBadges = userBadges
+                        .filter { !$0.isCompleted }
+                        .map { ub in
+                            let target = ub.badge.targetValue
+                            let progress = target > 0 ? Float(ub.currentProgress / target) : 0
+                            let progressText = self.formatProgress(ub.currentProgress, target: target, type: ub.badge.badgeType)
+                            return Badge(
+                                title: ub.badge.name,
+                                description: ub.badge.description,
+                                iconName: "badge1",
+                                progress: min(progress, 1.0),
+                                progressText: progressText,
+                                isLocked: false
+                            )
                         }
-                        if totalSessions >= 1 {
-                            self.completedBadges.append(Badge(title: "First Run", description: "Complete your first session.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false))
+
+                    self.completedBadges = userBadges
+                        .filter { $0.isCompleted }
+                        .map { ub in
+                            Badge(
+                                title: ub.badge.name,
+                                description: ub.badge.description,
+                                iconName: "badge2",
+                                progress: 1.0,
+                                progressText: "Done",
+                                isLocked: false
+                            )
                         }
-                        if totalDist >= 50.0 {
-                            self.completedBadges.append(Badge(title: "Nebula Walker", description: "Cover 50 km total distance.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false))
-                        }
-                        if stats.friendCount >= 1 {
-                            self.completedBadges.append(Badge(title: "Social Voyager", description: "Add a friend.", iconName: "badge2", progress: 1.0, progressText: "Done", isLocked: false))
-                        }
-                        
-                        // Filter out completed from in-progress
-                        let completedTitles = Set(self.completedBadges.map { $0.title })
-                        self.inProgressBadges = self.inProgressBadges.filter { !completedTitles.contains($0.title) }
-                        
-                        self.tableView.reloadData()
-                        print("✅ Profile UI updated with real Django data!")
-                    }
-                } catch {
-                    print("❌ Failed to fetch profile data: \(error)")
+
+                    self.tableView.reloadData()
+                    print("✅ Profile badges loaded from API: \(userBadges.count) total")
                 }
+            } catch {
+                print("❌ Failed to fetch profile data: \(error)")
             }
         }
+    }
+
+    private func formatProgress(_ current: Double, target: Double, type: String) -> String {
+        switch type {
+        case "distance":
+            return String(format: "%.1f/%.0f km", min(current, target), target)
+        case "calories":
+            return "\(Int(min(current, target)))/\(Int(target)) cal"
+        case "sessions":
+            return "\(Int(min(current, target)))/\(Int(target))"
+        case "streak":
+            return "\(Int(min(current, target)))/\(Int(target)) days"
+        case "jumps":
+            return "\(Int(min(current, target)))/\(Int(target)) jumps"
+        case "crouches":
+            return "\(Int(min(current, target)))/\(Int(target)) crouches"
+        default:
+            return String(format: "%.0f/%.0f", min(current, target), target)
+        }
+    }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
@@ -197,10 +216,15 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         avatarImageView.layer.borderWidth = 2
         avatarImageView.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
         avatarImageView.translatesAutoresizingMaskIntoConstraints = false
-        editLabel.text = "Edit"
+
+        editLabel.text = "Edit Profile"
         editLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        editLabel.textColor = .lightGray
+        editLabel.textColor = UIColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 1)
         editLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        editButton.backgroundColor = .clear
+        editButton.translatesAutoresizingMaskIntoConstraints = false
+        editButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
         nameLabel.text = ""
         nameLabel.font = .systemFont(ofSize: 22, weight: .bold)
         nameLabel.textColor = .white
@@ -222,27 +246,38 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         copyIcon.tintColor = .lightGray
         copyIcon.contentMode = .scaleAspectFit
         copyIcon.translatesAutoresizingMaskIntoConstraints = false
-        
-        let tap = UITapGestureRecognizer(target: self, action: #selector(copyIDTapped))
-        idPillView.addGestureRecognizer(tap)
-        idPillView.isUserInteractionEnabled = true
-        
+
+        // Transparent UIButton overlay — far more reliable than a tap gesture recogniser
+        // in complex scroll/table view hierarchies.
+        let copyButton = UIButton(type: .system)
+        copyButton.backgroundColor = .clear
+        copyButton.translatesAutoresizingMaskIntoConstraints = false
+        copyButton.addTarget(self, action: #selector(copyIDTapped), for: .touchUpInside)
+
         view.addSubview(avatarImageView)
         view.addSubview(editLabel)
+        view.addSubview(editButton)
         view.addSubview(nameLabel)
         view.addSubview(emailLabel)
         view.addSubview(idPillView)
         idPillView.addSubview(idLabel)
         idPillView.addSubview(copyIcon)
-        
+        idPillView.addSubview(copyButton)   // on top — catches all taps on the pill
+
         NSLayoutConstraint.activate([
             avatarImageView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 10),
             avatarImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             avatarImageView.widthAnchor.constraint(equalToConstant: 100),
             avatarImageView.heightAnchor.constraint(equalToConstant: 100),
-            
+
             editLabel.topAnchor.constraint(equalTo: avatarImageView.bottomAnchor, constant: 8),
             editLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            // Edit button covers the avatar + edit label so the whole area is tappable
+            editButton.topAnchor.constraint(equalTo: avatarImageView.topAnchor),
+            editButton.bottomAnchor.constraint(equalTo: editLabel.bottomAnchor),
+            editButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            editButton.widthAnchor.constraint(equalToConstant: 120),
             
             nameLabel.topAnchor.constraint(equalTo: editLabel.bottomAnchor, constant: 8),
             nameLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -262,7 +297,13 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
             copyIcon.trailingAnchor.constraint(equalTo: idPillView.trailingAnchor, constant: -12),
             copyIcon.centerYAnchor.constraint(equalTo: idPillView.centerYAnchor),
             copyIcon.widthAnchor.constraint(equalToConstant: 14),
-            copyIcon.heightAnchor.constraint(equalToConstant: 14)
+            copyIcon.heightAnchor.constraint(equalToConstant: 14),
+
+            // Copy button fills the entire pill
+            copyButton.topAnchor.constraint(equalTo: idPillView.topAnchor),
+            copyButton.bottomAnchor.constraint(equalTo: idPillView.bottomAnchor),
+            copyButton.leadingAnchor.constraint(equalTo: idPillView.leadingAnchor),
+            copyButton.trailingAnchor.constraint(equalTo: idPillView.trailingAnchor)
         ])
     }
     
@@ -346,6 +387,59 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         present(settingsVC, animated: true)
     }
     
+    @objc func editProfileTapped() {
+        let currentName     = nameLabel.text ?? ""
+        let rawUsername     = emailLabel.text ?? ""
+        let currentUsername = rawUsername.hasPrefix("@") ? String(rawUsername.dropFirst()) : rawUsername
+        let purple          = UIColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 1)
+
+        let modal = GlassEditModalController(
+            title: "Edit Profile",
+            subtitle: "Update your name and username",
+            icon: "person.fill",
+            accentColor: purple,
+            fields: [
+                GlassEditModalController.FieldConfig(
+                    placeholder: "Display Name",
+                    icon: "person.fill",
+                    keyboard: .default,
+                    value: currentName
+                ),
+                GlassEditModalController.FieldConfig(
+                    placeholder: "Username",
+                    icon: "at",
+                    keyboard: .default,
+                    value: currentUsername
+                )
+            ]
+        ) { [weak self] values in
+            guard let self = self else { return }
+            let newName     = values.count > 0 ? values[0].trimmingCharacters(in: .whitespaces) : ""
+            let newUsername = values.count > 1 ? values[1].trimmingCharacters(in: .whitespaces) : ""
+
+            if !newName.isEmpty     { self.nameLabel.text  = newName }
+            if !newUsername.isEmpty { self.emailLabel.text = "@\(newUsername)" }
+
+            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+            Task {
+                do {
+                    var payload: [String: Any] = [:]
+                    if !newName.isEmpty     { payload["display_name"] = newName }
+                    if !newUsername.isEmpty { payload["username"]     = newUsername }
+                    guard !payload.isEmpty else { return }
+                    _ = try await APIManager.shared.updateUser(userId: userId, payload: payload)
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    print("✅ Profile updated — name: \(newName), username: \(newUsername)")
+                } catch {
+                    print("❌ Failed to update profile: \(error)")
+                }
+            }
+        }
+        modal.modalPresentationStyle = .overFullScreen
+        modal.modalTransitionStyle   = .crossDissolve
+        present(modal, animated: true)
+    }
+
     @objc func copyIDTapped() {
         let idToCopy = realUserId.isEmpty ? (UserDefaults.standard.string(forKey: "djangoUserID") ?? "123456") : realUserId
         UIPasteboard.general.string = idToCopy

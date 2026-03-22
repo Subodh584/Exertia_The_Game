@@ -1,178 +1,435 @@
 import UIKit
 
-class FullCalendarViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
-    
-    let monthLabel = UILabel()
+// MARK: - Full Calendar — full-screen, Stats-page style
+class FullCalendarViewController: UIViewController,
+                                   UICollectionViewDataSource,
+                                   UICollectionViewDelegateFlowLayout {
+
+    // Injected from StatisticsViewController
+    var activeDateStrings: Set<String> = []
+    var sessionsByDate: [String: [DjangoSession]] = [:]
+
+    // IST
+    private static let istTZ = TimeZone(identifier: "Asia/Kolkata")!
+    private var istCalendar: Calendar {
+        var c = Calendar.current; c.timeZone = Self.istTZ; return c
+    }
+    private let dateKeyFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "Asia/Kolkata")!; return f
+    }()
+
+    // State
     var currentMonthDate = Date()
-    var collectionView: UICollectionView!
-    
+
+    // Nav — same pattern as Stats page
+    private let navBar       = UIView()
+    private let backBtn      = UIButton()
+    private let gradientView = UIView()
+
+    // Month navigation row
+    private let monthLabel = UILabel()
+    private let prevBtn    = UIButton()
+    private let nextBtn    = UIButton()
+
+    // Weekday header
+    private let weekdayStack = UIStackView()
+
+    // Grid
+    private var collectionView: UICollectionView!
+
+    // MARK: Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor.black.withAlphaComponent(0.6)
-        
-        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-        blur.frame = view.bounds
-        blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.addSubview(blur)
-        
-        setupModalUI()
+        view.backgroundColor = UIColor(red: 13/255, green: 5/255, blue: 26/255, alpha: 1.0)
+        addGradient()
+        configureNavBar()
+        configureMonthRow()
+        configureWeekdayHeader()
+        configureGrid()
     }
-    
-    func setupModalUI() {
-        let container = UIView()
-        container.backgroundColor = UIColor(red: 0.05, green: 0.02, blue: 0.1, alpha: 0.95)
-        container.layer.cornerRadius = 28
-        container.layer.borderWidth = 1
-        container.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
-        container.layer.shadowColor = UIColor.black.cgColor
-        container.layer.shadowOpacity = 0.6
-        container.layer.shadowRadius = 30
-        container.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(container)
-        monthLabel.font = .systemFont(ofSize: 22, weight: .bold)
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        backBtn.layer.cornerRadius = backBtn.frame.height / 2
+    }
+
+    // MARK: Background gradient — same as Stats page
+    private func addGradient() {
+        gradientView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(gradientView)
+        view.sendSubviewToBack(gradientView)
+        NSLayoutConstraint.activate([
+            gradientView.topAnchor.constraint(equalTo: view.topAnchor),
+            gradientView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            gradientView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            gradientView.heightAnchor.constraint(equalToConstant: 350)
+        ])
+        let gl = CAGradientLayer()
+        gl.colors = [UIColor.neonPink.withAlphaComponent(0.28).cgColor, UIColor.clear.cgColor]
+        gl.locations = [0.0, 1.0]
+        gl.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 350)
+        gradientView.layer.addSublayer(gl)
+    }
+
+    // MARK: Nav bar — same as Stats page
+    private func configureNavBar() {
+        navBar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(navBar)
+
+        backBtn.backgroundColor = UIColor.white.withAlphaComponent(0.1)
+        backBtn.layer.borderWidth = 1
+        backBtn.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
+        let cfg = UIImage.SymbolConfiguration(weight: .bold)
+        backBtn.setImage(UIImage(systemName: "chevron.left", withConfiguration: cfg), for: .normal)
+        backBtn.tintColor = .white
+        backBtn.addTarget(self, action: #selector(goBack), for: .touchUpInside)
+        backBtn.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleLbl = UILabel()
+        titleLbl.text = "Streak Calendar"
+        titleLbl.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLbl.textColor = .white
+        titleLbl.textAlignment = .center
+        titleLbl.translatesAutoresizingMaskIntoConstraints = false
+
+        navBar.addSubview(backBtn)
+        navBar.addSubview(titleLbl)
+
+        NSLayoutConstraint.activate([
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            navBar.heightAnchor.constraint(equalToConstant: 50),
+
+            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 20),
+            backBtn.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
+            backBtn.widthAnchor.constraint(equalToConstant: 40),
+            backBtn.heightAnchor.constraint(equalToConstant: 40),
+
+            titleLbl.centerXAnchor.constraint(equalTo: navBar.centerXAnchor),
+            titleLbl.centerYAnchor.constraint(equalTo: navBar.centerYAnchor)
+        ])
+    }
+
+    // MARK: Month navigation row
+    private func configureMonthRow() {
+        let monthCard = UIView()
+        monthCard.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(monthCard)
+
+        // Glass pill background
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+        blur.layer.cornerRadius = 18; blur.clipsToBounds = true
+        blur.layer.borderColor  = UIColor.white.withAlphaComponent(0.15).cgColor
+        blur.layer.borderWidth  = 1
+        blur.translatesAutoresizingMaskIntoConstraints = false
+        monthCard.addSubview(blur)
+
+        monthLabel.font      = .systemFont(ofSize: 18, weight: .bold)
         monthLabel.textColor = .white
         monthLabel.textAlignment = .center
         monthLabel.translatesAutoresizingMaskIntoConstraints = false
         updateMonthLabel()
-        let prevBtn = UIButton()
-        prevBtn.setImage(UIImage(systemName: "chevron.left"), for: .normal)
+
+        func arrowBtn(_ sys: String) -> UIButton {
+            let b = UIButton()
+            let cfg = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
+            b.setImage(UIImage(systemName: sys, withConfiguration: cfg), for: .normal)
+            b.tintColor = .white
+            b.translatesAutoresizingMaskIntoConstraints = false
+            return b
+        }
+
+        prevBtn.setImage(UIImage(systemName: "chevron.left",
+                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)), for: .normal)
         prevBtn.tintColor = .white
         prevBtn.addTarget(self, action: #selector(prevMonth), for: .touchUpInside)
         prevBtn.translatesAutoresizingMaskIntoConstraints = false
-        
-        let nextBtn = UIButton()
-        nextBtn.setImage(UIImage(systemName: "chevron.right"), for: .normal)
+
+        nextBtn.setImage(UIImage(systemName: "chevron.right",
+                                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)), for: .normal)
         nextBtn.tintColor = .white
         nextBtn.addTarget(self, action: #selector(nextMonth), for: .touchUpInside)
         nextBtn.translatesAutoresizingMaskIntoConstraints = false
-        let closeBtn = UIButton()
-        closeBtn.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        closeBtn.tintColor = .white.withAlphaComponent(0.5)
-        closeBtn.addTarget(self, action: #selector(dismissModal), for: .touchUpInside)
-        closeBtn.translatesAutoresizingMaskIntoConstraints = false
-        let weekdaysStack = UIStackView()
-        weekdaysStack.axis = .horizontal
-        weekdaysStack.distribution = .fillEqually
-        weekdaysStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        let days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-        for day in days {
-            let lbl = UILabel()
-            lbl.text = day
-            lbl.font = .systemFont(ofSize: 13, weight: .semibold)
-            lbl.textColor = .gray
-            lbl.textAlignment = .center
-            weekdaysStack.addArrangedSubview(lbl)
+
+        monthCard.addSubview(monthLabel)
+        monthCard.addSubview(prevBtn)
+        monthCard.addSubview(nextBtn)
+
+        NSLayoutConstraint.activate([
+            monthCard.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 14),
+            monthCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            monthCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            monthCard.heightAnchor.constraint(equalToConstant: 52),
+
+            blur.topAnchor.constraint(equalTo: monthCard.topAnchor),
+            blur.bottomAnchor.constraint(equalTo: monthCard.bottomAnchor),
+            blur.leadingAnchor.constraint(equalTo: monthCard.leadingAnchor),
+            blur.trailingAnchor.constraint(equalTo: monthCard.trailingAnchor),
+
+            prevBtn.leadingAnchor.constraint(equalTo: monthCard.leadingAnchor, constant: 18),
+            prevBtn.centerYAnchor.constraint(equalTo: monthCard.centerYAnchor),
+            prevBtn.widthAnchor.constraint(equalToConstant: 32),
+            prevBtn.heightAnchor.constraint(equalToConstant: 32),
+
+            nextBtn.trailingAnchor.constraint(equalTo: monthCard.trailingAnchor, constant: -18),
+            nextBtn.centerYAnchor.constraint(equalTo: monthCard.centerYAnchor),
+            nextBtn.widthAnchor.constraint(equalToConstant: 32),
+            nextBtn.heightAnchor.constraint(equalToConstant: 32),
+
+            monthLabel.centerXAnchor.constraint(equalTo: monthCard.centerXAnchor),
+            monthLabel.centerYAnchor.constraint(equalTo: monthCard.centerYAnchor)
+        ])
+
+        // Store reference so weekday row can pin below it
+        self._monthCard = monthCard
+    }
+    private var _monthCard: UIView?
+
+    // MARK: Weekday header row
+    private func configureWeekdayHeader() {
+        weekdayStack.axis         = .horizontal
+        weekdayStack.distribution = .fillEqually
+        weekdayStack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(weekdayStack)
+
+        for day in ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] {
+            let l = UILabel()
+            l.text          = day
+            l.font          = .systemFont(ofSize: 11, weight: .semibold)
+            l.textColor     = UIColor.white.withAlphaComponent(0.35)
+            l.textAlignment = .center
+            weekdayStack.addArrangedSubview(l)
         }
 
-        let layout = UICollectionViewFlowLayout()
-        let itemWidth = (340 - 20) / 7
-        layout.itemSize = CGSize(width: itemWidth, height: 65)
-        layout.minimumInteritemSpacing = 0
-        layout.minimumLineSpacing = 0
-        
-        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.backgroundColor = .clear
-        collectionView.dataSource = self
-        collectionView.delegate = self
-        collectionView.register(CalendarDayCell.self, forCellWithReuseIdentifier: "GridCell")
-        collectionView.translatesAutoresizingMaskIntoConstraints = false
-
-        container.addSubview(monthLabel)
-        container.addSubview(prevBtn)
-        container.addSubview(nextBtn)
-        container.addSubview(closeBtn)
-        container.addSubview(weekdaysStack)
-        container.addSubview(collectionView)
-        
         NSLayoutConstraint.activate([
-            container.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            container.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            container.widthAnchor.constraint(equalToConstant: 340),
-            container.heightAnchor.constraint(equalToConstant: 550),
-
-            monthLabel.topAnchor.constraint(equalTo: container.topAnchor, constant: 25),
-            monthLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            
-            prevBtn.centerYAnchor.constraint(equalTo: monthLabel.centerYAnchor),
-            prevBtn.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 25),
-            
-            nextBtn.centerYAnchor.constraint(equalTo: monthLabel.centerYAnchor),
-            nextBtn.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -60),
-            
-            closeBtn.centerYAnchor.constraint(equalTo: monthLabel.centerYAnchor),
-            closeBtn.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -15),
-
-            weekdaysStack.topAnchor.constraint(equalTo: monthLabel.bottomAnchor, constant: 25),
-            weekdaysStack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
-            weekdaysStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
-            weekdaysStack.heightAnchor.constraint(equalToConstant: 20),
-
-            collectionView.topAnchor.constraint(equalTo: weekdaysStack.bottomAnchor, constant: 10),
-            collectionView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
-            collectionView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
-            collectionView.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -20)
+            weekdayStack.topAnchor.constraint(equalTo: _monthCard!.bottomAnchor, constant: 16),
+            weekdayStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            weekdayStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            weekdayStack.heightAnchor.constraint(equalToConstant: 22)
         ])
     }
 
-    @objc func prevMonth() {
-        currentMonthDate = Calendar.current.date(byAdding: .month, value: -1, to: currentMonthDate) ?? Date()
-        updateMonthLabel()
-        collectionView.reloadData()
-    }
-    
-    @objc func nextMonth() {
-        currentMonthDate = Calendar.current.date(byAdding: .month, value: 1, to: currentMonthDate) ?? Date()
-        updateMonthLabel()
-        collectionView.reloadData()
-    }
-    
-    func updateMonthLabel() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM yyyy"
-        monthLabel.text = formatter.string(from: currentMonthDate)
-    }
-    
-    @objc func dismissModal() { dismiss(animated: true) }
+    // MARK: Collection view grid
+    private func configureGrid() {
+        let w = UIScreen.main.bounds.width - 32
+        let itemW = w / 7
 
-    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return daysInMonth(date: currentMonthDate) + firstWeekday(date: currentMonthDate) - 1
+        let layout = UICollectionViewFlowLayout()
+        layout.itemSize              = CGSize(width: itemW, height: 68)
+        layout.minimumInteritemSpacing = 0
+        layout.minimumLineSpacing    = 4
+
+        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView.backgroundColor = .clear
+        collectionView.showsVerticalScrollIndicator = false
+        collectionView.dataSource = self
+        collectionView.delegate   = self
+        collectionView.register(CalendarDayCell.self, forCellWithReuseIdentifier: "Day")
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(collectionView)
+
+        // Legend row at the bottom
+        let legend = buildLegend()
+        view.addSubview(legend)
+
+        NSLayoutConstraint.activate([
+            collectionView.topAnchor.constraint(equalTo: weekdayStack.bottomAnchor, constant: 8),
+            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            collectionView.bottomAnchor.constraint(equalTo: legend.topAnchor, constant: -12),
+
+            legend.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            legend.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            legend.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            legend.heightAnchor.constraint(equalToConstant: 28)
+        ])
     }
-    
-    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "GridCell", for: indexPath) as! CalendarDayCell
-        
-        let firstDayIndex = firstWeekday(date: currentMonthDate) - 1
-        
-        if indexPath.item < firstDayIndex {
+
+    private func buildLegend() -> UIView {
+        let row = UIStackView()
+        row.axis    = .horizontal
+        row.spacing = 20
+        row.alignment = .center
+        row.translatesAutoresizingMaskIntoConstraints = false
+
+        func dot(_ color: UIColor) -> UIView {
+            let v = UIView(); v.backgroundColor = color
+            v.layer.cornerRadius = 5; v.clipsToBounds = true
+            v.translatesAutoresizingMaskIntoConstraints = false
+            v.widthAnchor.constraint(equalToConstant: 10).isActive = true
+            v.heightAnchor.constraint(equalToConstant: 10).isActive = true
+            return v
+        }
+        func lbl(_ text: String) -> UILabel {
+            let l = UILabel(); l.text = text
+            l.font = .systemFont(ofSize: 11, weight: .medium)
+            l.textColor = UIColor.white.withAlphaComponent(0.45)
+            return l
+        }
+
+        let gold = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1)
+        for (color, title) in [
+            (gold,           "Target Met"),
+            (UIColor.neonPink, "Today"),
+            (UIColor.white.withAlphaComponent(0.2), "No Run")
+        ] {
+            let pair = UIStackView(arrangedSubviews: [dot(color), lbl(title)])
+            pair.axis = .horizontal; pair.spacing = 6; pair.alignment = .center
+            row.addArrangedSubview(pair)
+        }
+
+        let spacer = UIView(); spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        row.addArrangedSubview(spacer)
+        return row
+    }
+
+    // MARK: Collection data source
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        daysInMonth + firstWeekdayOffset
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Day", for: indexPath) as! CalendarDayCell
+        let offset = firstWeekdayOffset
+
+        if indexPath.item < offset {
             cell.isHidden = true
         } else {
             cell.isHidden = false
-            let day = indexPath.item - firstDayIndex + 1
-            if let date = Calendar.current.date(byAdding: .day, value: day - 1, to: startOfMonth(date: currentMonthDate)) {
-                let isToday = Calendar.current.isDateInToday(date)
-                let hasActivity = (day % 2 == 0) && date < Date()
-                cell.configure(date: date, isToday: isToday, hasActivity: hasActivity)
-                let formatter = DateFormatter()
-                formatter.dateFormat = "d"
-                cell.dayLabel.text = formatter.string(from: date)
+            let dayNum = indexPath.item - offset + 1
+            var cal = istCalendar
+            if let date = cal.date(byAdding: .day, value: dayNum - 1, to: startOfMonth) {
+                let key       = dateKeyFmt.string(from: date)
+                let isToday   = cal.isDateInToday(date)
+                let targetMet = activeDateStrings.contains(key)
+                let hasSessions = sessionsByDate[key] != nil
+
+                cell.configure(date: date, isToday: isToday, targetMet: targetMet)
+
+                // Subtle dot if there are sessions but target not met
+                if hasSessions && !targetMet && !isToday {
+                    cell.showSessionDot(true)
+                } else {
+                    cell.showSessionDot(false)
+                }
             }
         }
         return cell
     }
-    
-    func daysInMonth(date: Date) -> Int {
-        return Calendar.current.range(of: .day, in: .month, for: date)?.count ?? 30
+
+    // MARK: Collection delegate — date tap → DayStatsViewController
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        let offset = firstWeekdayOffset
+        guard indexPath.item >= offset else { return }
+        let dayNum = indexPath.item - offset + 1
+        guard let date = istCalendar.date(byAdding: .day, value: dayNum - 1, to: startOfMonth) else { return }
+
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+        // Scale-bounce on the cell
+        if let cell = collectionView.cellForItem(at: indexPath) {
+            UIView.animate(withDuration: 0.1, animations: { cell.transform = CGAffineTransform(scaleX: 0.88, y: 0.88) }) { _ in
+                UIView.animate(withDuration: 0.15, delay: 0,
+                               usingSpringWithDamping: 0.6, initialSpringVelocity: 0) {
+                    cell.transform = .identity
+                }
+            }
+        }
+
+        let key = dateKeyFmt.string(from: date)
+        let daySessions = sessionsByDate[key] ?? []
+
+        let vc = DayStatsViewController()
+        vc.date        = date
+        vc.sessions    = daySessions
+        vc.targetMet   = activeDateStrings.contains(key)
+        vc.modalPresentationStyle = .pageSheet
+        if let sheet = vc.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 28
+        }
+        present(vc, animated: true)
     }
-    
-    func firstWeekday(date: Date) -> Int {
-        let components = Calendar.current.dateComponents([.year, .month], from: date)
-        let startOfMonth = Calendar.current.date(from: components)!
-        return Calendar.current.component(.weekday, from: startOfMonth)
+
+    // MARK: Month nav
+    @objc private func prevMonth() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        currentMonthDate = istCalendar.date(byAdding: .month, value: -1, to: currentMonthDate) ?? Date()
+        updateMonthLabel()
+        collectionView.reloadData()
     }
-    
-    func startOfMonth(date: Date) -> Date {
-        let components = Calendar.current.dateComponents([.year, .month], from: date)
-        return Calendar.current.date(from: components)!
+
+    @objc private func nextMonth() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        currentMonthDate = istCalendar.date(byAdding: .month, value: 1, to: currentMonthDate) ?? Date()
+        updateMonthLabel()
+        collectionView.reloadData()
+    }
+
+    private func updateMonthLabel() {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM yyyy"
+        f.timeZone   = Self.istTZ
+        monthLabel.text = f.string(from: currentMonthDate)
+    }
+
+    @objc private func goBack() {
+        UIView.animate(withDuration: 0.1, animations: {
+            self.backBtn.transform = CGAffineTransform(scaleX: 0.88, y: 0.88)
+        }) { _ in
+            UIView.animate(withDuration: 0.1) { self.backBtn.transform = .identity }
+            self.dismiss(animated: true)
+        }
+    }
+
+    // MARK: Calendar helpers
+    private var daysInMonth: Int {
+        istCalendar.range(of: .day, in: .month, for: currentMonthDate)?.count ?? 30
+    }
+    private var firstWeekdayOffset: Int {
+        var comp = istCalendar.dateComponents([.year, .month], from: currentMonthDate)
+        guard let som = istCalendar.date(from: comp) else { return 0 }
+        return istCalendar.component(.weekday, from: som) - 1  // 0-based (Sun=0)
+    }
+    private var startOfMonth: Date {
+        let comp = istCalendar.dateComponents([.year, .month], from: currentMonthDate)
+        return istCalendar.date(from: comp) ?? currentMonthDate
+    }
+}
+
+// MARK: - CalendarDayCell session-dot extension
+extension CalendarDayCell {
+    /// Shows a tiny neonPink dot at the bottom if there are sessions but target not met
+    func showSessionDot(_ show: Bool) {
+        // Tag 9999 is the session dot
+        viewWithTag(9999)?.removeFromSuperview()
+        guard show else { return }
+        let dot = UIView()
+        dot.tag = 9999
+        dot.backgroundColor = UIColor.neonPink.withAlphaComponent(0.6)
+        dot.layer.cornerRadius = 2.5
+        dot.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(dot)
+        NSLayoutConstraint.activate([
+            dot.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            dot.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -5),
+            dot.widthAnchor.constraint(equalToConstant: 5),
+            dot.heightAnchor.constraint(equalToConstant: 5)
+        ])
+    }
+}
+
+// MARK: - Int weekday abbreviation (1=Sun…7=Sat)
+private extension Int {
+    var weekdayAbbr: String {
+        switch self {
+        case 1: return "SUN"; case 2: return "MON"; case 3: return "TUE"
+        case 4: return "WED"; case 5: return "THU"; case 6: return "FRI"
+        case 7: return "SAT"; default: return ""
+        }
     }
 }

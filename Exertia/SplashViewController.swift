@@ -90,32 +90,44 @@ class SplashViewController: UIViewController {
     }
 
     func checkAuthAndNavigate() {
-        // Step 1: Check if we have stored tokens at all
-        guard TokenManager.shared.hasTokens,
-              TokenManager.shared.accessToken != nil else {
-            print("🔐 No stored tokens — going to login")
+        // Migrate tokens stored in UserDefaults (old format) to Keychain
+        TokenManager.shared.migrateFromUserDefaultsIfNeeded()
+
+        // No refresh token at all → must log in
+        guard TokenManager.shared.hasTokens else {
+            print("🔐 No stored refresh token — going to login")
             goToLogin()
             return
         }
 
         Task {
-            do {
-                // Step 2: Try GET /auth/me/ with the stored access token
-                let user = try await APIManager.shared.getMe()
-                // 200 → user is still logged in
-                print("✅ /auth/me/ succeeded — user: \(user.username)")
-                // Ensure djangoUserID is stored
-                UserDefaults.standard.set(user.id, forKey: "djangoUserID")
+            let result = await APIManager.shared.refreshTokenResult()
+
+            switch result {
+            case .success:
+                // Token refreshed — fetch latest user profile and go home
+                if let userId = UserDefaults.standard.string(forKey: "djangoUserID") {
+                    if let user = try? await APIManager.shared.getUser(userId: userId) {
+                        UserDefaults.standard.set(user.id, forKey: "djangoUserID")
+                        print("✅ Token refreshed, user: \(user.username) — going home")
+                    }
+                }
                 DispatchQueue.main.async { self.goToHome() }
-            } catch {
-                // Step 3: Access token expired (401) — makeRequest already tried refresh internally
-                // If makeRequest's auto-refresh succeeded, it would have returned the user above.
-                // If we're here, both access AND refresh failed.
-                print("❌ Auth check failed: \(error) — going to login")
+
+            case .expired:
+                // Token is definitively invalid (401/403) — must log in again
+                print("🔐 Refresh token expired — must log in again")
                 DispatchQueue.main.async {
                     TokenManager.shared.clear()
+                    UserDefaults.standard.removeObject(forKey: "djangoUserID")
                     self.goToLogin()
                 }
+
+            case .serverError:
+                // Server unreachable / cold-starting — tokens are likely still valid.
+                // Go home; individual screens will retry API calls on 401 automatically.
+                print("⚠️ Server unreachable during refresh — proceeding to home (tokens kept)")
+                DispatchQueue.main.async { self.goToHome() }
             }
         }
     }
