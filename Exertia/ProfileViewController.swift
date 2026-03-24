@@ -406,16 +406,18 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
             accentColor: purple,
             fields: [
                 GlassEditModalController.FieldConfig(
-                    placeholder: "Display Name",
+                    placeholder: "e.g. John Doe",
                     icon: "person.fill",
                     keyboard: .default,
-                    value: currentName
+                    value: currentName,
+                    label: "Display Name"
                 ),
                 GlassEditModalController.FieldConfig(
-                    placeholder: "Username",
+                    placeholder: "e.g. johndoe",
                     icon: "at",
                     keyboard: .default,
-                    value: currentUsername
+                    value: currentUsername,
+                    label: "Username"
                 )
             ]
         ) { [weak self] values in

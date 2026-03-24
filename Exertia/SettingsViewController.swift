@@ -511,22 +511,30 @@ class SettingsViewController: UIViewController {
     }
 
     @objc private func deleteTapped() {
-        let alert = UIAlertController(title: "Delete Account?",
-                                      message: "This cannot be undone.",
-                                      preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { _ in
+        let modal = DeleteConfirmModalController { [weak self] password in
+            guard let self = self else { return }
             Task {
-                if let uid = UserDefaults.standard.string(forKey: "djangoUserID") {
-                    try? await APIManager.shared.setUserOffline(userId: uid)
+                do {
+                    // Verify password + delete on the Django backend
+                    try await APIManager.shared.deleteUserAccount(password: password)
+                    // Clean up local state
+                    if let uid = UserDefaults.standard.string(forKey: "djangoUserID") {
+                        try? await APIManager.shared.setUserOffline(userId: uid)
+                    }
+                    TokenManager.shared.clear()
+                    UserDefaults.standard.removeObject(forKey: "djangoUserID")
+                    await MainActor.run { self.navigateToLogin() }
+                } catch {
+                    await MainActor.run {
+                        UINotificationFeedbackGenerator().notificationOccurred(.error)
+                        self.showAlert("Could Not Delete Account", error.localizedDescription)
+                    }
                 }
-                try? await SupabaseManager.shared.deleteAccount()
-                TokenManager.shared.clear()
-                UserDefaults.standard.removeObject(forKey: "djangoUserID")
-                self.navigateToLogin()
             }
-        })
-        present(alert, animated: true)
+        }
+        modal.modalPresentationStyle = .overFullScreen
+        modal.modalTransitionStyle   = .crossDissolve
+        present(modal, animated: true)
     }
 
     private func navigateToLogin() {
@@ -634,5 +642,320 @@ class SettingsViewController: UIViewController {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completion?() })
         present(alert, animated: true)
+    }
+}
+
+// MARK: - Delete Account Confirmation Modal
+
+private final class DeleteConfirmModalController: UIViewController {
+
+    private let onConfirm: (String) -> Void
+
+    private let dimView    = UIView()
+    private let cardView   = UIView()
+    private var passwordTF: UITextField!
+    private var deleteBtn:  UIButton!
+    private var cardBottomConstraint: NSLayoutConstraint!
+
+    private let red    = UIColor(red: 0.92, green: 0.28, blue: 0.28, alpha: 1)
+    private let dimRed = UIColor(red: 0.92, green: 0.28, blue: 0.28, alpha: 0.12)
+    private var eyeBtnKey: UInt8 = 0
+
+    init(onConfirm: @escaping (String) -> Void) {
+        self.onConfirm = onConfirm
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        setupDim()
+        setupCard()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(keyboardWillShow(_:)),
+            name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(keyboardWillHide(_:)),
+            name: UIResponder.keyboardWillHideNotification, object: nil)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        animateIn()
+    }
+
+    // MARK: - Layout
+
+    private func setupDim() {
+        dimView.backgroundColor = .clear
+        dimView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(dimView)
+        NSLayoutConstraint.activate([
+            dimView.topAnchor.constraint(equalTo: view.topAnchor),
+            dimView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            dimView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            dimView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
+        let tap = UITapGestureRecognizer(target: self, action: #selector(cancelTapped))
+        dimView.addGestureRecognizer(tap)
+    }
+
+    private func setupCard() {
+        cardView.backgroundColor = UIColor(red: 20/255, green: 10/255, blue: 35/255, alpha: 0.98)
+        cardView.layer.cornerRadius    = 28
+        cardView.layer.maskedCorners   = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        cardView.layer.borderWidth     = 1
+        cardView.layer.borderColor     = UIColor.white.withAlphaComponent(0.12).cgColor
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(cardView)
+
+        cardBottomConstraint = cardView.bottomAnchor.constraint(
+            equalTo: view.bottomAnchor, constant: 600)
+        NSLayoutConstraint.activate([
+            cardView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            cardView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            cardBottomConstraint
+        ])
+
+        // Drag handle
+        let handle = UIView()
+        handle.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        handle.layer.cornerRadius = 2.5
+        handle.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(handle)
+
+        // Warning icon circle
+        let iconCircle = UIView()
+        iconCircle.backgroundColor    = dimRed
+        iconCircle.layer.cornerRadius = 28
+        iconCircle.layer.borderWidth  = 1
+        iconCircle.layer.borderColor  = red.withAlphaComponent(0.4).cgColor
+        iconCircle.translatesAutoresizingMaskIntoConstraints = false
+
+        let symCfg  = UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
+        let iconImg = UIImageView(image: UIImage(systemName: "exclamationmark.triangle.fill",
+                                                 withConfiguration: symCfg))
+        iconImg.tintColor     = red
+        iconImg.contentMode   = .scaleAspectFit
+        iconImg.translatesAutoresizingMaskIntoConstraints = false
+        iconCircle.addSubview(iconImg)
+        cardView.addSubview(iconCircle)
+
+        // Title
+        let titleLbl = UILabel()
+        titleLbl.text      = "Delete Account"
+        titleLbl.font      = .systemFont(ofSize: 22, weight: .bold)
+        titleLbl.textColor = .white
+        titleLbl.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(titleLbl)
+
+        // Subtitle
+        let subLbl = UILabel()
+        subLbl.text          = "This action is permanent and cannot be undone."
+        subLbl.font          = .systemFont(ofSize: 13, weight: .medium)
+        subLbl.textColor     = UIColor.white.withAlphaComponent(0.45)
+        subLbl.numberOfLines = 0
+        subLbl.textAlignment = .center
+        subLbl.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(subLbl)
+
+        // Instruction label
+        let instrLbl = UILabel()
+        instrLbl.text          = "Enter your password to confirm"
+        instrLbl.font          = .systemFont(ofSize: 12, weight: .semibold)
+        instrLbl.textColor     = red.withAlphaComponent(0.8)
+        instrLbl.textAlignment = .center
+        instrLbl.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(instrLbl)
+
+        // Password field
+        let tf = UITextField()
+        tf.isSecureTextEntry      = true
+        tf.autocorrectionType     = .no
+        tf.autocapitalizationType = .none
+        tf.textColor              = .white
+        tf.font                   = .systemFont(ofSize: 16, weight: .medium)
+        tf.backgroundColor        = red.withAlphaComponent(0.08)
+        tf.layer.cornerRadius     = 14
+        tf.layer.borderWidth      = 1
+        tf.layer.borderColor      = red.withAlphaComponent(0.3).cgColor
+        tf.tintColor              = red
+        tf.translatesAutoresizingMaskIntoConstraints = false
+        tf.heightAnchor.constraint(equalToConstant: 50).isActive = true
+        tf.addTarget(self, action: #selector(textChanged), for: .editingChanged)
+
+        let placeholderAttrs: [NSAttributedString.Key: Any] = [
+            .foregroundColor: UIColor.white.withAlphaComponent(0.25)
+        ]
+        tf.attributedPlaceholder = NSAttributedString(string: "Enter your password", attributes: placeholderAttrs)
+
+        // Left padding
+        let padView = UIView(frame: CGRect(x: 0, y: 0, width: 16, height: 1))
+        tf.leftView     = padView
+        tf.leftViewMode = .always
+
+        // Eye toggle
+        let eyeSymCfg = UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        let eyeBtn = UIButton(type: .system)
+        eyeBtn.setImage(UIImage(systemName: "eye.slash", withConfiguration: eyeSymCfg), for: .normal)
+        eyeBtn.tintColor = UIColor.white.withAlphaComponent(0.4)
+        eyeBtn.frame     = CGRect(x: 0, y: 0, width: 44, height: 50)
+        eyeBtn.addTarget(self, action: #selector(togglePasswordEye(_:)), for: .touchUpInside)
+        objc_setAssociatedObject(eyeBtn, &eyeBtnKey, tf, .OBJC_ASSOCIATION_ASSIGN)
+        tf.rightView     = eyeBtn
+        tf.rightViewMode = .always
+
+        cardView.addSubview(tf)
+        self.passwordTF = tf
+
+        // Buttons
+        let cancelBtn = makeBtn(title: "Cancel", filled: false)
+        cancelBtn.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+
+        let delBtn = makeBtn(title: "Delete Account", filled: true)
+        delBtn.addTarget(self, action: #selector(confirmDelete), for: .touchUpInside)
+        delBtn.alpha = 0.35
+        delBtn.isEnabled = false
+        cardView.addSubview(delBtn)
+        self.deleteBtn = delBtn
+
+        let btnStack = UIStackView(arrangedSubviews: [cancelBtn, delBtn])
+        btnStack.spacing      = 12
+        btnStack.distribution = .fillEqually
+        btnStack.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(btnStack)
+
+        NSLayoutConstraint.activate([
+            handle.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 12),
+            handle.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            handle.widthAnchor.constraint(equalToConstant: 40),
+            handle.heightAnchor.constraint(equalToConstant: 5),
+
+            iconCircle.topAnchor.constraint(equalTo: handle.bottomAnchor, constant: 24),
+            iconCircle.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            iconCircle.widthAnchor.constraint(equalToConstant: 56),
+            iconCircle.heightAnchor.constraint(equalToConstant: 56),
+            iconImg.centerXAnchor.constraint(equalTo: iconCircle.centerXAnchor),
+            iconImg.centerYAnchor.constraint(equalTo: iconCircle.centerYAnchor),
+            iconImg.widthAnchor.constraint(equalToConstant: 26),
+            iconImg.heightAnchor.constraint(equalToConstant: 26),
+
+            titleLbl.topAnchor.constraint(equalTo: iconCircle.bottomAnchor, constant: 16),
+            titleLbl.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+
+            subLbl.topAnchor.constraint(equalTo: titleLbl.bottomAnchor, constant: 6),
+            subLbl.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 32),
+            subLbl.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -32),
+
+            instrLbl.topAnchor.constraint(equalTo: subLbl.bottomAnchor, constant: 24),
+            instrLbl.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+
+            passwordTF.topAnchor.constraint(equalTo: instrLbl.bottomAnchor, constant: 10),
+            passwordTF.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 28),
+            passwordTF.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -28),
+
+            btnStack.topAnchor.constraint(equalTo: passwordTF.bottomAnchor, constant: 24),
+            btnStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 28),
+            btnStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -28),
+            btnStack.heightAnchor.constraint(equalToConstant: 50),
+            btnStack.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -40)
+        ])
+    }
+
+    private func makeBtn(title: String, filled: Bool) -> UIButton {
+        let btn = UIButton(type: .system)
+        btn.setTitle(title, for: .normal)
+        btn.titleLabel?.font = .systemFont(ofSize: 15, weight: .bold)
+        btn.layer.cornerRadius = 14
+        if filled {
+            btn.backgroundColor = red
+            btn.setTitleColor(.white, for: .normal)
+        } else {
+            btn.backgroundColor = UIColor.white.withAlphaComponent(0.06)
+            btn.setTitleColor(UIColor.white.withAlphaComponent(0.7), for: .normal)
+            btn.layer.borderWidth = 1
+            btn.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
+        }
+        return btn
+    }
+
+    // MARK: - Animations
+
+    private func animateIn() {
+        view.layoutIfNeeded()
+        cardBottomConstraint.constant = 0
+        UIView.animate(withDuration: 0.5, delay: 0,
+                       usingSpringWithDamping: 0.85, initialSpringVelocity: 0.5,
+                       options: .curveEaseOut) {
+            self.dimView.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            self.passwordTF.becomeFirstResponder()
+        }
+    }
+
+    private func animateOut(completion: (() -> Void)? = nil) {
+        view.endEditing(true)
+        cardBottomConstraint.constant = 600
+        UIView.animate(withDuration: 0.35, delay: 0, options: .curveEaseIn) {
+            self.dimView.backgroundColor = .clear
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            self.dismiss(animated: false, completion: completion)
+        }
+    }
+
+    // MARK: - Actions
+
+    @objc private func textChanged() {
+        let hasText = !(passwordTF.text ?? "").isEmpty
+        UIView.animate(withDuration: 0.2) {
+            self.deleteBtn.alpha     = hasText ? 1.0 : 0.35
+            self.deleteBtn.isEnabled = hasText
+        }
+    }
+
+    @objc private func togglePasswordEye(_ sender: UIButton) {
+        guard let tf = objc_getAssociatedObject(sender, &eyeBtnKey) as? UITextField else { return }
+        tf.isSecureTextEntry.toggle()
+        let symCfg   = UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        let iconName = tf.isSecureTextEntry ? "eye.slash" : "eye"
+        sender.setImage(UIImage(systemName: iconName, withConfiguration: symCfg), for: .normal)
+        sender.tintColor = tf.isSecureTextEntry
+            ? UIColor.white.withAlphaComponent(0.4)
+            : UIColor(red: 0.92, green: 0.28, blue: 0.28, alpha: 1)
+    }
+
+    @objc private func cancelTapped() {
+        animateOut()
+    }
+
+    @objc private func confirmDelete() {
+        let password = passwordTF.text ?? ""
+        guard !password.isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        animateOut { [weak self] in
+            self?.onConfirm(password)
+        }
+    }
+
+    // MARK: - Keyboard
+
+    @objc private func keyboardWillShow(_ n: Notification) {
+        guard let info = n.userInfo,
+              let frame = (info[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue,
+              let dur   = info[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double
+        else { return }
+        cardBottomConstraint.constant = -frame.height
+        UIView.animate(withDuration: dur) { self.view.layoutIfNeeded() }
+    }
+
+    @objc private func keyboardWillHide(_ n: Notification) {
+        guard let dur = n.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double
+        else { return }
+        cardBottomConstraint.constant = 0
+        UIView.animate(withDuration: dur) { self.view.layoutIfNeeded() }
     }
 }
