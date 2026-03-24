@@ -802,6 +802,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
             characterContainerNode.removeAllAnimations()
             
             // Critical Fix: Force-stop any embedded animations recursively. Mixamo adds T-Pose and Idle tracks everywhere.
+            var meshRenderOrder = 10
             characterContainerNode.enumerateChildNodes { (node, _) in
                 node.castsShadow = true
                 for key in node.animationKeys {
@@ -813,10 +814,36 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                 if let materials = node.geometry?.materials {
                     for material in materials {
                         material.lightingModel = .physicallyBased
-                        material.metalness.contents = 0.8 // High metal finish
-                        material.roughness.contents = 0.2 // Smooth reflection
-                        material.isDoubleSided = true
+                        
+                        // We ONLY check the material name here so we don't accidentally grab the entire body's mesh node.
+                        // We include both "white_suit" (helmet shell) AND "Material.003" (the visor) because they overlap
+                        // and cause Z-fighting. Since the visor is only on the front and won't be seen by the camera,
+                        // making them BOTH matte white completely hides any clipping/glitching between the two layers!
+                        let isHelmetPart = material.name?.lowercased().contains("helmet") == true ||
+                                           material.name?.lowercased().contains("white") == true ||
+                                           material.name?.contains("003") == true
+                        
+                        // Apply the matte white logic ONLY to the helmet parts
+                        if isHelmetPart {
+                            material.diffuse.contents = UIColor.white
+                            // Removing metallic prevents it from reflecting the black sky
+                            material.metalness.contents = 0.0
+                            material.roughness.contents = 1.0
+                        } else {
+                            // Leave the body (undersuit, metallic_pink, etc.) intact!
+                            material.metalness.contents = 0.8 // High metal finish
+                            material.roughness.contents = 0.2 // Smooth reflection
+                        }
+                        
+                        material.isDoubleSided = false
+                        // Fix Z-fighting: force each material to write depth properly
+                        material.writesToDepthBuffer = true
+                        material.readsFromDepthBuffer = true
                     }
+                    // Assign a unique rendering order to each mesh node so the GPU never flickers
+                    // between two overlapping surfaces (e.g. helmet shell vs visor).
+                    node.renderingOrder = meshRenderOrder
+                    meshRenderOrder += 1
                 }
             }
                    // Map missing bone animations perfectly
