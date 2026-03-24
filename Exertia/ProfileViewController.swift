@@ -48,15 +48,15 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
     
     func fetchRealProfileData() {
-        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
 
         Task {
             // ── 1. Profile header (must always succeed) ──────────────────────
             do {
-                let user = try await APIManager.shared.getUser(userId: userId)
+                let user = try await SupabaseManager.shared.getUser(userId: userId)
                 DispatchQueue.main.async {
-                    self.nameLabel.text  = user.displayName ?? user.username
-                    self.emailLabel.text = "@\(user.username)"
+                    self.nameLabel.text  = user.display_name ?? user.username ?? "Player"
+                    self.emailLabel.text = "@\(user.username ?? "")"
                     let shortId = String(user.id.prefix(8)).uppercased()
                     self.idLabel.text = "ID: \(shortId)"
                     self.realUserId   = user.id
@@ -67,23 +67,26 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
 
             // ── 2. Badges (isolated — a missing endpoint won't break the header) ──
             do {
-                async let userBadgesFetch = APIManager.shared.getUserBadges(userId: userId)
-                async let allBadgesFetch  = APIManager.shared.getAllBadges()
+                async let userBadgesFetch = SupabaseManager.shared.getUserBadges(userId: userId)
+                async let allBadgesFetch  = SupabaseManager.shared.getAllBadges()
                 let (userBadges, allBadges) = try await (userBadgesFetch, allBadgesFetch)
 
                 // Build a lookup: badge id → UserBadge progress record
-                let progressMap = Dictionary(uniqueKeysWithValues: userBadges.map { ($0.badge.id, $0) })
+                let progressMap = Dictionary(uniqueKeysWithValues: userBadges.compactMap { ub -> (String, AppUserBadge)? in
+                    guard let bid = ub.badge?.id ?? ub.badge_id else { return nil }
+                    return (bid, ub)
+                })
 
                 var inProgress: [Badge] = []
                 var completed:  [Badge] = []
 
                 for badge in allBadges {
                     let userBadge    = progressMap[badge.id]
-                    let isCompleted  = userBadge?.isCompleted ?? false
-                    let current      = userBadge?.currentProgress ?? 0
-                    let target       = badge.targetValue
+                    let isCompleted  = userBadge?.is_completed ?? false
+                    let current      = userBadge?.current_progress ?? 0
+                    let target       = badge.target_value
                     let progress     = target > 0 ? Float(current / target) : 0
-                    let progressText = self.formatProgress(current, target: target, type: badge.badgeType)
+                    let progressText = self.formatProgress(current, target: target, type: badge.badge_type)
 
                     let localBadge = Badge(
                         title:        badge.name,
@@ -428,14 +431,14 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
             if !newName.isEmpty     { self.nameLabel.text  = newName }
             if !newUsername.isEmpty { self.emailLabel.text = "@\(newUsername)" }
 
-            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+            guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
             Task {
                 do {
-                    var payload: [String: Any] = [:]
-                    if !newName.isEmpty     { payload["display_name"] = newName }
-                    if !newUsername.isEmpty { payload["username"]     = newUsername }
-                    guard !payload.isEmpty else { return }
-                    _ = try await APIManager.shared.updateUser(userId: userId, payload: payload)
+                    var data: [String: AnyEncodable] = [:]
+                    if !newName.isEmpty     { data["display_name"] = AnyEncodable(newName) }
+                    if !newUsername.isEmpty { data["username"]     = AnyEncodable(newUsername) }
+                    guard !data.isEmpty else { return }
+                    _ = try await SupabaseManager.shared.updateUser(userId: userId, data: data)
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                     print("✅ Profile updated — name: \(newName), username: \(newUsername)")
                 } catch {
@@ -449,7 +452,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
 
     @objc func copyIDTapped() {
-        let idToCopy = realUserId.isEmpty ? (UserDefaults.standard.string(forKey: "djangoUserID") ?? "123456") : realUserId
+        let idToCopy = realUserId.isEmpty ? (UserDefaults.standard.string(forKey: "supabaseUserID") ?? "123456") : realUserId
         UIPasteboard.general.string = idToCopy
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)

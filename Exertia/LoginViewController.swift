@@ -50,14 +50,20 @@ class LoginViewController: UIViewController {
             defer { DispatchQueue.main.async { self.setSignInLoading(false) } }
 
             do {
-                let foundUser = try await APIManager.shared.loginWithCredentials(
-                    username: username,
-                    password: password
-                )
+                // 1. Look up the user's email from their username
+                guard let foundUser = try await SupabaseManager.shared.findUserByUsername(username) else {
+                    throw LoginError.userNotFound
+                }
+                guard let email = foundUser.email, !email.isEmpty else {
+                    throw LoginError.userNotFound
+                }
 
-                print("✅ LOGIN SUCCESS! User ID: \(foundUser.id)")
-                UserDefaults.standard.set(foundUser.id, forKey: "djangoUserID")
-                try? await APIManager.shared.setUserOnline(userId: foundUser.id)
+                // 2. Sign in with Supabase Auth using email + password
+                let user = try await SupabaseManager.shared.signIn(email: email, password: password)
+
+                print("✅ LOGIN SUCCESS! User ID: \(user.id)")
+                UserDefaults.standard.set(user.id, forKey: "supabaseUserID")
+                await SupabaseManager.shared.setUserOnline()
 
                 DispatchQueue.main.async {
                     let sb = UIStoryboard(name: "Main", bundle: nil)

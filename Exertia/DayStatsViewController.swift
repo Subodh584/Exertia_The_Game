@@ -4,11 +4,11 @@ import UIKit
 class DayStatsViewController: UIViewController {
 
     var date: Date = Date()
-    var sessions: [DjangoSession] = []
+    var sessions: [AppSession] = []
     var targetMet: Bool = false
 
     // Sorted session list — used by button taps to find the right session
-    private var sortedSessions: [DjangoSession] = []
+    private var sortedSessions: [AppSession] = []
     private var bestSessionIndex: Int? = nil
 
     private static let istTZ = TimeZone(identifier: "Asia/Kolkata")!
@@ -18,9 +18,7 @@ class DayStatsViewController: UIViewController {
     private static let timeFmt: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "h:mm a"; f.timeZone = istTZ; return f
     }()
-    private static let isoParser: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
-    }()
+    // Use ISODateParser.date(from:) for flexible ISO8601 parsing
     private static let trackFmt: (String) -> String = { raw in
         raw.replacingOccurrences(of: "track_", with: "")
            .replacingOccurrences(of: "_", with: " ")
@@ -33,9 +31,9 @@ class DayStatsViewController: UIViewController {
         view.backgroundColor = UIColor(red: 13/255, green: 5/255, blue: 26/255, alpha: 1.0)
 
         // Sort by time and find best (highest distance)
-        sortedSessions = sessions.sorted { ($0.createdAt ?? "") < ($1.createdAt ?? "") }
+        sortedSessions = sessions.sorted { ($0.created_at ?? "") < ($1.created_at ?? "") }
         bestSessionIndex = sortedSessions.indices.max {
-            (sortedSessions[$0].distanceCovered ?? 0) < (sortedSessions[$1].distanceCovered ?? 0)
+            (sortedSessions[$0].distance_covered ?? 0) < (sortedSessions[$1].distance_covered ?? 0)
         }
         buildUI()
     }
@@ -146,11 +144,11 @@ class DayStatsViewController: UIViewController {
 
     // MARK: Day totals card
     private func buildTotalsCard() -> UIView {
-        let totalDist     = sortedSessions.compactMap { $0.distanceCovered }.reduce(0, +)
-        let totalCal      = sortedSessions.compactMap { $0.caloriesBurned  }.reduce(0, +)
-        let totalMins     = sortedSessions.compactMap { $0.durationMinutes }.reduce(0, +)
-        let totalJumps    = sortedSessions.compactMap { $0.totalJumps      }.reduce(0, +)
-        let totalCrouches = sortedSessions.compactMap { $0.totalCrouches   }.reduce(0, +)
+        let totalDist     = sortedSessions.compactMap { $0.distance_covered }.reduce(0, +)
+        let totalCal      = sortedSessions.compactMap { $0.calories_burned  }.reduce(0, +)
+        let totalMins     = sortedSessions.compactMap { $0.duration_minutes }.reduce(0, +)
+        let totalJumps    = sortedSessions.compactMap { $0.total_jumps      }.reduce(0, +)
+        let totalCrouches = sortedSessions.compactMap { $0.total_crouches   }.reduce(0, +)
 
         let card = glassCard(h: nil)
 
@@ -222,20 +220,20 @@ class DayStatsViewController: UIViewController {
     }
 
     // MARK: Tappable session card
-    private func buildSessionCard(_ s: DjangoSession, index: Int) -> UIView {
+    private func buildSessionCard(_ s: AppSession, index: Int) -> UIView {
         let isBest = (index == bestSessionIndex)
         let card   = glassCard(h: nil, isBest: isBest)
 
-        let timeStr  = s.createdAt.flatMap { raw -> String? in
-            guard let ts = Self.isoParser.date(from: raw) else { return nil }
+        let timeStr  = s.created_at.flatMap { raw -> String? in
+            guard let ts = ISODateParser.date(from: raw) else { return nil }
             return Self.timeFmt.string(from: ts)
         } ?? "--:--"
-        let trackStr = Self.trackFmt(s.trackId ?? "Unknown Track")
+        let trackStr = Self.trackFmt(s.track_id ?? "Unknown Track")
 
         let timeLbl  = makeLbl(timeStr,  size: 11, weight: .semibold, color: UIColor.white.withAlphaComponent(0.4))
         let trackLbl = makeLbl(trackStr, size: 15, weight: .bold,     color: .white)
-        let distStr  = s.distanceCovered.map { String(format: "%.1f km", $0) } ?? "--"
-        let calStr   = s.caloriesBurned.map  { "\($0) kcal" } ?? "--"
+        let distStr  = s.distance_covered.map { String(format: "%.1f km", $0) } ?? "--"
+        let calStr   = s.calories_burned.map  { "\($0) kcal" } ?? "--"
         let distLbl  = makeLbl(distStr, size: 18, weight: .heavy,  color: .neonPink)
         let calLbl   = makeLbl(calStr,  size: 11, weight: .medium, color: UIColor.white.withAlphaComponent(0.4))
         distLbl.textAlignment = .right
@@ -263,9 +261,9 @@ class DayStatsViewController: UIViewController {
         row.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(row)
 
-        let jumpStr   = s.totalJumps.map    { "\($0) jumps"    }
-        let crouchStr = s.totalCrouches.map { "\($0) crouches" }
-        let durStr    = s.durationMinutes.map { "\($0) min"    }
+        let jumpStr   = s.total_jumps.map    { "\($0) jumps"    }
+        let crouchStr = s.total_crouches.map { "\($0) crouches" }
+        let durStr    = s.duration_minutes.map { "\($0) min"    }
         let extras    = [jumpStr, crouchStr, durStr].compactMap { $0 }
         let extraLbl  = makeLbl(extras.joined(separator: "  ·  "), size: 10,
                                 weight: .medium, color: UIColor.white.withAlphaComponent(0.3))
@@ -328,11 +326,11 @@ class DayStatsViewController: UIViewController {
 
         let index = sender.tag
         guard index < sortedSessions.count else { return }
-        let djangoSession = sortedSessions[index]
+        let appSession = sortedSessions[index]
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             let vc = SessionDetailViewController()
-            vc.session = self.toGameSession(djangoSession)
+            vc.session = self.toGameSession(appSession)
             vc.isBest  = (index == self.bestSessionIndex)
             vc.modalPresentationStyle = .fullScreen
             vc.modalTransitionStyle   = .crossDissolve
@@ -340,25 +338,25 @@ class DayStatsViewController: UIViewController {
         }
     }
 
-    // MARK: DjangoSession → GameSession converter
-    private func toGameSession(_ s: DjangoSession) -> GameSession {
-        let date  = s.createdAt.flatMap { Self.isoParser.date(from: $0) } ?? Date()
-        let track = Self.trackFmt(s.trackId ?? "unknown")
+    // MARK: AppSession → GameSession converter
+    private func toGameSession(_ s: AppSession) -> GameSession {
+        let date  = s.created_at.flatMap { ISODateParser.date(from: $0) } ?? Date()
+        let track = Self.trackFmt(s.track_id ?? "unknown")
         return GameSession(
             date:               date,
-            durationMinutes:    s.durationMinutes  ?? 0,
-            caloriesBurned:     s.caloriesBurned   ?? 0,
+            durationMinutes:    s.duration_minutes  ?? 0,
+            caloriesBurned:     s.calories_burned   ?? 0,
             trackName:          track,
-            trackId:            s.trackId          ?? "track_001",
-            characterId:        s.characterId      ?? "p1",
-            totalJumps:         s.totalJumps       ?? 0,
-            totalCrouches:      s.totalCrouches    ?? 0,
-            totalLeftLeans:     0,
-            totalRightLeans:    0,
-            distanceCovered:    s.distanceCovered  ?? 0,
-            averageSpeed:       s.averageSpeed,
+            trackId:            s.track_id          ?? "track_001",
+            characterId:        s.character_id      ?? "p1",
+            totalJumps:         s.total_jumps       ?? 0,
+            totalCrouches:      s.total_crouches    ?? 0,
+            totalLeftLeans:     s.total_left_leans  ?? 0,
+            totalRightLeans:    s.total_right_leans ?? 0,
+            distanceCovered:    s.distance_covered  ?? 0,
+            averageSpeed:       s.average_speed,
             characterImageName: "character1",
-            completionStatus:   s.completionStatus ?? "completed"
+            completionStatus:   s.completion_status ?? "completed"
         )
     }
 

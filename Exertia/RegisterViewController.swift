@@ -72,7 +72,7 @@ class RegisterViewController: UIViewController {
         signUpButton.setTitle("Creating account…", for: .normal)
         signUpButton.alpha = 0.7
 
-        print("🚀 Sending new user to Django: username=\(username), email=\(email)…")
+        print("🚀 Creating new user in Supabase: username=\(username), email=\(email)…")
 
         Task {
             defer {
@@ -84,21 +84,15 @@ class RegisterViewController: UIViewController {
             }
 
             do {
-                let newUser = try await APIManager.shared.createUser(
-                    username: username,
-                    displayName: fullName,
+                let userId = try await SupabaseManager.shared.signUp(
                     email: email,
-                    password: password
+                    password: password,
+                    username: username,
+                    displayName: fullName
                 )
 
-                UserDefaults.standard.set(newUser.id, forKey: "djangoUserID")
-                print("✅ DJANGO INSERT SUCCESS! User ID: \(newUser.id), username: \(username)")
-
-                // Auto-login to get JWT tokens
-                let _ = try await APIManager.shared.loginWithCredentials(
-                    username: username, password: password
-                )
-                print("🔑 Auto-login after registration successful!")
+                UserDefaults.standard.set(userId, forKey: "supabaseUserID")
+                print("✅ SUPABASE SIGNUP SUCCESS! User ID: \(userId), username: \(username)")
 
                 DispatchQueue.main.async {
                     let otpVC = OTPViewController()
@@ -108,10 +102,10 @@ class RegisterViewController: UIViewController {
                 }
 
             } catch {
-                print("❌ DJANGO INSERT FAILED: \(error)")
+                print("❌ SUPABASE SIGNUP FAILED: \(error)")
                 DispatchQueue.main.async {
                     self.showAlert(title: "Registration Failed",
-                                   message: "Could not create your account. The username may already be taken, or the server is unreachable. Please try again.")
+                                   message: "Could not create your account. The email may already be taken, or the server is unreachable. Please try again.")
                 }
             }
         }

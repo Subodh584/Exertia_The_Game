@@ -54,42 +54,38 @@ class HomeViewController: UIViewController {
         c.timeZone = TimeZone(identifier: "Asia/Kolkata")!
         return c
     }()
-    private static let isoParser: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+    // Use ISODateParser.date(from:) for flexible ISO8601 parsing
 
     func fetchHomeData() {
-        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
 
         Task {
             do {
-                async let statsFetch = APIManager.shared.getUserStats(userId: userId)
-                async let userFetch  = APIManager.shared.getUser(userId: userId)
-                async let sessFetch  = APIManager.shared.getUserSessions(userId: userId)
+                async let statsFetch = SupabaseManager.shared.getUserStats(userId: userId)
+                async let userFetch  = SupabaseManager.shared.getUser(userId: userId)
+                async let sessFetch  = SupabaseManager.shared.getUserSessions(userId: userId)
 
                 let (stats, user, sessions) = try await (statsFetch, userFetch, sessFetch)
 
-                // Filter completed sessions whose createdAt falls on TODAY in IST
+                // Filter completed sessions whose created_at falls on TODAY in IST
                 let todaySessions = sessions.filter { s in
-                    guard s.completionStatus == "completed",
-                          let raw = s.createdAt,
-                          let ts  = Self.isoParser.date(from: raw) else { return false }
+                    guard s.completion_status == "completed",
+                          let raw = s.created_at,
+                          let ts  = ISODateParser.date(from: raw) else { return false }
                     return Self.istCalendar.isDateInToday(ts)
                 }
 
-                let todayDistance = todaySessions.compactMap { $0.distanceCovered }.reduce(0, +)
-                let todayCalories = todaySessions.compactMap { $0.caloriesBurned  }.reduce(0, +)
+                let todayDistance = todaySessions.compactMap { $0.distance_covered }.reduce(0, +)
+                let todayCalories = todaySessions.compactMap { $0.calories_burned  }.reduce(0, +)
 
                 // Update local GameData cache
-                self.gameData.stats.calories       = stats.totalCalories
-                self.gameData.stats.runTimeMinutes = stats.totalMinutes
-                self.gameData.stats.currentStreak  = user.currentStreak ?? 0
+                self.gameData.stats.calories       = stats.total_calories
+                self.gameData.stats.runTimeMinutes = stats.total_minutes
+                self.gameData.stats.currentStreak  = user.current_streak ?? 0
 
                 DispatchQueue.main.async {
                     // Top-left streak + TODAY's cal badges (resets at IST midnight)
-                    self.streakLabel.text   = "\(user.currentStreak ?? 0)"
+                    self.streakLabel.text   = "\(user.current_streak ?? 0)"
                     self.currencyLabel.text = "\(todayCalories)"
 
                     // "Today's stats" row — IST-filtered, resets at IST midnight

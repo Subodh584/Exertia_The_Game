@@ -7,7 +7,7 @@ class FullCalendarViewController: UIViewController,
 
     // Injected from StatisticsViewController
     var activeDateStrings: Set<String> = []
-    var sessionsByDate: [String: [DjangoSession]] = [:]
+    var sessionsByDate: [String: [AppSession]] = [:]
 
     // IST
     private static let istTZ = TimeZone(identifier: "Asia/Kolkata")!

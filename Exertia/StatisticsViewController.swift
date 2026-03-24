@@ -98,11 +98,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         c.timeZone = TimeZone(identifier: "Asia/Kolkata")!
         return c
     }()
-    private static let isoParser: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+    // Use ISODateParser.date(from:) for flexible ISO8601 parsing
     private var apiLastSessionDuration: Int? = nil
     private var apiLastSessionCalories: Int? = nil
     private var apiLastSessionDistance: Double? = nil
@@ -117,21 +113,21 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     // Dates from streak-calendar API where the daily target was met
     private var activeDateStrings: Set<String> = []
     // All completed sessions — used to build day-by-day stats for the calendar
-    private var allCompletedSessions: [DjangoSession] = []
+    private var allCompletedSessions: [AppSession] = []
     
     func fetchRealUserName() {
-            guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
-            
+            guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
+
             Task {
                 do {
-                    let user = try await APIManager.shared.getUser(userId: userId)
+                    let user = try await SupabaseManager.shared.getUser(userId: userId)
                     DispatchQueue.main.async {
-                        self.nameLabel.text = user.displayName ?? user.username
-                        self.apiDailyTargetCalories = user.dailyTargetCalories ?? 500
-                        self.apiDailyTargetDistance = user.dailyTargetDistance ?? 5.0
-                        self.apiCurrentWeight = user.currentWeight
-                        self.apiTargetWeight = user.targetWeight
-                        self.apiCurrentStreak = user.currentStreak ?? 0
+                        self.nameLabel.text = user.display_name ?? user.username ?? "Player"
+                        self.apiDailyTargetCalories = user.daily_target_calories ?? 500
+                        self.apiDailyTargetDistance = user.daily_target_distance ?? 5.0
+                        self.apiCurrentWeight = user.current_weight
+                        self.apiTargetWeight = user.target_weight
+                        self.apiCurrentStreak = user.current_streak ?? 0
                         self.refreshUI()
                     }
                 } catch {
@@ -141,47 +137,47 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         }
     
     func fetchStatsData() {
-        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
-        
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
+
         Task {
             do {
                 // Fetch aggregated stats
-                let stats = try await APIManager.shared.getUserStats(userId: userId)
-                self.apiTotalCalories = stats.totalCalories
-                self.apiTotalDistance = stats.totalDistance
-                self.apiTotalMinutes = stats.totalMinutes
-                self.apiCompletedSessions = stats.completedSessions
+                let stats = try await SupabaseManager.shared.getUserStats(userId: userId)
+                self.apiTotalCalories = stats.total_calories
+                self.apiTotalDistance = stats.total_distance
+                self.apiTotalMinutes = stats.total_minutes
+                self.apiCompletedSessions = stats.completed_sessions
 
                 // Use stats endpoint for personal bests
-                self.apiBestSessionDistance = stats.personalBestDistance > 0 ? stats.personalBestDistance : nil
-                self.apiBestSessionCalories = stats.personalBestCalories > 0 ? stats.personalBestCalories : nil
+                self.apiBestSessionDistance = stats.personal_best_distance > 0 ? stats.personal_best_distance : nil
+                self.apiBestSessionCalories = stats.personal_best_calories > 0 ? stats.personal_best_calories : nil
 
                 // Fetch all sessions to find last run
-                let sessions = try await APIManager.shared.getUserSessions(userId: userId)
-                let completed = sessions.filter { $0.completionStatus == "completed" }
+                let sessions = try await SupabaseManager.shared.getUserSessions(userId: userId)
+                let completed = sessions.filter { $0.completion_status == "completed" }
                 self.allCompletedSessions = completed   // stored for calendar day-stats
 
                 // Compute TODAY (IST) totals for the ring / big stat label
                 let todaySessions = completed.filter { s in
-                    guard let raw = s.createdAt,
-                          let ts  = Self.isoParser.date(from: raw) else { return false }
+                    guard let raw = s.created_at,
+                          let ts  = ISODateParser.date(from: raw) else { return false }
                     return Self.istCalendar.isDateInToday(ts)
                 }
-                self.apiTodayCalories = todaySessions.compactMap { $0.caloriesBurned  }.reduce(0, +)
-                self.apiTodayDistance = todaySessions.compactMap { $0.distanceCovered }.reduce(0, +)
+                self.apiTodayCalories = todaySessions.compactMap { $0.calories_burned  }.reduce(0, +)
+                self.apiTodayDistance = todaySessions.compactMap { $0.distance_covered }.reduce(0, +)
                 print("📊 Stats today (IST): \(self.apiTodayCalories) cal, \(String(format: "%.2f", self.apiTodayDistance)) km (\(todaySessions.count) sessions)")
 
-                let sorted = completed.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
+                let sorted = completed.sorted { ($0.created_at ?? "") > ($1.created_at ?? "") }
 
                 if let lastSession = sorted.first {
-                    self.apiLastSessionDuration = lastSession.durationMinutes
-                    self.apiLastSessionCalories = lastSession.caloriesBurned
-                    self.apiLastSessionDistance = lastSession.distanceCovered
+                    self.apiLastSessionDuration = lastSession.duration_minutes
+                    self.apiLastSessionCalories = lastSession.calories_burned
+                    self.apiLastSessionDistance = lastSession.distance_covered
                 }
 
                 // If stats endpoint doesn't have best duration, compute from sessions
-                if let bestSession = completed.max(by: { ($0.caloriesBurned ?? 0) < ($1.caloriesBurned ?? 0) }) {
-                    self.apiBestSessionDuration = bestSession.durationMinutes
+                if let bestSession = completed.max(by: { ($0.calories_burned ?? 0) < ($1.calories_burned ?? 0) }) {
+                    self.apiBestSessionDuration = bestSession.duration_minutes
                 }
 
                 DispatchQueue.main.async {
@@ -196,54 +192,16 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     func fetchStreakCalendar() {
-        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
         Task {
             do {
-                // Fetch streak calendar for target_met info AND sessions for IST-accurate timestamps.
-                // The backend stores dates in UTC, so "2026-03-20T19:33Z" (UTC) = "2026-03-21 01:03 IST".
-                // Using created_at timestamps converted to IST gives the correct IST calendar date.
-                async let calFetch  = APIManager.shared.getStreakCalendar(userId: userId, days: 90)
-                async let sessFetch = APIManager.shared.getUserSessions(userId: userId)
-                let (records, sessions) = try await (calFetch, sessFetch)
-
-                // Build a set of UTC date strings where target was met (from streak-calendar API)
-                let targetMetUTCDates = Set(records.filter { $0.targetMet }.map { $0.date })
-
-                // Convert each completed session's created_at to IST date string
-                let iso = ISO8601DateFormatter()
-                iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                let istFmt = DateFormatter()
-                istFmt.dateFormat = "yyyy-MM-dd"
-                istFmt.timeZone = TimeZone(identifier: "Asia/Kolkata")!
-
-                // Also build a UTC date → IST date mapping from sessions
-                var utcToIST: [String: String] = [:]
-                for s in sessions where s.completionStatus == "completed" {
-                    if let raw = s.createdAt, let ts = iso.date(from: raw) {
-                        let utcFmt = DateFormatter()
-                        utcFmt.dateFormat = "yyyy-MM-dd"
-                        utcFmt.timeZone = TimeZone(abbreviation: "UTC")
-                        let utcDate = utcFmt.string(from: ts)
-                        let istDate = istFmt.string(from: ts)
-                        utcToIST[utcDate] = istDate
-                    }
-                }
-
-                // Map target-met UTC dates → IST dates
-                var active: Set<String> = []
-                for utcDate in targetMetUTCDates {
-                    if let istDate = utcToIST[utcDate] {
-                        active.insert(istDate)
-                    } else {
-                        // Fallback: treat the date string as-is (won't cross midnight boundary)
-                        active.insert(utcDate)
-                    }
-                }
-
+                let records = try await SupabaseManager.shared.getStreakCalendar(userId: userId, days: 90)
+                // daily_progress.date is already stored as an IST date string — use directly
+                let active = Set(records.filter { $0.target_met }.map { $0.date })
                 DispatchQueue.main.async {
                     self.activeDateStrings = active
                     self.streakCollection.reloadData()
-                    print("✅ Streak calendar: \(active.count) target-met days (IST-corrected)")
+                    print("✅ Streak calendar: \(active.count) target-met days")
                 }
             } catch {
                 print("❌ Failed to fetch streak calendar: \(error)")
@@ -682,15 +640,13 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         present(vc, animated: true)
     }
 
-    private func buildSessionsByDate() -> [String: [DjangoSession]] {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    private func buildSessionsByDate() -> [String: [AppSession]] {
         let istFmt = DateFormatter()
         istFmt.dateFormat = "yyyy-MM-dd"
         istFmt.timeZone   = TimeZone(identifier: "Asia/Kolkata")!
-        var dict: [String: [DjangoSession]] = [:]
+        var dict: [String: [AppSession]] = [:]
         for s in allCompletedSessions {
-            if let raw = s.createdAt, let ts = iso.date(from: raw) {
+            if let raw = s.created_at, let ts = ISODateParser.date(from: raw) {
                 let key = istFmt.string(from: ts)
                 dict[key, default: []].append(s)
             }
@@ -961,11 +917,11 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             guard let self = self,
                   let current = Double(values[0]), current > 0,
                   let target = Double(values[1]), target > 0,
-                  let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+                  let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
             Task {
                 do {
-                    let payload: [String: Any] = ["current_weight": current, "target_weight": target]
-                    let _ = try await APIManager.shared.updateUser(userId: userId, payload: payload)
+                    let data: [String: AnyEncodable] = ["current_weight": AnyEncodable(current), "target_weight": AnyEncodable(target)]
+                    let _ = try await SupabaseManager.shared.updateUser(userId: userId, data: data)
                     DispatchQueue.main.async {
                         self.apiCurrentWeight = current
                         self.apiTargetWeight = target
@@ -1010,14 +966,14 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             guard let self = self,
                   let cal = Int(values[0]), cal > 0,
                   let dist = Double(values[1]), dist > 0,
-                  let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+                  let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
             Task {
                 do {
-                    let payload: [String: Any] = [
-                        "daily_target_calories": cal,
-                        "daily_target_distance": dist
+                    let data: [String: AnyEncodable] = [
+                        "daily_target_calories": AnyEncodable(cal),
+                        "daily_target_distance": AnyEncodable(dist)
                     ]
-                    let _ = try await APIManager.shared.updateUser(userId: userId, payload: payload)
+                    let _ = try await SupabaseManager.shared.updateUser(userId: userId, data: data)
                     DispatchQueue.main.async {
                         self.apiDailyTargetCalories = cal
                         self.apiDailyTargetDistance = dist

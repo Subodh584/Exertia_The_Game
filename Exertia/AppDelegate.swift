@@ -14,9 +14,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
 
-        // Migrate tokens from UserDefaults to Keychain (one-time)
-        TokenManager.shared.migrateFromUserDefaultsIfNeeded()
-
         // FORCE WAKE UP
         print("⚡️ APP LAUNCHED. WAKING UP SUPABASE...")
         _ = SupabaseManager.shared

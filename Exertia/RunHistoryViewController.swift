@@ -255,35 +255,32 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
 
     // MARK: API
     func fetchSessionsFromAPI() {
-        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else { return }
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
         Task {
             do {
-                let sessions = try await APIManager.shared.getUserSessions(userId: userId)
-                let completed = sessions.filter { $0.completionStatus == "completed" }
-                let iso = ISO8601DateFormatter()
-                iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
+                let sessions = try await SupabaseManager.shared.getUserSessions(userId: userId)
+                let completed = sessions.filter { $0.completion_status == "completed" }
                 let converted: [GameSession] = completed.compactMap { s in
-                    let date = iso.date(from: s.createdAt ?? "") ?? Date()
-                    let track = s.trackId?
+                    let date = ISODateParser.date(from: s.created_at ?? "") ?? Date()
+                    let track = s.track_id?
                         .replacingOccurrences(of: "track_", with: "")
                         .replacingOccurrences(of: "_", with: " ")
                         .capitalized ?? "Unknown"
                     return GameSession(
                         date: date,
-                        durationMinutes:  s.durationMinutes ?? 0,
-                        caloriesBurned:   s.caloriesBurned  ?? 0,
+                        durationMinutes:  s.duration_minutes ?? 0,
+                        caloriesBurned:   s.calories_burned  ?? 0,
                         trackName:        track,
-                        trackId:          s.trackId         ?? "track_001",
-                        characterId:      s.characterId     ?? "p1",
-                        totalJumps:       s.totalJumps      ?? 0,
-                        totalCrouches:    s.totalCrouches   ?? 0,
-                        totalLeftLeans:   0,
-                        totalRightLeans:  0,
-                        distanceCovered:  s.distanceCovered ?? 0,
-                        averageSpeed:     s.averageSpeed,
+                        trackId:          s.track_id         ?? "track_001",
+                        characterId:      s.character_id     ?? "p1",
+                        totalJumps:       s.total_jumps      ?? 0,
+                        totalCrouches:    s.total_crouches   ?? 0,
+                        totalLeftLeans:   s.total_left_leans  ?? 0,
+                        totalRightLeans:  s.total_right_leans ?? 0,
+                        distanceCovered:  s.distance_covered ?? 0,
+                        averageSpeed:     s.average_speed,
                         characterImageName: "character1",
-                        completionStatus: s.completionStatus ?? "completed"
+                        completionStatus: s.completion_status ?? "completed"
                     )
                 }.sorted { $0.date > $1.date }
 
