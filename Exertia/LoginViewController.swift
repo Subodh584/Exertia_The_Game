@@ -1,4 +1,6 @@
 import UIKit
+import AuthenticationServices
+import Supabase
 
 class LoginViewController: UIViewController {
 
@@ -15,6 +17,8 @@ class LoginViewController: UIViewController {
     private let forgotButton = UIButton()
     private let registerLabel = UILabel()
     private let registerButton = UIButton()
+    private var appleBtn: UIButton!
+    private var googleBtn: UIButton!
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -128,15 +132,95 @@ class LoginViewController: UIViewController {
     }
     
     @objc func registerTapped() {
-            print("📲 Navigating to Register Screen...")
-            DispatchQueue.main.async {
-                let registerVC = RegisterViewController()
-                // Presenting it full screen
-                registerVC.modalPresentationStyle = .fullScreen
-                registerVC.modalTransitionStyle = .coverVertical
-                self.present(registerVC, animated: true, completion: nil)
+        print("📲 Navigating to Register Screen...")
+        DispatchQueue.main.async {
+            let registerVC = RegisterViewController()
+            registerVC.modalPresentationStyle = .fullScreen
+            registerVC.modalTransitionStyle = .coverVertical
+            self.present(registerVC, animated: true, completion: nil)
+        }
+    }
+
+    // MARK: - OAuth Actions
+
+    @objc func googleSignInTapped() {
+        handleOAuthSignIn(provider: .google)
+    }
+
+    @objc func appleSignInTapped() {
+        handleOAuthSignIn(provider: .apple)
+    }
+
+    private func handleOAuthSignIn(provider: Auth.Provider) {
+        googleBtn.isEnabled = false
+        appleBtn.isEnabled = false
+
+        Task {
+            defer {
+                DispatchQueue.main.async {
+                    self.googleBtn.isEnabled = true
+                    self.appleBtn.isEnabled = true
+                }
+            }
+
+            do {
+                try await SupabaseManager.shared.signInWithOAuth(provider: provider)
+
+                guard let authUser = SupabaseManager.shared.client.auth.currentUser else {
+                    throw NSError(domain: "OAuth", code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "No user after sign-in"])
+                }
+
+                let userId = authUser.id.uuidString
+                UserDefaults.standard.set(userId, forKey: "supabaseUserID")
+                await SupabaseManager.shared.setUserOnline()
+
+                print("✅ OAuth sign-in success! User: \(userId)")
+
+                // Check if user needs to complete their profile
+                let profileComplete = try await SupabaseManager.shared.isProfileComplete(userId: userId)
+
+                if !profileComplete {
+                    // First-time OAuth user — create a minimal row, then go to onboarding
+                    let email = authUser.email ?? ""
+                    let displayName: String? = {
+                        if case let .string(name) = authUser.userMetadata["full_name"] { return name }
+                        return nil
+                    }()
+
+                    // Only create row if it doesn't exist at all
+                    let users: [AppUser] = try await SupabaseManager.shared.client.from("users")
+                        .select().eq("id", value: userId).execute().value
+                    if users.isEmpty {
+                        try await SupabaseManager.shared.createOAuthUserRow(
+                            userId: userId, email: email, displayName: displayName)
+                    }
+
+                    DispatchQueue.main.async {
+                        let onboardingVC = OnboardingProfileViewController()
+                        onboardingVC.modalPresentationStyle = .fullScreen
+                        onboardingVC.modalTransitionStyle = .crossDissolve
+                        self.present(onboardingVC, animated: true)
+                    }
+                } else {
+                    // Returning OAuth user — go straight to home
+                    DispatchQueue.main.async {
+                        self.navigateToHome()
+                    }
+                }
+
+            } catch let error as ASWebAuthenticationSessionError
+                        where error.code == .canceledLogin {
+                print("ℹ️ User cancelled OAuth sign-in")
+            } catch {
+                print("❌ OAuth sign-in failed: \(error)")
+                DispatchQueue.main.async {
+                    self.showAlert(title: "Sign-In Failed",
+                                   message: "Could not complete sign-in. Please try again.")
+                }
             }
         }
+    }
     
     func navigateToHome() {
         DispatchQueue.main.async {
@@ -240,8 +324,10 @@ class LoginViewController: UIViewController {
         socialStack.spacing = 25
         socialStack.translatesAutoresizingMaskIntoConstraints = false
         
-        let appleBtn = createSocialButton(iconName: "apple.logo", isSystem: true)
-        let googleBtn = createSocialButton(iconName: "google logo", isSystem: false)
+        appleBtn = createSocialButton(iconName: "apple.logo", isSystem: true)
+        googleBtn = createSocialButton(iconName: "google logo", isSystem: false)
+        appleBtn.addTarget(self, action: #selector(appleSignInTapped), for: .touchUpInside)
+        googleBtn.addTarget(self, action: #selector(googleSignInTapped), for: .touchUpInside)
         
         socialStack.addArrangedSubview(appleBtn)
         socialStack.addArrangedSubview(googleBtn)

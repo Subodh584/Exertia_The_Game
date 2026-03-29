@@ -47,6 +47,17 @@ class FullCalendarViewController: UIViewController,
         configureMonthRow()
         configureWeekdayHeader()
         configureGrid()
+        addSwipeGestures()
+    }
+
+    private func addSwipeGestures() {
+        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(nextMonth))
+        swipeLeft.direction = .left
+        view.addGestureRecognizer(swipeLeft)
+
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(prevMonth))
+        swipeRight.direction = .right
+        view.addGestureRecognizer(swipeRight)
     }
 
     override func viewDidLayoutSubviews() {

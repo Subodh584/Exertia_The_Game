@@ -454,7 +454,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     func addWeightView() {
-        let card = glassCard(h: 140)
+        let card = glassCard(h: 110)
         let title = UILabel()
         title.text = "Weight Goal Progress"
         title.font = .systemFont(ofSize: 14, weight: .bold)
@@ -504,13 +504,13 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         card.addSubview(bottom)
 
         NSLayoutConstraint.activate([
-            title.topAnchor.constraint(equalTo: card.topAnchor, constant: 15),
+            title.topAnchor.constraint(equalTo: card.topAnchor, constant: 10),
             title.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
             editBtn.centerYAnchor.constraint(equalTo: title.centerYAnchor),
             editBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
             editBtn.widthAnchor.constraint(equalToConstant: 28),
             editBtn.heightAnchor.constraint(equalToConstant: 28),
-            weightBar.centerYAnchor.constraint(equalTo: card.centerYAnchor, constant: 5),
+            weightBar.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 14),
             weightBar.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
             weightBar.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
             weightBar.heightAnchor.constraint(equalToConstant: 12),
@@ -519,7 +519,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             bubbleLabel.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor, constant: 6),
             bubbleLabel.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor, constant: -6),
             bubbleView.bottomAnchor.constraint(equalTo: weightBar.topAnchor, constant: -4),
-            bottom.topAnchor.constraint(equalTo: weightBar.bottomAnchor, constant: 8),
+            bottom.topAnchor.constraint(equalTo: weightBar.bottomAnchor, constant: 6),
             bottom.leadingAnchor.constraint(equalTo: weightBar.leadingAnchor),
             bottom.trailingAnchor.constraint(equalTo: weightBar.trailingAnchor)
         ])
@@ -530,9 +530,9 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     func addStreakView() {
-        let card = glassCard(h: 250)
+        let card = glassCard(h: 195)
         card.clipsToBounds = false
-        
+
         let fireImg = UIImageView(image: UIImage(named: "Streaks"))
         fireImg.contentMode = .scaleAspectFit
         fireImg.translatesAutoresizingMaskIntoConstraints = false
@@ -542,15 +542,15 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         t1.font = .systemFont(ofSize: 22, weight: .bold)
         t1.textColor = .white
         streakCountLabel = t1
-        
+
         let t2 = UILabel()
         t2.text = "Keep going, you are almost there"
         t2.font = .systemFont(ofSize: 12)
         t2.textColor = .gray
-        
+
         let txtStack = UIStackView(arrangedSubviews: [t1, t2])
         txtStack.axis = .vertical
-        txtStack.spacing = 4
+        txtStack.spacing = 2
         txtStack.alignment = .center
         txtStack.translatesAutoresizingMaskIntoConstraints = false
         
@@ -597,13 +597,13 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             backBtn.topAnchor.constraint(equalTo: card.topAnchor, constant: 15),
             backBtn.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 15),
 
-            txtStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 50),
+            txtStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 42),
             txtStack.centerXAnchor.constraint(equalTo: card.centerXAnchor),
 
-            streakCollection.topAnchor.constraint(equalTo: txtStack.bottomAnchor, constant: 20),
+            streakCollection.topAnchor.constraint(equalTo: txtStack.bottomAnchor, constant: 12),
             streakCollection.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 15),
             streakCollection.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -15),
-            streakCollection.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20)
+            streakCollection.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -10)
         ])
         stackContainer.addArrangedSubview(card)
         DispatchQueue.main.async { self.goToToday() }

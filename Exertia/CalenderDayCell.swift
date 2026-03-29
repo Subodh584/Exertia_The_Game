@@ -8,10 +8,9 @@
 import UIKit
 
 class CalendarDayCell: UICollectionViewCell {
-    let bgView = UIView()
     let dayLabel = UILabel()      // "SAT"
     let dateLabel = UILabel()     // "21"
-    let iconImageView = UIImageView()
+    let medalImageView = UIImageView()
 
     // IST formatter — shared across all cells for efficiency
     private static let istTimeZone = TimeZone(identifier: "Asia/Kolkata")!
@@ -38,10 +37,6 @@ class CalendarDayCell: UICollectionViewCell {
     }
 
     private func setupLayout() {
-        bgView.layer.cornerRadius = 16
-        bgView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(bgView)
-
         dayLabel.font = .systemFont(ofSize: 9, weight: .semibold)
         dayLabel.textColor = .lightGray
         dayLabel.textAlignment = .center
@@ -54,56 +49,53 @@ class CalendarDayCell: UICollectionViewCell {
         dateLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(dateLabel)
 
-        iconImageView.contentMode = .scaleAspectFit
-        iconImageView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(iconImageView)
+        medalImageView.contentMode = .scaleAspectFit
+        medalImageView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(medalImageView)
 
         NSLayoutConstraint.activate([
-            bgView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            bgView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-            bgView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            bgView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-
             dayLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
             dayLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-            dateLabel.topAnchor.constraint(equalTo: dayLabel.bottomAnchor, constant: 2),
+            dateLabel.topAnchor.constraint(equalTo: dayLabel.bottomAnchor, constant: 4),
             dateLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-            iconImageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
-            iconImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            iconImageView.widthAnchor.constraint(equalToConstant: 20),
-            iconImageView.heightAnchor.constraint(equalToConstant: 20)
+            medalImageView.topAnchor.constraint(equalTo: dayLabel.bottomAnchor, constant: 2),
+            medalImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            medalImageView.widthAnchor.constraint(equalToConstant: 28),
+            medalImageView.heightAnchor.constraint(equalToConstant: 28)
         ])
     }
 
-    /// Shows a gold medal if the daily target was met on this date (IST-aware).
-    /// Today gets a purple highlight ring. All other days without a medal are plain.
+    /// If target is met, the date number is replaced by a medal icon.
+    /// Today gets pink-colored text. No box backgrounds on any cell.
     func configure(date: Date, isToday: Bool, targetMet: Bool) {
         dayLabel.text = Self.dayFmt.string(from: date).uppercased()
         dateLabel.text = Self.dateFmt.string(from: date)
 
         // Reset
-        bgView.layer.borderWidth = 0
-        bgView.backgroundColor = .clear
-        iconImageView.image = nil
+        contentView.layer.borderWidth = 0
+        contentView.layer.cornerRadius = 0
+        contentView.backgroundColor = .clear
+        medalImageView.image = nil
+        medalImageView.isHidden = true
+        dateLabel.isHidden = false
 
-        if isToday {
-            bgView.backgroundColor = UIColor.neonPink.withAlphaComponent(0.15)
-            bgView.layer.borderWidth = 1.5
-            bgView.layer.borderColor = UIColor.neonPink.cgColor
-            dayLabel.textColor = .white
-            dateLabel.textColor = .white
-            if targetMet {
-                iconImageView.image = UIImage(systemName: "medal.fill")
-                iconImageView.tintColor = .neonYellow
+        if targetMet {
+            // Replace date number with medal
+            dateLabel.isHidden = true
+            medalImageView.isHidden = false
+            medalImageView.image = UIImage(systemName: "medal.fill")
+            medalImageView.tintColor = .neonYellow
+
+            if isToday {
+                dayLabel.textColor = .neonPink
+            } else {
+                dayLabel.textColor = UIColor.white.withAlphaComponent(0.7)
             }
-        } else if targetMet {
-            bgView.backgroundColor = UIColor.neonYellow.withAlphaComponent(0.1)
-            dayLabel.textColor = UIColor.white.withAlphaComponent(0.7)
-            dateLabel.textColor = .white
-            iconImageView.image = UIImage(systemName: "medal.fill")
-            iconImageView.tintColor = .neonYellow
+        } else if isToday {
+            dayLabel.textColor = .neonPink
+            dateLabel.textColor = .neonPink
         } else {
             dayLabel.textColor = UIColor.white.withAlphaComponent(0.25)
             dateLabel.textColor = UIColor.white.withAlphaComponent(0.25)

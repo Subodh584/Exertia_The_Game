@@ -8,6 +8,7 @@
 import Foundation
 import UIKit
 import Supabase
+import AuthenticationServices
 
 // MARK: - ISO8601 parser (handles with/without fractional seconds)
 enum ISODateParser {
@@ -111,7 +112,7 @@ struct AppDailyProgress: Codable {
 
 struct UserInsert: Encodable {
     let id: String
-    let username: String
+    let username: String?
     let display_name: String
     let email: String?
     let daily_target_distance: Double?
@@ -231,6 +232,43 @@ class SupabaseManager {
         UserDefaults.standard.set(userId, forKey: "supabaseUserID")
         print("✅ Signed in. User ID: \(userId)")
         return user
+    }
+
+    // MARK: - OAuth
+
+    /// Opens an ASWebAuthenticationSession for Google/Apple OAuth via Supabase
+    @discardableResult
+    func signInWithOAuth(provider: Auth.Provider) async throws -> Session {
+        let redirectURL = URL(string: "exertia://auth-callback")!
+        return try await client.auth.signInWithOAuth(
+            provider: provider,
+            redirectTo: redirectURL
+        )
+    }
+
+    /// Check if a first-time OAuth user still needs to set up their profile
+    func isProfileComplete(userId: String) async throws -> Bool {
+        let users: [AppUser] = try await client.from("users")
+            .select()
+            .eq("id", value: userId)
+            .execute()
+            .value
+        guard let user = users.first else { return false }
+        return user.username != nil && !user.username!.isEmpty
+    }
+
+    /// Create a minimal user row for first-time OAuth users (no username yet)
+    func createOAuthUserRow(userId: String, email: String, displayName: String?) async throws {
+        let newUser = UserInsert(
+            id: userId,
+            username: nil,
+            display_name: displayName ?? "New Player",
+            email: email,
+            daily_target_distance: nil,
+            daily_target_calories: nil
+        )
+        try await client.from("users").insert(newUser).execute()
+        print("✅ Created users row for OAuth user: \(userId)")
     }
 
     /// Attempt to restore session on app launch. Returns the user if session is valid.
@@ -473,3 +511,4 @@ struct AnyEncodable: Encodable {
         try _encode(encoder)
     }
 }
+
