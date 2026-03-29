@@ -473,10 +473,60 @@ class SupabaseManager {
 
     // MARK: - Delete Account
 
-    func deleteAccount() async throws {
-        guard let id = currentUserId else { return }
+    /// Returns true if the current user signed in via OAuth (Google/Apple), false for email+password
+    var isOAuthUser: Bool {
+        guard let user = client.auth.currentUser else { return false }
+        if case let .object(meta) = user.appMetadata["provider"] {
+            return false // shouldn't happen, but fallback
+        }
+        if case let .string(provider) = user.appMetadata["provider"] {
+            return provider != "email"
+        }
+        return false
+    }
+
+    /// Delete account after verifying password (for email+password users)
+    func deleteAccount(password: String) async throws {
+        guard let user = client.auth.currentUser, let email = user.email else {
+            throw NSError(domain: "DeleteAccount", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "No logged-in user found."])
+        }
+
+        // 1. Verify password by re-authenticating
+        print("🔐 Verifying password before deletion...")
+        do {
+            try await client.auth.signIn(email: email, password: password)
+        } catch {
+            throw NSError(domain: "DeleteAccount", code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "Incorrect password. Account was not deleted."])
+        }
+
+        // 2. Password correct — delete user data
+        try await performAccountDeletion(userId: user.id)
+    }
+
+    /// Delete account after re-authenticating via OAuth (for Google/Apple users)
+    func deleteAccountOAuth() async throws {
+        guard let user = client.auth.currentUser else {
+            throw NSError(domain: "DeleteAccount", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "No logged-in user found."])
+        }
+
+        // Re-authenticate via OAuth to verify identity
+        print("🔐 Re-authenticating via OAuth before deletion...")
+        try await client.auth.signInWithOAuth(
+            provider: .google,
+            redirectTo: URL(string: "exertia://auth-callback")!
+        )
+
+        // If we get here, user re-authenticated successfully
+        try await performAccountDeletion(userId: user.id)
+    }
+
+    /// Shared deletion logic
+    private func performAccountDeletion(userId: UUID) async throws {
         print("🗑️ Deleting user profile from database...")
-        try await client.from("users").delete().eq("id", value: id).execute()
+        try await client.from("users").delete().eq("id", value: userId).execute()
         try await client.auth.signOut()
         UserDefaults.standard.removeObject(forKey: "supabaseUserID")
         print("✅ Account deleted and logged out!")
