@@ -61,8 +61,10 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private let weightStartLabel = UILabel()
     private let weightEndLabel = UILabel()
 
-    // Streak label reference
+    // Streak label references
     private var streakCountLabel: UILabel?
+    private var streakSubtitleLabel: UILabel?
+    private var bestStreakLabel: UILabel?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -110,6 +112,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var apiCurrentWeight: Double? = nil
     private var apiTargetWeight: Double? = nil
     private var apiCurrentStreak: Int = 0
+    private var apiLongestStreak: Int = 0
     // Dates from streak-calendar API where the daily target was met
     private var activeDateStrings: Set<String> = []
     // All completed sessions — used to build day-by-day stats for the calendar
@@ -120,14 +123,17 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
             Task {
                 do {
-                    let user = try await SupabaseManager.shared.getUser(userId: userId)
+                    async let userFetch = SupabaseManager.shared.getUser(userId: userId)
+                    async let streakFetch = SupabaseManager.shared.calculateLiveStreak(userId: userId)
+                    let (user, liveStreak) = try await (userFetch, streakFetch)
                     DispatchQueue.main.async {
                         self.nameLabel.text = user.display_name ?? user.username ?? "Player"
                         self.apiDailyTargetCalories = user.daily_target_calories ?? 500
                         self.apiDailyTargetDistance = user.daily_target_distance ?? 5.0
                         self.apiCurrentWeight = user.current_weight
                         self.apiTargetWeight = user.target_weight
-                        self.apiCurrentStreak = user.current_streak ?? 0
+                        self.apiLongestStreak = user.longest_streak ?? 0
+                        self.apiCurrentStreak = liveStreak
                         self.refreshUI()
                     }
                 } catch {
@@ -547,8 +553,15 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         t2.text = "Keep going, you are almost there"
         t2.font = .systemFont(ofSize: 12)
         t2.textColor = .gray
+        streakSubtitleLabel = t2
 
-        let txtStack = UIStackView(arrangedSubviews: [t1, t2])
+        let bestLbl = UILabel()
+        bestLbl.text = "Best: 0 days"
+        bestLbl.font = .systemFont(ofSize: 11, weight: .medium)
+        bestLbl.textColor = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 0.8)
+        bestStreakLabel = bestLbl
+
+        let txtStack = UIStackView(arrangedSubviews: [t1, t2, bestLbl])
         txtStack.axis = .vertical
         txtStack.spacing = 2
         txtStack.alignment = .center
@@ -871,8 +884,16 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         }
         moveBubble()
 
-        // Update streak label with real streak from user profile
+        // Update streak labels with live values
         streakCountLabel?.text = "\(apiCurrentStreak) Day Streak!"
+        bestStreakLabel?.text = "Best: \(apiLongestStreak) days"
+        if apiCurrentStreak == 0 {
+            streakSubtitleLabel?.text = "Start a new streak today!"
+        } else if apiCurrentStreak >= apiLongestStreak {
+            streakSubtitleLabel?.text = "You're on your best streak! 🔥"
+        } else {
+            streakSubtitleLabel?.text = "Keep going, you are almost there"
+        }
     }
     
     @objc func clickedCal() {

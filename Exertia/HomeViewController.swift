@@ -61,11 +61,12 @@ class HomeViewController: UIViewController {
 
         Task {
             do {
-                async let statsFetch = SupabaseManager.shared.getUserStats(userId: userId)
-                async let userFetch  = SupabaseManager.shared.getUser(userId: userId)
-                async let sessFetch  = SupabaseManager.shared.getUserSessions(userId: userId)
+                async let statsFetch  = SupabaseManager.shared.getUserStats(userId: userId)
+                async let userFetch   = SupabaseManager.shared.getUser(userId: userId)
+                async let sessFetch   = SupabaseManager.shared.getUserSessions(userId: userId)
+                async let streakFetch = SupabaseManager.shared.calculateLiveStreak(userId: userId)
 
-                let (stats, user, sessions) = try await (statsFetch, userFetch, sessFetch)
+                let (stats, user, sessions, liveStreak) = try await (statsFetch, userFetch, sessFetch, streakFetch)
 
                 // Filter completed sessions whose created_at falls on TODAY in IST
                 let todaySessions = sessions.filter { s in
@@ -81,11 +82,11 @@ class HomeViewController: UIViewController {
                 // Update local GameData cache
                 self.gameData.stats.calories       = stats.total_calories
                 self.gameData.stats.runTimeMinutes = stats.total_minutes
-                self.gameData.stats.currentStreak  = user.current_streak ?? 0
+                self.gameData.stats.currentStreak  = liveStreak
 
                 DispatchQueue.main.async {
                     // Top-left streak + TODAY's cal badges (resets at IST midnight)
-                    self.streakLabel.text   = "\(user.current_streak ?? 0)"
+                    self.streakLabel.text   = "\(liveStreak)"
                     self.currencyLabel.text = "\(todayCalories)"
 
                     // "Today's stats" row — IST-filtered, resets at IST midnight

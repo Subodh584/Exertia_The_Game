@@ -449,6 +449,16 @@ class SupabaseManager {
             .value
     }
 
+    // MARK: - Live Streak Calculation
+
+    func calculateLiveStreak(userId: String) async throws -> Int {
+        let result: Int = try await client.rpc(
+            "calculate_current_streak",
+            params: ["p_user_id": userId]
+        ).execute().value
+        return result
+    }
+
     // MARK: - Friendships
 
     func sendFriendRequest(requesterId: String, receiverId: String) async throws -> AppFriendship {
