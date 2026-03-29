@@ -203,6 +203,8 @@ class CameraViewController: UIViewController {
     view.addSubview(cameraView)
 
     previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
+    previewLayer.videoGravity = .resizeAspectFill
+    cameraView.layer.insertSublayer(previewLayer, at: 0)
     setUpPreviewOverlayView()
     setUpAnnotationOverlayView()
     setUpDemoUI()
@@ -244,7 +246,7 @@ class CameraViewController: UIViewController {
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    previewLayer.frame = cameraView.frame
+    previewLayer.frame = cameraView.bounds
   }
 
   // MARK: - Demo Flow
