@@ -48,7 +48,7 @@ class OnboardingProfileViewController: UIViewController {
             return
         }
 
-        guard let userId = UserDefaults.standard.string(forKey: "djangoUserID") else {
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else {
             showAlert(title: "Error", message: "User session not found. Please register again.")
             return
         }
@@ -62,14 +62,14 @@ class OnboardingProfileViewController: UIViewController {
 
         Task {
             do {
-                let payload: [String: Any] = [
-                    "username": username,
-                    "daily_target_calories": calories,
-                    "daily_target_distance": distance
+                let data: [String: AnyEncodable] = [
+                    "username": AnyEncodable(username),
+                    "daily_target_calories": AnyEncodable(calories),
+                    "daily_target_distance": AnyEncodable(distance)
                 ]
 
-                let updatedUser = try await APIManager.shared.updateUser(userId: userId, payload: payload)
-                print("✅ Profile updated! Username: \(updatedUser.username), Calories: \(updatedUser.dailyTargetCalories ?? 0), Distance: \(updatedUser.dailyTargetDistance ?? 0) km")
+                let updatedUser = try await SupabaseManager.shared.updateUser(userId: userId, data: data)
+                print("✅ Profile updated! Username: \(updatedUser.username ?? ""), Calories: \(updatedUser.daily_target_calories ?? 0), Distance: \(updatedUser.daily_target_distance ?? 0) km")
 
                 DispatchQueue.main.async {
                     self.navigateToHome()

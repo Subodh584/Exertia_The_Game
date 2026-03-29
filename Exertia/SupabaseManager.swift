@@ -6,146 +6,509 @@
 //
 
 import Foundation
+import UIKit
 import Supabase
+import AuthenticationServices
 
-// The struct that matches your 'users' table in the database
-struct DBUser: Codable {
-    let id: UUID
-    let username: String
-    let display_name: String
-    let daily_target_distance: Double
-    let daily_target_calories: Int
-    let current_streak: Int
-    let longest_streak: Int
-    let is_online: Bool
+// MARK: - ISO8601 parser (handles with/without fractional seconds)
+enum ISODateParser {
+    private static let withFrac: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let noFrac: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+    static func date(from string: String) -> Date? {
+        withFrac.date(from: string) ?? noFrac.date(from: string)
+    }
 }
+
+// MARK: - Database Models
+
+struct AppUser: Codable {
+    let id: String
+    let username: String?
+    let email: String?
+    let display_name: String?
+    let daily_target_distance: Double?
+    let daily_target_calories: Int?
+    let current_weight: Double?
+    let target_weight: Double?
+    let current_streak: Int?
+    let longest_streak: Int?
+    let is_online: Bool?
+    let last_seen: String?
+    let last_streak_date: String?
+}
+
+struct AppSession: Codable {
+    let id: String?
+    let user_id: String?
+    let track_id: String?
+    let character_id: String?
+    let duration_minutes: Int?
+    let calories_burned: Int?
+    let distance_covered: Double?
+    let average_speed: Double?
+    let total_jumps: Int?
+    let total_crouches: Int?
+    let total_left_leans: Int?
+    let total_right_leans: Int?
+    let completion_status: String?
+    let created_at: String?
+}
+
+struct AppUserStats: Codable {
+    let total_sessions: Int
+    let total_minutes: Int
+    let total_calories: Int
+    let total_distance: Double
+    let completed_sessions: Int
+    let personal_best_distance: Double
+    let personal_best_calories: Int
+    let friend_count: Int
+}
+
+struct AppFriendship: Codable {
+    let id: String
+    let requester_id: String
+    let receiver_id: String
+    let status: String
+    let created_at: String?
+}
+
+struct AppBadge: Codable {
+    let id: String
+    let name: String
+    let description: String
+    let icon: String
+    let badge_type: String
+    let target_value: Double
+}
+
+struct AppUserBadge: Codable {
+    let id: String
+    let badge: AppBadge?
+    let badge_id: String?
+    let current_progress: Double
+    let is_completed: Bool
+    let completed_at: String?
+}
+
+struct AppDailyProgress: Codable {
+    let id: String?
+    let date: String
+    let total_distance: Double
+    let total_calories: Int
+    let total_duration_mins: Int
+    let target_met: Bool
+}
+
+// MARK: - Insert/Update Structs
+
+struct UserInsert: Encodable {
+    let id: String
+    let username: String?
+    let display_name: String
+    let email: String?
+    let daily_target_distance: Double?
+    let daily_target_calories: Int?
+}
+
+struct SessionInsert: Encodable {
+    let user_id: String
+    let track_id: String
+    let character_id: String
+    let duration_minutes: Int
+    let calories_burned: Int
+    let distance_covered: Double
+    let average_speed: Double?
+    let total_jumps: Int
+    let total_crouches: Int
+    let total_left_leans: Int
+    let total_right_leans: Int
+    let completion_status: String
+}
+
+struct FriendshipInsert: Encodable {
+    let requester_id: String
+    let receiver_id: String
+}
+
+private struct UserStatusUpdate: Encodable {
+    let is_online: Bool
+    let last_seen: String
+}
+
+// MARK: - Login Error Types
+enum LoginError: Error {
+    case emptyUsername
+    case emptyPassword
+    case invalidCredentials
+    case userNotFound
+    case networkError
+    case sessionExpired
+}
+
+// MARK: - Supabase Manager
 
 class SupabaseManager {
     static let shared = SupabaseManager()
-        
-        let client: SupabaseClient
-        
-        private init() {
-            print("🔌 INITIALIZING SUPABASE CLIENT...") // <--- ADD THIS
-            
-            self.client = SupabaseClient(
-                supabaseURL: URL(string: "https://zdnhlvgjoaltgfdnkxrg.supabase.co")!,
-                supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpkbmhsdmdqb2FsdGdmZG5reHJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5Njc0NDUsImV4cCI6MjA4NjU0MzQ0NX0.oMF-6lLKtl0vsvuu1OcS-h0JAaMDYjUbJAZYrFClDEI",
-                options: SupabaseClientOptions(
-                    auth: SupabaseClientOptions.AuthOptions(
-                        emitLocalSessionAsInitialSession: true
-                    )
+
+    let client: SupabaseClient
+
+    private init() {
+        print("🔌 INITIALIZING SUPABASE CLIENT...")
+        self.client = SupabaseClient(
+            supabaseURL: URL(string: "https://zdnhlvgjoaltgfdnkxrg.supabase.co")!,
+            supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpkbmhsdmdqb2FsdGdmZG5reHJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5Njc0NDUsImV4cCI6MjA4NjU0MzQ0NX0.oMF-6lLKtl0vsvuu1OcS-h0JAaMDYjUbJAZYrFClDEI",
+            options: SupabaseClientOptions(
+                auth: SupabaseClientOptions.AuthOptions(
+                    emitLocalSessionAsInitialSession: true
                 )
             )
-            print("✅ SUPABASE CLIENT READY") // <--- ADD THIS
+        )
+        print("✅ SUPABASE CLIENT READY")
+    }
+
+    // MARK: - Authentication
+
+    /// Returns true if user has a valid Supabase session
+    var hasSession: Bool {
+        return client.auth.currentUser != nil
+    }
+
+    var currentUserId: String? {
+        return client.auth.currentUser?.id.uuidString
+    }
+
+    func signUp(email: String, password: String, username: String, displayName: String) async throws -> String {
+        let response = try await client.auth.signUp(email: email, password: password)
+        let userId = response.user.id.uuidString
+
+        let newUser = UserInsert(
+            id: userId,
+            username: username,
+            display_name: displayName,
+            email: email,
+            daily_target_distance: 5.0,
+            daily_target_calories: 300
+        )
+        try await client.from("users").insert(newUser).execute()
+        print("✅ User created in Supabase Auth + users table. ID: \(userId)")
+        return userId
+    }
+
+    func signIn(email: String, password: String) async throws -> AppUser {
+        do {
+            try await client.auth.signIn(email: email, password: password)
+        } catch {
+            let errorDesc = error.localizedDescription.lowercased()
+            if errorDesc.contains("invalid") || errorDesc.contains("credentials") {
+                throw LoginError.invalidCredentials
+            }
+            throw LoginError.networkError
         }
-    
-    // MARK: - Authentication Functions
-    
-    // 1. Sign Up (Creates a new Auth Account)
-    func signUp(email: String, password: String) async throws -> User {
-        let response = try await client.auth.signUp(
-            email: email,
-            password: password
-        )
-        
-        // In the new SDK, 'user' is not optional, so we just return it directly
-        return response.user
+
+        guard let authUser = client.auth.currentUser else {
+            throw LoginError.userNotFound
+        }
+
+        let userId = authUser.id.uuidString
+        let users: [AppUser] = try await client.from("users")
+            .select()
+            .eq("id", value: userId)
+            .execute()
+            .value
+
+        guard let user = users.first else {
+            throw LoginError.userNotFound
+        }
+
+        UserDefaults.standard.set(userId, forKey: "supabaseUserID")
+        print("✅ Signed in. User ID: \(userId)")
+        return user
     }
-    
-    // 2. Sign In (Logs in an existing user)
-    // FIX: Changed 'signInWithPassword' to 'signIn' for SDK v2.0+
-    func signIn(email: String, password: String) async throws {
-        try await client.auth.signIn(
-            email: email,
-            password: password
+
+    // MARK: - OAuth
+
+    /// Opens an ASWebAuthenticationSession for Google/Apple OAuth via Supabase
+    @discardableResult
+    func signInWithOAuth(provider: Auth.Provider) async throws -> Session {
+        let redirectURL = URL(string: "exertia://auth-callback")!
+        return try await client.auth.signInWithOAuth(
+            provider: provider,
+            redirectTo: redirectURL
         )
     }
-    
-    // 3. Sign Out
+
+    /// Check if a first-time OAuth user still needs to set up their profile
+    func isProfileComplete(userId: String) async throws -> Bool {
+        let users: [AppUser] = try await client.from("users")
+            .select()
+            .eq("id", value: userId)
+            .execute()
+            .value
+        guard let user = users.first else { return false }
+        return user.username != nil && !user.username!.isEmpty
+    }
+
+    /// Create a minimal user row for first-time OAuth users (no username yet)
+    func createOAuthUserRow(userId: String, email: String, displayName: String?) async throws {
+        let newUser = UserInsert(
+            id: userId,
+            username: nil,
+            display_name: displayName ?? "New Player",
+            email: email,
+            daily_target_distance: nil,
+            daily_target_calories: nil
+        )
+        try await client.from("users").insert(newUser).execute()
+        print("✅ Created users row for OAuth user: \(userId)")
+    }
+
+    /// Attempt to restore session on app launch. Returns the user if session is valid.
+    func restoreSession() async throws -> AppUser? {
+        // Supabase SDK auto-restores the session from keychain
+        guard let authUser = client.auth.currentUser else {
+            return nil
+        }
+
+        let userId = authUser.id.uuidString
+        let users: [AppUser] = try await client.from("users")
+            .select()
+            .eq("id", value: userId)
+            .execute()
+            .value
+
+        guard let user = users.first else { return nil }
+        UserDefaults.standard.set(userId, forKey: "supabaseUserID")
+        return user
+    }
+
     func signOut() async throws {
-        print("⚡️ Logging out...")
+        await setUserOffline()
         try await client.auth.signOut()
-        print("✅ Logged out successfully!")
+        UserDefaults.standard.removeObject(forKey: "supabaseUserID")
+        print("✅ Signed out")
     }
-    
-    // 4. Get Current User Object (Auth)
-    var currentUser: User? {
-        return client.auth.currentUser
+
+    // MARK: - Change Password (via Supabase Auth)
+    func changePassword(newPassword: String) async throws {
+        try await client.auth.update(user: .init(password: newPassword))
+        print("✅ Password changed via Supabase Auth")
     }
-    
-    // 5. Get Current User ID (Helper)
-    func getCurrentUserID() -> UUID? {
-        return client.auth.currentUser?.id
+
+    // MARK: - User CRUD
+
+    func getUser(userId: String) async throws -> AppUser {
+        let users: [AppUser] = try await client.from("users")
+            .select()
+            .eq("id", value: userId)
+            .execute()
+            .value
+        guard let user = users.first else { throw LoginError.userNotFound }
+        return user
     }
-    
-    // MARK: - User Status Updates
-        
-        // 1. Define a little struct for the update data
-        struct UserStatusUpdate: Encodable {
-            let is_online: Bool
-            let last_seen: String
+
+    func updateUser(userId: String, data: [String: AnyEncodable]) async throws -> AppUser {
+        let users: [AppUser] = try await client.from("users")
+            .update(data)
+            .eq("id", value: userId)
+            .select()
+            .execute()
+            .value
+        guard let user = users.first else { throw LoginError.userNotFound }
+        return user
+    }
+
+    func findUserByUsername(_ username: String) async throws -> AppUser? {
+        let users: [AppUser] = try await client.from("users")
+            .select()
+            .ilike("username", value: username)
+            .execute()
+            .value
+        return users.first
+    }
+
+    func getAllUsers() async throws -> [AppUser] {
+        return try await client.from("users").select().execute().value
+    }
+
+    // MARK: - Online/Offline Status
+
+    func setUserOnline() async {
+        guard let id = currentUserId else { return }
+        let updateData = UserStatusUpdate(is_online: true, last_seen: ISO8601DateFormatter().string(from: Date()))
+        do {
+            try await client.from("users").update(updateData).eq("id", value: id).execute()
+            print("✅ User is now ONLINE")
+        } catch {
+            print("❌ Failed to set online: \(error)")
         }
-        
-        // Call this when the user logs in or opens the app
-        func setUserOnline() async {
-            guard let id = getCurrentUserID() else { return }
-            
-            print("🟢 Setting User ONLINE...")
-            
-            // FIX: Use the struct instead of a Dictionary
-            let updateData = UserStatusUpdate(
-                is_online: true,
-                last_seen: ISO8601DateFormatter().string(from: Date())
-            )
-            
-            do {
-                try await client
-                    .from("users")
-                    .update(updateData) // Pass the struct here
-                    .eq("id", value: id)
-                    .execute()
-                print("✅ User is now ONLINE in Database")
-            } catch {
-                print("❌ Failed to set online: \(error)")
-            }
+    }
+
+    func setUserOffline() async {
+        guard let id = currentUserId else { return }
+        let updateData = UserStatusUpdate(is_online: false, last_seen: ISO8601DateFormatter().string(from: Date()))
+        do {
+            try await client.from("users").update(updateData).eq("id", value: id).execute()
+            print("✅ User is now OFFLINE")
+        } catch {
+            print("❌ Failed to set offline: \(error)")
         }
-        
-        // Call this when the user closes the app
-        func setUserOffline() async {
-            guard let id = getCurrentUserID() else { return }
-            
-            print("Setting User OFFLINE...")
-            
-            // FIX: Use the struct here too
-            let updateData = UserStatusUpdate(
-                is_online: false,
-                last_seen: ISO8601DateFormatter().string(from: Date())
-            )
-            
-            do {
-                try await client
-                    .from("users")
-                    .update(updateData)
-                    .eq("id", value: id)
-                    .execute()
-                print("✅ User is now OFFLINE in Database")
-            } catch {
-                print("❌ Failed to set offline: \(error)")
-            }
-        }
-    
-    // MARK: - Logout and Delete
-        
+    }
+
+    // MARK: - User Stats (RPC)
+
+    func getUserStats(userId: String) async throws -> AppUserStats {
+        return try await client.rpc("get_user_stats", params: ["p_user_id": userId])
+            .execute()
+            .value
+    }
+
+    // MARK: - Game Sessions
+
+    func createSession(session: SessionInsert) async throws -> AppSession {
+        let sessions: [AppSession] = try await client.from("game_sessions")
+            .insert(session)
+            .select()
+            .execute()
+            .value
+        guard let created = sessions.first else { throw URLError(.badServerResponse) }
+        return created
+    }
+
+    func completeSession(sessionId: String, caloriesBurned: Int) async throws {
+        try await client.rpc("complete_session", params: [
+            "p_session_id": sessionId,
+            "p_calories": "\(caloriesBurned)"
+        ]).execute()
+        print("✅ Session \(sessionId) completed with \(caloriesBurned) cal")
+    }
+
+    func abandonSession(sessionId: String) async throws {
+        try await client.rpc("abandon_session", params: ["p_session_id": sessionId]).execute()
+    }
+
+    func getUserSessions(userId: String) async throws -> [AppSession] {
+        return try await client.from("game_sessions")
+            .select()
+            .eq("user_id", value: userId)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+    }
+
+    // MARK: - Badges
+
+    func getAllBadges() async throws -> [AppBadge] {
+        return try await client.from("badges").select().execute().value
+    }
+
+    func getUserBadges(userId: String) async throws -> [AppUserBadge] {
+        return try await client.from("user_badges")
+            .select("*, badge:badges(*)")
+            .eq("user_id", value: userId)
+            .execute()
+            .value
+    }
+
+    // MARK: - Streak Calendar / Daily Progress
+
+    func getStreakCalendar(userId: String, days: Int = 90) async throws -> [AppDailyProgress] {
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let cutoffStr = formatter.string(from: cutoffDate)
+
+        return try await client.from("daily_progress")
+            .select()
+            .eq("user_id", value: userId)
+            .gte("date", value: cutoffStr)
+            .order("date", ascending: true)
+            .execute()
+            .value
+    }
+
+    // MARK: - Friendships
+
+    func sendFriendRequest(requesterId: String, receiverId: String) async throws -> AppFriendship {
+        let insert = FriendshipInsert(requester_id: requesterId, receiver_id: receiverId)
+        let friendships: [AppFriendship] = try await client.from("friendships")
+            .insert(insert)
+            .select()
+            .execute()
+            .value
+        guard let friendship = friendships.first else { throw URLError(.badServerResponse) }
+        return friendship
+    }
+
+    func acceptFriendship(friendshipId: String) async throws {
+        try await client.from("friendships")
+            .update(["status": "accepted"])
+            .eq("id", value: friendshipId)
+            .execute()
+    }
+
+    func declineFriendship(friendshipId: String) async throws {
+        try await client.from("friendships")
+            .update(["status": "declined"])
+            .eq("id", value: friendshipId)
+            .execute()
+    }
+
+    func getUserFriends(userId: String) async throws -> [AppFriendship] {
+        return try await client.from("friendships")
+            .select()
+            .eq("status", value: "accepted")
+            .or("requester_id.eq.\(userId),receiver_id.eq.\(userId)")
+            .execute()
+            .value
+    }
+
+    // MARK: - Delete Account
+
     func deleteAccount() async throws {
-        guard let id = getCurrentUserID() else { return }
+        guard let id = currentUserId else { return }
         print("🗑️ Deleting user profile from database...")
-            
-        // 1. Delete the user's row from the 'users' table
         try await client.from("users").delete().eq("id", value: id).execute()
-            
-        // 2. Log them out locally
         try await client.auth.signOut()
+        UserDefaults.standard.removeObject(forKey: "supabaseUserID")
         print("✅ Account deleted and logged out!")
     }
+
+    // MARK: - Session Expired Handler
+    func handleSessionExpired() {
+        UserDefaults.standard.removeObject(forKey: "supabaseUserID")
+        DispatchQueue.main.async {
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = scene.windows.first else { return }
+            let sb = UIStoryboard(name: "Main", bundle: nil)
+            if let loginVC = sb.instantiateViewController(withIdentifier: "LoginViewController") as? LoginViewController {
+                loginVC.modalPresentationStyle = .fullScreen
+                window.rootViewController = loginVC
+                window.makeKeyAndVisible()
+            }
+        }
+    }
 }
+
+// MARK: - AnyEncodable helper for dynamic dictionaries
+
+struct AnyEncodable: Encodable {
+    private let _encode: (Encoder) throws -> Void
+
+    init<T: Encodable>(_ value: T) {
+        _encode = { encoder in try value.encode(to: encoder) }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try _encode(encoder)
+    }
+}
+

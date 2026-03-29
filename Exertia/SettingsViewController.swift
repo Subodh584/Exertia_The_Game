@@ -473,10 +473,7 @@ class SettingsViewController: UIViewController {
 
         Task {
             do {
-                try await APIManager.shared.changePassword(
-                    currentPassword: current,
-                    newPassword: newPw
-                )
+                try await SupabaseManager.shared.changePassword(newPassword: newPw)
                 await MainActor.run {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                     self.showAlert("Password Updated", "Your password has been changed successfully.") {
@@ -502,11 +499,9 @@ class SettingsViewController: UIViewController {
     @objc private func backTapped() { dismiss(animated: true) }
 
     @objc private func logoutTapped() {
-        if let uid = UserDefaults.standard.string(forKey: "djangoUserID") {
-            Task { try? await APIManager.shared.setUserOffline(userId: uid) }
+        Task {
+            try? await SupabaseManager.shared.signOut()
         }
-        TokenManager.shared.clear()
-        UserDefaults.standard.removeObject(forKey: "djangoUserID")
         navigateToLogin()
     }
 
@@ -515,14 +510,7 @@ class SettingsViewController: UIViewController {
             guard let self = self else { return }
             Task {
                 do {
-                    // Verify password + delete on the Django backend
-                    try await APIManager.shared.deleteUserAccount(password: password)
-                    // Clean up local state
-                    if let uid = UserDefaults.standard.string(forKey: "djangoUserID") {
-                        try? await APIManager.shared.setUserOffline(userId: uid)
-                    }
-                    TokenManager.shared.clear()
-                    UserDefaults.standard.removeObject(forKey: "djangoUserID")
+                    try await SupabaseManager.shared.deleteAccount()
                     await MainActor.run { self.navigateToLogin() }
                 } catch {
                     await MainActor.run {

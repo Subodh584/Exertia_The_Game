@@ -7,7 +7,7 @@ class FullCalendarViewController: UIViewController,
 
     // Injected from StatisticsViewController
     var activeDateStrings: Set<String> = []
-    var sessionsByDate: [String: [DjangoSession]] = [:]
+    var sessionsByDate: [String: [AppSession]] = [:]
 
     // IST
     private static let istTZ = TimeZone(identifier: "Asia/Kolkata")!
@@ -47,6 +47,17 @@ class FullCalendarViewController: UIViewController,
         configureMonthRow()
         configureWeekdayHeader()
         configureGrid()
+        addSwipeGestures()
+    }
+
+    private func addSwipeGestures() {
+        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(nextMonth))
+        swipeLeft.direction = .left
+        view.addGestureRecognizer(swipeLeft)
+
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(prevMonth))
+        swipeRight.direction = .right
+        view.addGestureRecognizer(swipeRight)
     }
 
     override func viewDidLayoutSubviews() {
