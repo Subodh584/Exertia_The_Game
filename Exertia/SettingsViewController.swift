@@ -473,7 +473,7 @@ class SettingsViewController: UIViewController {
 
         Task {
             do {
-                try await SupabaseManager.shared.changePassword(newPassword: newPw)
+                try await SupabaseManager.shared.changePassword(currentPassword: current, newPassword: newPw)
                 await MainActor.run {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                     self.showAlert("Password Updated", "Your password has been changed successfully.") {

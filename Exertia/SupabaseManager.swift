@@ -298,7 +298,21 @@ class SupabaseManager {
     }
 
     // MARK: - Change Password (via Supabase Auth)
-    func changePassword(newPassword: String) async throws {
+    func changePassword(currentPassword: String, newPassword: String) async throws {
+        guard let email = client.auth.currentUser?.email else {
+            throw NSError(domain: "ChangePassword", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "No logged-in user found."])
+        }
+
+        // Verify current password first
+        do {
+            try await client.auth.signIn(email: email, password: currentPassword)
+        } catch {
+            throw NSError(domain: "ChangePassword", code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "Current password is incorrect."])
+        }
+
+        // Current password correct — update to new password
         try await client.auth.update(user: .init(password: newPassword))
         print("✅ Password changed via Supabase Auth")
     }
