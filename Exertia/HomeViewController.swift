@@ -1,4 +1,5 @@
 import UIKit
+import SceneKit
 
 class HomeViewController: UIViewController {
 
@@ -9,9 +10,22 @@ class HomeViewController: UIViewController {
     @IBOutlet weak var profileButton: UIButton!
     @IBOutlet weak var distanceLabel: UILabel!
     @IBOutlet weak var caloriesLabel: UILabel!
-    
-    
-    
+
+    // 3D character scene
+    private var characterSceneView: SCNView?
+    private var characterNode: SCNNode?
+    private var lastPanX: CGFloat = 0
+    private var sceneSetupDone = false
+
+    /// Adjust this to scale the 3D character up or down on the home screen
+    private let characterScale: Float = 0.072
+    /// Shift the character left (–) or right (+) in scene units
+    private let characterOffsetX: Float = 0.0
+    /// Shift the character down (–) or up (+) in scene units
+    private let characterOffsetY: Float = -0.9
+    /// Move the character closer (+) or further away (–) from the camera
+    private let characterOffsetZ: Float = 0.4
+
     private let tabBarContainer = UIView()
     private let tabBarStackView = UIStackView()
     private let indicatorView = UIView()
@@ -37,6 +51,7 @@ class HomeViewController: UIViewController {
         if tabWrappers.indices.contains(currentTabIndex) {
             moveIndicator(to: tabWrappers[currentTabIndex], animated: false)
         }
+        setupCharacterSceneView()
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -339,6 +354,123 @@ class HomeViewController: UIViewController {
                 trackVC.modalTransitionStyle = .crossDissolve
                 self.present(trackVC, animated: true, completion: nil)
             }
+        }
+    }
+
+    // MARK: - 3D Character Scene
+
+    private func setupCharacterSceneView() {
+        guard !sceneSetupDone, characterImageView.frame.width > 0 else { return }
+        sceneSetupDone = true
+
+        // Hide the 2D image
+        characterImageView.isHidden = true
+
+        // Create SCNView matching the characterImageView frame
+        let scnView = SCNView(frame: characterImageView.frame)
+        scnView.backgroundColor = .clear
+        scnView.allowsCameraControl = false
+        scnView.autoenablesDefaultLighting = false
+        scnView.antialiasingMode = .multisampling4X
+
+        // Insert at the same level in the hierarchy, just above the image view
+        if let superview = characterImageView.superview,
+           let idx = superview.subviews.firstIndex(of: characterImageView) {
+            superview.insertSubview(scnView, at: idx + 1)
+        } else {
+            view.addSubview(scnView)
+        }
+        characterSceneView = scnView
+
+        // Load idle character model
+        guard let scene = SCNScene(named: "Character.scnassets/Idle.dae") else {
+            print("⚠️ Could not load Character.scnassets/Idle.dae")
+            return
+        }
+
+        // Move (not clone) all children into a pivot node so we can rotate cleanly
+        // Cloning leaves the originals in rootNode at full size — that was the bug
+        let pivot = SCNNode()
+        let children = scene.rootNode.childNodes
+        children.forEach {
+            $0.removeFromParentNode()
+            pivot.addChildNode($0)
+        }
+        scene.rootNode.addChildNode(pivot)
+        characterNode = pivot
+
+        // Auto-fit: measure the model's bounding box, scale so the full body
+        // fills ~1.8 scene units tall, then apply characterScale as a multiplier
+        let (minB, maxB) = pivot.boundingBox
+        let modelHeight = maxB.y - minB.y
+        let autoScale: Float = modelHeight > 0 ? (1.8 / modelHeight) * characterScale : characterScale
+        pivot.scale = SCNVector3(autoScale, autoScale, autoScale)
+
+        // Center the model horizontally and vertically in scene space
+        let midX = (minB.x + maxB.x) / 2 * autoScale
+        let midY = (minB.y + maxB.y) / 2 * autoScale
+        pivot.position = SCNVector3(-midX + characterOffsetX, -midY + characterOffsetY, characterOffsetZ)
+
+        // Ambient light
+        let ambientNode = SCNNode()
+        let ambient = SCNLight()
+        ambient.type = .ambient
+        ambient.color = UIColor.white
+        ambient.intensity = 600
+        ambientNode.light = ambient
+        scene.rootNode.addChildNode(ambientNode)
+
+        // Directional light
+        let dirNode = SCNNode()
+        let dir = SCNLight()
+        dir.type = .directional
+        dir.color = UIColor.white
+        dir.intensity = 900
+        dirNode.light = dir
+        dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
+        scene.rootNode.addChildNode(dirNode)
+
+        // Camera: positioned to frame a ~1.8-unit-tall character
+        let cameraNode = SCNNode()
+        cameraNode.camera = SCNCamera()
+        cameraNode.camera?.fieldOfView = 50
+        cameraNode.position = SCNVector3(0, 0, 3.5)
+        scene.rootNode.addChildNode(cameraNode)
+
+        scnView.scene = scene
+        scnView.pointOfView = cameraNode
+
+        // Play embedded idle animation
+        playIdleAnimation(on: pivot)
+
+        // Pan gesture for Y-axis rotation
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleCharacterPan(_:)))
+        scnView.addGestureRecognizer(pan)
+    }
+
+    private func playIdleAnimation(on node: SCNNode) {
+        node.enumerateChildNodes { child, _ in
+            for key in child.animationKeys {
+                if let player = child.animationPlayer(forKey: key) {
+                    player.animation.repeatCount = .infinity
+                    player.play()
+                }
+            }
+        }
+    }
+
+    @objc private func handleCharacterPan(_ gesture: UIPanGestureRecognizer) {
+        guard let node = characterNode else { return }
+        let translation = gesture.translation(in: gesture.view)
+        switch gesture.state {
+        case .began:
+            lastPanX = translation.x
+        case .changed:
+            let delta = translation.x - lastPanX
+            lastPanX = translation.x
+            node.eulerAngles.y += Float(delta) * 0.01
+        default:
+            break
         }
     }
 

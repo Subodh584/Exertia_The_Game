@@ -82,7 +82,7 @@ class CharacterCell: UICollectionViewCell {
         } else {
             // Character is visible
             thumbImageView.isHidden = false
-            thumbImageView.image = UIImage(named: player.thumbnailImageName)
+            thumbImageView.image = UIImage(named: "CharacterAssetThumbnail")
             containerView.backgroundColor = .clear
 
             let blurStyle: UIBlurEffect.Style = isSelected ? .systemMaterialLight : .systemUltraThinMaterialDark
