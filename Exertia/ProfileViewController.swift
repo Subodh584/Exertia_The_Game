@@ -48,6 +48,11 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         updateTabSelection()
         fetchRealProfileData()
     }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        AudioManager.shared.playAppMusic()
+    }
     
     func fetchRealProfileData() {
         guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
@@ -397,11 +402,13 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
     
     @objc func backTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         dismiss(animated: true, completion: nil)
     }
     
     // 🔥 ADDED THIS: Action to open Settings
     @objc func settingsTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         print("⚙️ Opening Settings...")
         let settingsVC = SettingsViewController()
         settingsVC.modalPresentationStyle = .fullScreen
@@ -410,6 +417,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
     
     @objc func editProfileTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let currentName     = nameLabel.text ?? ""
         let rawUsername     = emailLabel.text ?? ""
         let currentUsername = rawUsername.hasPrefix("@") ? String(rawUsername.dropFirst()) : rawUsername
@@ -465,6 +473,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
 
     @objc func copyIDTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let idToCopy = realUserId.isEmpty ? (UserDefaults.standard.string(forKey: "supabaseUserID") ?? "123456") : realUserId
         UIPasteboard.general.string = idToCopy
         let generator = UINotificationFeedbackGenerator()
@@ -472,6 +481,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
     
     @objc func tabChanged(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         let isCompletedTab = (sender == completedButton)
         if isCompletedTab == isShowingCompleted { return }
         

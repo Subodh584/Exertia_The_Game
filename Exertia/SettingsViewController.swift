@@ -45,6 +45,11 @@ class SettingsViewController: UIViewController {
         loadAudioPrefs()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        AudioManager.shared.playAppMusic()
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         backBtn.layer.cornerRadius = backBtn.frame.height / 2
@@ -396,42 +401,45 @@ class SettingsViewController: UIViewController {
     }
 
     @objc private func toggleMusicMute() {
+        AudioManager.shared.playEffect(.buttonTapped)
         musicMuted.toggle()
         UserDefaults.standard.set(musicMuted, forKey: "audio_music_muted")
         UIView.animate(withDuration: 0.2) {
             self.applyMuteState(muteBtn: self.musicMuteBtn, slider: self.musicSlider,
                                 pctLabel: self.musicPctLabel, muted: self.musicMuted)
         }
-        // TODO: AudioManager.shared.setMusicMuted(musicMuted)
+        AudioManager.shared.setMusicMuted(musicMuted)
     }
 
     @objc private func toggleSFXMute() {
+        AudioManager.shared.playEffect(.buttonTapped)
         sfxMuted.toggle()
         UserDefaults.standard.set(sfxMuted, forKey: "audio_sfx_muted")
         UIView.animate(withDuration: 0.2) {
             self.applyMuteState(muteBtn: self.sfxMuteBtn, slider: self.sfxSlider,
                                 pctLabel: self.sfxPctLabel, muted: self.sfxMuted)
         }
-        // TODO: AudioManager.shared.setSFXMuted(sfxMuted)
+        AudioManager.shared.setSFXMuted(sfxMuted)
     }
 
     @objc private func musicSliderMoved() {
         let val = musicSlider.value
         UserDefaults.standard.set(val, forKey: "audio_music_volume")
         updatePctLabel(musicPctLabel, value: val)
-        // TODO: AudioManager.shared.setMusicVolume(val)
+        AudioManager.shared.setMusicVolume(val)
     }
 
     @objc private func sfxSliderMoved() {
         let val = sfxSlider.value
         UserDefaults.standard.set(val, forKey: "audio_sfx_volume")
         updatePctLabel(sfxPctLabel, value: val)
-        // TODO: AudioManager.shared.setSFXVolume(val)
+        AudioManager.shared.setSFXVolume(val)
     }
 
     // MARK: - Password Expand
 
     @objc private func togglePasswordExpand() {
+        AudioManager.shared.playEffect(.buttonTapped)
         pwExpanded.toggle()
         // 3 pw fields × 46 + save btn 46 + 3 gaps × 12 + top 12 + bottom 4 = 240
         let openH: CGFloat   = 240.0
@@ -496,7 +504,11 @@ class SettingsViewController: UIViewController {
 
     // MARK: - Account Actions
 
-    @objc private func backTapped() { dismiss(animated: true) }
+    @objc private func backTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
+        dismiss(animated: true)
+    }
+    
 
     @objc private func logoutTapped() {
         Task {

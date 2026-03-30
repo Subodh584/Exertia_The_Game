@@ -20,18 +20,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
+        AudioManager.shared.resumeAfterAppForeground()
         Task {
             await SupabaseManager.shared.setUserOnline()
         }
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
+        AudioManager.shared.pauseForAppBackground()
     }
 
     func sceneWillEnterForeground(_ scene: UIScene) {
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
+        AudioManager.shared.pauseForAppBackground()
         Task {
             await SupabaseManager.shared.setUserOffline()
         }
