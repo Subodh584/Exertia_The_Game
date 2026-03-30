@@ -41,9 +41,11 @@ final class CelebrationView: UIView {
     private let badgeName: String
     private let containerView = UIView()
     private let emojiLabel = UILabel()
+    private let streakIconView = UIImageView()
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let streakLabel = UILabel()
+    private let streakRow = UIStackView()
 
     private init(frame: CGRect, streak: Int, mode: Mode = .dailyTarget, badgeName: String = "") {
         self.streakCount = streak
@@ -75,9 +77,9 @@ final class CelebrationView: UIView {
             titleLabel.text = "Daily Target Complete!"
             subtitleLabel.text = "You crushed both your calorie & distance goals"
             if streakCount > 0 {
-                streakLabel.text = "🔥 \(streakCount) Day Streak!"
+                streakLabel.text = "\(streakCount) Day Streak!"
             } else {
-                streakLabel.text = "🔥 Streak started!"
+                streakLabel.text = "Streak started!"
             }
         case .badge:
             emojiLabel.text = "🏆"
@@ -119,10 +121,24 @@ final class CelebrationView: UIView {
         streakLabel.textAlignment = .center
         streakLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        streakIconView.image = UIImage(named: "fire")
+        streakIconView.contentMode = .scaleAspectFit
+        streakIconView.translatesAutoresizingMaskIntoConstraints = false
+        streakIconView.widthAnchor.constraint(equalToConstant: 28).isActive = true
+        streakIconView.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        streakIconView.isHidden = mode == .badge
+
+        streakRow.axis = .horizontal
+        streakRow.alignment = .center
+        streakRow.spacing = 10
+        streakRow.translatesAutoresizingMaskIntoConstraints = false
+        streakRow.addArrangedSubview(streakIconView)
+        streakRow.addArrangedSubview(streakLabel)
+
         containerView.addSubview(emojiLabel)
         containerView.addSubview(titleLabel)
         containerView.addSubview(subtitleLabel)
-        containerView.addSubview(streakLabel)
+        containerView.addSubview(streakRow)
 
         NSLayoutConstraint.activate([
             containerView.centerXAnchor.constraint(equalTo: centerXAnchor),
@@ -140,9 +156,9 @@ final class CelebrationView: UIView {
             subtitleLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             subtitleLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
 
-            streakLabel.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 16),
-            streakLabel.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
-            streakLabel.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -28)
+            streakRow.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 16),
+            streakRow.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+            streakRow.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -28)
         ])
 
         // Close button (X) at top-right of card
