@@ -1,4 +1,5 @@
 import UIKit
+import SceneKit
 
 class CharacterSelectionViewController: UIViewController {
 
@@ -19,6 +20,21 @@ class CharacterSelectionViewController: UIViewController {
     private var tabIcons: [UIImageView] = []
     private var tabLabels: [UILabel] = []
     private var tabWrappers: [UIView] = []
+
+    // 3D character scene
+    private var characterSceneView: SCNView?
+    private var characterNode: SCNNode?
+    private var lastPanX: CGFloat = 0
+    private var sceneSetupDone = false
+
+    /// Adjust to scale the 3D character up or down
+    private let characterScale: Float = 0.072
+    /// Shift the character left (–) or right (+) in scene units
+    private let characterOffsetX: Float = 0.0
+    /// Shift the character down (–) or up (+) in scene units
+    private let characterOffsetY: Float = -1.2
+    /// Move the character closer (+) or further away (–) from the camera
+    private let characterOffsetZ: Float = 0.4
 
     var gameData = GameData.shared
     var currentViewingIndex: Int = 0
@@ -50,12 +66,111 @@ class CharacterSelectionViewController: UIViewController {
         if tabWrappers.indices.contains(1) {
             moveIndicator(to: tabWrappers[1], animated: false)
         }
+        setupCharacterSceneView()
+    }
+    // MARK: - 3D Character Scene
+
+    private func setupCharacterSceneView() {
+        guard !sceneSetupDone, mainCharacterImageView.frame.width > 0 else { return }
+        sceneSetupDone = true
+
+        mainCharacterImageView.isHidden = true
+
+        let scnView = SCNView(frame: mainCharacterImageView.frame)
+        scnView.backgroundColor = .clear
+        scnView.allowsCameraControl = false
+        scnView.autoenablesDefaultLighting = false
+        scnView.antialiasingMode = .multisampling4X
+
+        if let superview = mainCharacterImageView.superview,
+           let idx = superview.subviews.firstIndex(of: mainCharacterImageView) {
+            superview.insertSubview(scnView, at: idx + 1)
+        } else {
+            view.addSubview(scnView)
+        }
+        characterSceneView = scnView
+
+        guard let scene = SCNScene(named: "Character.scnassets/Idle.dae") else {
+            print("⚠️ Could not load Character.scnassets/Idle.dae")
+            return
+        }
+
+        let pivot = SCNNode()
+        let children = scene.rootNode.childNodes
+        children.forEach {
+            $0.removeFromParentNode()
+            pivot.addChildNode($0)
+        }
+        scene.rootNode.addChildNode(pivot)
+        characterNode = pivot
+
+        let (minB, maxB) = pivot.boundingBox
+        let modelHeight = maxB.y - minB.y
+        let autoScale: Float = modelHeight > 0 ? (1.8 / modelHeight) * characterScale : characterScale
+        pivot.scale = SCNVector3(autoScale, autoScale, autoScale)
+
+        let midX = (minB.x + maxB.x) / 2 * autoScale
+        let midY = (minB.y + maxB.y) / 2 * autoScale
+        pivot.position = SCNVector3(-midX + characterOffsetX, -midY + characterOffsetY, characterOffsetZ)
+
+        let ambientNode = SCNNode()
+        let ambient = SCNLight()
+        ambient.type = .ambient
+        ambient.color = UIColor.white
+        ambient.intensity = 600
+        ambientNode.light = ambient
+        scene.rootNode.addChildNode(ambientNode)
+
+        let dirNode = SCNNode()
+        let dir = SCNLight()
+        dir.type = .directional
+        dir.color = UIColor.white
+        dir.intensity = 900
+        dirNode.light = dir
+        dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
+        scene.rootNode.addChildNode(dirNode)
+
+        let cameraNode = SCNNode()
+        cameraNode.camera = SCNCamera()
+        cameraNode.camera?.fieldOfView = 50
+        cameraNode.position = SCNVector3(0, 0, 3.5)
+        scene.rootNode.addChildNode(cameraNode)
+
+        scnView.scene = scene
+        scnView.pointOfView = cameraNode
+
+        playIdleAnimation(on: pivot)
+
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleCharacterPan(_:)))
+        scnView.addGestureRecognizer(pan)
     }
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        AudioManager.shared.playAppMusic()
+    private func playIdleAnimation(on node: SCNNode) {
+        node.enumerateChildNodes { child, _ in
+            for key in child.animationKeys {
+                if let player = child.animationPlayer(forKey: key) {
+                    player.animation.repeatCount = .infinity
+                    player.play()
+                }
+            }
+        }
     }
+
+    @objc private func handleCharacterPan(_ gesture: UIPanGestureRecognizer) {
+        guard let node = characterNode else { return }
+        let translation = gesture.translation(in: gesture.view)
+        switch gesture.state {
+        case .began:
+            lastPanX = translation.x
+        case .changed:
+            let delta = translation.x - lastPanX
+            lastPanX = translation.x
+            node.eulerAngles.y += Float(delta) * 0.01
+        default:
+            break
+        }
+    }
+
         func setupNextButton() {
             view.addSubview(nextButton)
             nextButton.translatesAutoresizingMaskIntoConstraints = false
