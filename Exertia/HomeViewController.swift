@@ -21,6 +21,7 @@ class HomeViewController: UIViewController {
     private let currentTabIndex = 0
 
     let gameData = GameData.shared
+    private var hasShownCelebrationToday = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -84,6 +85,11 @@ class HomeViewController: UIViewController {
                 self.gameData.stats.runTimeMinutes = stats.total_minutes
                 self.gameData.stats.currentStreak  = liveStreak
 
+                // Check if daily target is met (both calories AND distance)
+                let dailyCalTarget = user.daily_target_calories ?? 500
+                let dailyDistTarget = user.daily_target_distance ?? 5.0
+                let targetMetNow = todayCalories >= dailyCalTarget && todayDistance >= dailyDistTarget
+
                 DispatchQueue.main.async {
                     // Top-left streak + TODAY's cal badges (resets at IST midnight)
                     self.streakLabel.text   = "\(liveStreak)"
@@ -97,6 +103,13 @@ class HomeViewController: UIViewController {
                         self.distanceLabel.text = String(format: "%.1f km", todayDistance)
                         self.caloriesLabel.text  = "\(todayCalories) cal"
                     }
+
+                    // Show celebration if target was just met
+                    if targetMetNow && !self.hasShownCelebrationToday {
+                        self.hasShownCelebrationToday = true
+                        CelebrationView.show(on: self, streak: liveStreak)
+                    }
+
                     print("✅ Home UI: today (IST) — \(String(format: "%.1f", todayDistance)) km, \(todayCalories) cal (\(todaySessions.count) sessions)")
                 }
             } catch {
