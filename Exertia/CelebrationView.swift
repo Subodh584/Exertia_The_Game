@@ -6,8 +6,7 @@ final class CelebrationView: UIView {
 
     // MARK: - Public API
 
-    /// Shows a celebration animation on the given view controller.
-    /// Automatically removes itself after the animation completes.
+    /// Shows a daily target celebration animation.
     static func show(on viewController: UIViewController, streak: Int) {
         let celebration = CelebrationView(frame: viewController.view.bounds, streak: streak)
         celebration.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -15,17 +14,41 @@ final class CelebrationView: UIView {
         celebration.startAnimation()
     }
 
+    /// Shows a badge earned celebration animation.
+    static func showBadge(on viewController: UIViewController, badgeName: String) {
+        let celebration = CelebrationView(frame: viewController.view.bounds, streak: 0,
+                                          mode: .badge, badgeName: badgeName)
+        celebration.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        viewController.view.addSubview(celebration)
+        celebration.startAnimation()
+    }
+
+    /// Shows a streak milestone celebration (7, 14, 30, 50, 100 days).
+    static func showMilestone(on viewController: UIViewController, streak: Int) {
+        let celebration = CelebrationView(frame: viewController.view.bounds, streak: streak,
+                                          mode: .milestone)
+        celebration.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        viewController.view.addSubview(celebration)
+        celebration.startAnimation()
+    }
+
     // MARK: - Private
 
+    enum Mode { case dailyTarget, badge, milestone }
+
     private let streakCount: Int
+    private let mode: Mode
+    private let badgeName: String
     private let containerView = UIView()
     private let emojiLabel = UILabel()
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let streakLabel = UILabel()
 
-    private init(frame: CGRect, streak: Int) {
+    private init(frame: CGRect, streak: Int, mode: Mode = .dailyTarget, badgeName: String = "") {
         self.streakCount = streak
+        self.mode = mode
+        self.badgeName = badgeName
         super.init(frame: frame)
         backgroundColor = UIColor.black.withAlphaComponent(0.6)
         alpha = 0
@@ -45,37 +68,54 @@ final class CelebrationView: UIView {
         containerView.alpha = 0
         addSubview(containerView)
 
-        // Trophy / medal emoji
-        emojiLabel.text = "🏅"
+        // Configure based on mode
+        switch mode {
+        case .dailyTarget:
+            emojiLabel.text = "🏅"
+            titleLabel.text = "Daily Target Complete!"
+            subtitleLabel.text = "You crushed both your calorie & distance goals"
+            if streakCount > 0 {
+                streakLabel.text = "🔥 \(streakCount) Day Streak!"
+            } else {
+                streakLabel.text = "🔥 Streak started!"
+            }
+        case .badge:
+            emojiLabel.text = "🏆"
+            titleLabel.text = "Badge Unlocked!"
+            subtitleLabel.text = badgeName
+            streakLabel.text = "⭐ Keep going for more!"
+        case .milestone:
+            let milestoneEmoji: String
+            switch streakCount {
+            case 100...: milestoneEmoji = "💎"
+            case 50...:  milestoneEmoji = "👑"
+            case 30...:  milestoneEmoji = "🌟"
+            case 14...:  milestoneEmoji = "⚡"
+            default:     milestoneEmoji = "🔥"
+            }
+            emojiLabel.text = milestoneEmoji
+            titleLabel.text = "\(streakCount) Day Streak!"
+            subtitleLabel.text = "Incredible dedication!"
+            streakLabel.text = "🏅 Milestone reached!"
+        }
+
         emojiLabel.font = .systemFont(ofSize: 64)
         emojiLabel.textAlignment = .center
         emojiLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        // Title
-        titleLabel.text = "Daily Target Complete!"
         titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
         titleLabel.textColor = .white
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        // Subtitle
-        subtitleLabel.text = "You crushed both your calorie & distance goals"
         subtitleLabel.font = .systemFont(ofSize: 13)
         subtitleLabel.textColor = .gray
         subtitleLabel.textAlignment = .center
         subtitleLabel.numberOfLines = 0
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        // Streak count
-        if streakCount > 0 {
-            streakLabel.text = "🔥 \(streakCount) Day Streak!"
-            streakLabel.font = .systemFont(ofSize: 18, weight: .semibold)
-            streakLabel.textColor = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1)
-        } else {
-            streakLabel.text = "🔥 Streak started!"
-            streakLabel.font = .systemFont(ofSize: 18, weight: .semibold)
-            streakLabel.textColor = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1)
-        }
+        streakLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        streakLabel.textColor = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1)
         streakLabel.textAlignment = .center
         streakLabel.translatesAutoresizingMaskIntoConstraints = false
 

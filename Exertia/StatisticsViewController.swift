@@ -84,6 +84,22 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         fetchRealUserName()
         fetchStatsData()
         fetchStreakCalendar()
+        animateCardsEntrance()
+    }
+
+    /// Staggered slide-up entrance for stats cards
+    private func animateCardsEntrance() {
+        let cards = stackContainer.arrangedSubviews
+        for (i, card) in cards.enumerated() {
+            card.alpha = 0
+            card.transform = CGAffineTransform(translationX: 0, y: 40)
+            UIView.animate(withDuration: 0.5, delay: Double(i) * 0.08,
+                           usingSpringWithDamping: 0.8, initialSpringVelocity: 0.3,
+                           options: .curveEaseOut, animations: {
+                card.alpha = 1
+                card.transform = .identity
+            })
+        }
     }
     
     // MARK: - Cached API data for display
@@ -592,6 +608,16 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         streakCollection.register(CalendarDayCell.self, forCellWithReuseIdentifier: "Cell")
         streakCollection.translatesAutoresizingMaskIntoConstraints = false
         
+        // Pulse animation on streak badge
+        let pulse = CABasicAnimation(keyPath: "transform.scale")
+        pulse.fromValue = 1.0
+        pulse.toValue = 1.1
+        pulse.duration = 1.0
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        fireImg.layer.add(pulse, forKey: "streakPulse")
+
         card.addSubview(fireImg)
         card.addSubview(txtStack)
         card.addSubview(calBtn)

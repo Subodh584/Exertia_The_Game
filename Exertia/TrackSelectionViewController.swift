@@ -444,21 +444,33 @@ class TrackSelectionViewController: UIViewController {
     }
     @IBAction func startButtonTapped(_ sender: UIButton) {
         view.endEditing(true)
-        let trackIds     = ["track_001", "track_002", "track_003"]
-        let displayNames = ["Earth's Twin", "Mars Colony", "Destroyer"]
-        DifficultySettings.shared.setSelectedTrack(
-            id: trackIds[currentIndex],
-            displayName: displayNames[currentIndex]
-        )
-        DifficultySettings.shared.setDistanceTarget(km: distanceKm)
 
-        let diffVC = DifficultySelectionViewController()
-        let nav    = UINavigationController(rootViewController: diffVC)
-        nav.setNavigationBarHidden(true, animated: false)
-        nav.modalPresentationStyle = .fullScreen
-        diffVC.onDifficultySelected = { [weak nav] in
-            nav?.pushViewController(CameraViewController(), animated: true)
+        // Bounce animation
+        UIView.animate(withDuration: 0.1, animations: {
+            sender.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        }) { _ in
+            UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.5,
+                           initialSpringVelocity: 0.5, options: [], animations: {
+                sender.transform = .identity
+            }) { [weak self] _ in
+                guard let self = self else { return }
+                let trackIds     = ["track_001", "track_002", "track_003"]
+                let displayNames = ["Earth's Twin", "Mars Colony", "Destroyer"]
+                DifficultySettings.shared.setSelectedTrack(
+                    id: trackIds[self.currentIndex],
+                    displayName: displayNames[self.currentIndex]
+                )
+                DifficultySettings.shared.setDistanceTarget(km: self.distanceKm)
+
+                let diffVC = DifficultySelectionViewController()
+                let nav    = UINavigationController(rootViewController: diffVC)
+                nav.setNavigationBarHidden(true, animated: false)
+                nav.modalPresentationStyle = .fullScreen
+                diffVC.onDifficultySelected = { [weak nav] in
+                    nav?.pushViewController(CameraViewController(), animated: true)
+                }
+                self.present(nav, animated: true)
+            }
         }
-        present(nav, animated: true)
     }
 }
