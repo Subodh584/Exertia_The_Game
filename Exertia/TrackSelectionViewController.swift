@@ -57,6 +57,7 @@ class TrackSelectionViewController: UIViewController {
     // MARK: — Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        AudioManager.shared.stopMusic()
 
         // Snapshot storyboard subviews BEFORE we add our programmatic controls.
         // Used in hideStoryboardGoalBox() to identify the original container.
@@ -74,6 +75,12 @@ class TrackSelectionViewController: UIViewController {
         // To re-enable: delete these two lines. No storyboard changes needed.
         prevTrackTapped.isHidden = true
         nextTrackTapped.isHidden = true
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        AudioManager.shared.stopMusic()
+        AudioManager.shared.applyMutedState(to: player)
     }
 
     override func viewDidLayoutSubviews() {
@@ -311,6 +318,7 @@ class TrackSelectionViewController: UIViewController {
 
     // MARK: — Arrow tap handlers
     @objc private func arrowTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.targetButton)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         view.endEditing(true)
         switch sender.tag {
@@ -422,6 +430,7 @@ class TrackSelectionViewController: UIViewController {
                 item.preferredForwardBufferDuration = 2.0
                 self.player = AVPlayer(playerItem: item)
                 self.player?.automaticallyWaitsToMinimizeStalling = false
+                AudioManager.shared.applyMutedState(to: self.player)
                 self.playerLayer = AVPlayerLayer(player: self.player)
                 self.videoContainerView.layoutIfNeeded()
                 self.playerLayer?.frame         = self.videoContainerView.bounds
@@ -440,15 +449,19 @@ class TrackSelectionViewController: UIViewController {
 
     // MARK: — IBActions
     @IBAction func prevTrackAction(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         if currentIndex > 0 { currentIndex -= 1; updateTrackUI() }
     }
     @IBAction func nextTrackAction(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         if currentIndex < tracks.count - 1 { currentIndex += 1; updateTrackUI() }
     }
     @IBAction func backButtonTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         dismiss(animated: true)
     }
     @IBAction func profileButtonTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         let vc = UIStoryboard(name: "Main", bundle: nil)
             .instantiateViewController(withIdentifier: "ProfileViewController")
         vc.modalPresentationStyle = .fullScreen
@@ -456,6 +469,7 @@ class TrackSelectionViewController: UIViewController {
         present(vc, animated: true)
     }
     @IBAction func startButtonTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.gameStart)
         view.endEditing(true)
 
         // Bounce animation

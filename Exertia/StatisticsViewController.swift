@@ -390,6 +390,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        AudioManager.shared.playAppMusic()
         refreshUI()
     }
     
@@ -800,9 +801,13 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         DispatchQueue.main.async { self.goToToday() }
     }
     
-    @objc func goBack() { self.dismiss(animated: true) }
+    @objc func goBack() {
+        AudioManager.shared.playEffect(.buttonTapped)
+        self.dismiss(animated: true)
+    }
     
     @objc func openProfile() {
+            AudioManager.shared.playEffect(.buttonTapped)
             let sb = UIStoryboard(name: "Main", bundle: nil)
             if let vc = sb.instantiateViewController(withIdentifier: "ProfileViewController") as? ProfileViewController {
                 vc.modalPresentationStyle = .fullScreen
@@ -811,8 +816,14 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             }
         }
     
-    @objc func openHistoryNormal() { openHistory(scrollToBest: false) }
-    @objc func openHistoryBest()   { openHistory(scrollToBest: true)  }
+    @objc func openHistoryNormal() {
+        AudioManager.shared.playEffect(.buttonTapped)
+        openHistory(scrollToBest: false)
+    }
+    @objc func openHistoryBest()   {
+        AudioManager.shared.playEffect(.buttonTapped)
+        openHistory(scrollToBest: true)
+    }
 
     private func openHistory(scrollToBest: Bool) {
         let vc = RunHistoryViewController()
@@ -823,6 +834,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
 
     @objc func openCalendar() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let vc = FullCalendarViewController()
         vc.activeDateStrings = activeDateStrings
         vc.sessionsByDate    = buildSessionsByDate()
@@ -1093,12 +1105,14 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
 
     @objc func clickedCal() {
+        AudioManager.shared.playEffect(.buttonTapped)
         showCalories = true
         animateToggle(b: calBtn, on: true, c: .neonPink)
         animateToggle(b: timeBtn, on: false, c: .gray)
         refreshUI()
     }
     @objc func clickedTime() {
+        AudioManager.shared.playEffect(.buttonTapped)
         showCalories = false
         animateToggle(b: calBtn, on: false, c: .gray)
         animateToggle(b: timeBtn, on: true, c: .neonYellow)
@@ -1107,6 +1121,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
     // MARK: - Edit Weight
     @objc func editWeightTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let modal = GlassEditModalController(
             title: "Update Weight",
             subtitle: "Track your weight journey with realistic goals",
@@ -1168,6 +1183,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
     // MARK: - Edit Targets
     @objc func editTargetsTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let modal = GlassEditModalController(
             title: "Daily Targets",
             subtitle: "Set your daily fitness goals",
@@ -1305,6 +1321,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     @objc func tapTab(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         let i = sender.tag
         moveIndicator(to: tabWrappers[i], animated: true)
         
@@ -1681,10 +1698,12 @@ class GlassEditModalController: UIViewController {
     }
 
     @objc private func cancelTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         animateOut()
     }
 
     @objc private func saveTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let values = textFields.map { $0.text ?? "" }
         // Validate all fields are non-empty
         guard values.allSatisfy({ !$0.isEmpty }) else {

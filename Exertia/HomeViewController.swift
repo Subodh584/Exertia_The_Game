@@ -50,6 +50,7 @@ class HomeViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        AudioManager.shared.playAppMusic()
         updateCharacterUI()
         if !applyCachedHomeSnapshot() {
             showLoadingState()
@@ -313,6 +314,7 @@ class HomeViewController: UIViewController {
     }
 
     @objc func tabTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         let index = sender.tag
         moveIndicator(to: tabWrappers[index], animated: true)
         
@@ -363,6 +365,7 @@ class HomeViewController: UIViewController {
     }
     
     @IBAction func profileButtonTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         let sb = UIStoryboard(name: "Main", bundle: nil)
         if let vc = sb.instantiateViewController(withIdentifier: "ProfileViewController") as? ProfileViewController {
             vc.modalPresentationStyle = .fullScreen
@@ -411,6 +414,7 @@ class HomeViewController: UIViewController {
     }
     
     @IBAction func playButtonTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         // Bounce animation on tap
         bounceButton(sender) {
             let storyboard = UIStoryboard(name: "Main", bundle: nil)
