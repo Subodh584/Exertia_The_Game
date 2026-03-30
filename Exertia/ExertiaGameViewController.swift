@@ -8,6 +8,7 @@
 
 import UIKit
 import SceneKit
+import SwiftUI
 
 class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
@@ -73,6 +74,11 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var totalDistanceCovered: Float = 0.0
     private let sceneKitUnitsToMeters: Float = 0.1
     private var endGameButton: UIButton?
+
+    // MARK: - Pause State
+    var isPaused: Bool = false
+    private var pauseMenuHostingController: UIViewController?
+    private var summaryHostingController: UIViewController?
 
     // Smooth movement interpolation
     private var currentSpeed: Float = 0.0  // Actual interpolated speed
@@ -1924,6 +1930,128 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.dismiss(animated: true)
         }
+    }
+
+    // MARK: - Pause / Resume
+
+    func pauseGame() {
+        guard isGameRunning, !isPaused else { return }
+        isPaused = true
+        isGameRunning = false
+        sceneView.isPlaying = false
+        showPauseMenu()
+    }
+
+    func resumeGame() {
+        guard isPaused else { return }
+        pauseMenuHostingController?.dismiss(animated: true) { [weak self] in
+            guard let self = self else { return }
+            self.pauseMenuHostingController = nil
+            self.isPaused = false
+            self.isGameRunning = true
+            self.sceneView.isPlaying = true
+        }
+    }
+
+    private func showPauseMenu() {
+        let elapsed      = Date().timeIntervalSince(sessionStartTime)
+        let currentCal   = Int(elapsed * (80.0 / 600.0))
+        let currentDistKm = Double(totalDistanceCovered) / 1000.0
+        let targetDistKm = DifficultySettings.shared.selectedDistanceKm
+        let targetCal    = Int((targetDistKm * 70).rounded())
+
+        let menuView = PauseMenuView(
+            currentCalories:   currentCal,
+            targetCalories:    targetCal,
+            currentDistanceKm: currentDistKm,
+            targetDistanceKm:  targetDistKm,
+            onResume:         { [weak self] in self?.resumeGame() },
+            onExitConfirmed:  { [weak self] in self?.exitAndShowSummary() }
+        )
+
+        let hosting = UIHostingController(rootView: menuView)
+        hosting.modalPresentationStyle = .overFullScreen
+        hosting.modalTransitionStyle   = .crossDissolve
+        hosting.view.backgroundColor   = .clear
+        present(hosting, animated: true)
+        pauseMenuHostingController = hosting
+    }
+
+    // MARK: - Exit → Summary
+
+    func exitAndShowSummary() {
+        // Stop the game
+        isGameRunning = false
+        isPaused      = false
+        sceneView.isPlaying = false
+
+        // Compute session stats
+        let durationSeconds = Int(Date().timeIntervalSince(sessionStartTime))
+        let durationMinutes = max(1, durationSeconds / 60)
+        let caloriesBurned  = Int(Double(durationSeconds) * (80.0 / 600.0))
+        let distanceMeters  = Double(totalDistanceCovered)
+        let avgSpeed: Double? = durationMinutes > 0 ? distanceMeters / Double(durationMinutes) : nil
+        let character  = GameData.shared.getSelectedPlayer()
+        let trackName  = DifficultySettings.shared.selectedTrackDisplayName
+        let trackId    = DifficultySettings.shared.selectedTrackId
+
+        let summaryData = SessionSummaryData(
+            trackName:        trackName,
+            durationSeconds:  durationSeconds,
+            caloriesBurned:   caloriesBurned,
+            completionStatus: "abandoned",
+            characterName:    character.name,
+            avgSpeedMpMin:    avgSpeed,
+            totalJumps:       totalJumps,
+            totalCrouches:    totalCrouches,
+            totalLeftLeans:   totalLeftLeans,
+            totalRightLeans:  totalRightLeans,
+            distanceMeters:   distanceMeters
+        )
+
+        // Capture values for the closure (avoid capturing self strongly in summary)
+        let capturedDuration  = durationMinutes
+        let capturedCal       = caloriesBurned
+        let capturedDist      = distanceMeters
+        let capturedSpeed     = avgSpeed
+        let capturedJumps     = totalJumps
+        let capturedCrouches  = totalCrouches
+        let capturedLeftLeans = totalLeftLeans
+        let capturedRightLeans = totalRightLeans
+        let capturedCharacter = character
+        let capturedTrack     = trackName
+        let capturedTrackId   = trackId
+
+        // Dismiss pause menu (no animation) then show summary
+        pauseMenuHostingController?.dismiss(animated: false)
+        pauseMenuHostingController = nil
+
+        let summaryView = SessionSummaryView(summary: summaryData) {
+            // Save to Supabase when user taps "Go Home"
+            GameData.shared.addSession(
+                duration:        capturedDuration,
+                calories:        capturedCal,
+                track:           capturedTrack,
+                trackId:         capturedTrackId,
+                characterId:     capturedCharacter.id,
+                jumps:           capturedJumps,
+                crouches:        capturedCrouches,
+                leftLeans:       capturedLeftLeans,
+                rightLeans:      capturedRightLeans,
+                distanceCovered: capturedDist,
+                averageSpeed:    capturedSpeed,
+                completionStatus: "abandoned"
+            )
+            // Navigate all the way home via notification (HomeVC dismisses its stack)
+            NotificationCenter.default.post(name: .navigateToHome, object: nil)
+        }
+
+        let hosting = UIHostingController(rootView: summaryView)
+        hosting.modalPresentationStyle = .overFullScreen
+        hosting.modalTransitionStyle   = .crossDissolve
+        hosting.view.backgroundColor   = UIColor(red: 0.02, green: 0.02, blue: 0.06, alpha: 1.0)
+        present(hosting, animated: true)
+        summaryHostingController = hosting
     }
 
     func startGame() {

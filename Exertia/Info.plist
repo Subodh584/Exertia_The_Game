@@ -5,12 +5,12 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.exertia.auth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>exertia</string>
 			</array>
-			<key>CFBundleURLName</key>
-			<string>com.exertia.auth</string>
 		</dict>
 	</array>
 	<key>UIAppFonts</key>
