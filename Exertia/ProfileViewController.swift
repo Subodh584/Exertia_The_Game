@@ -36,6 +36,8 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     private var completedBadges: [Badge] = []
     private var activeBadges: [Badge] { return isShowingCompleted ? completedBadges : inProgressBadges }
     private var realUserId: String = ""
+    /// Tracks which badges were already shown as completed (by title) to detect new ones
+    private static var knownCompletedBadges: Set<String> = []
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -102,9 +104,20 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
                 }
 
                 DispatchQueue.main.async {
+                    // Detect newly completed badges
+                    let completedTitles = Set(completed.map { $0.title })
+                    let newlyCompleted = completedTitles.subtracting(Self.knownCompletedBadges)
+                    Self.knownCompletedBadges = completedTitles
+
                     self.inProgressBadges = inProgress
                     self.completedBadges  = completed
                     self.tableView.reloadData()
+
+                    // Show celebration for first newly completed badge
+                    if let firstNew = newlyCompleted.first {
+                        CelebrationView.showBadge(on: self, badgeName: firstNew)
+                    }
+
                     print("✅ Badges: \(inProgress.count) in progress, \(completed.count) completed (catalogue: \(allBadges.count))")
                 }
             } catch {
@@ -574,6 +587,9 @@ class BadgeCell: UITableViewCell {
         
         progressLabel.font = .systemFont(ofSize: 10)
         progressLabel.textColor = .gray
+        progressLabel.lineBreakMode = .byClipping
+        progressLabel.adjustsFontSizeToFitWidth = true
+        progressLabel.minimumScaleFactor = 0.7
         progressLabel.translatesAutoresizingMaskIntoConstraints = false
         
         containerView.addSubview(iconContainer)
@@ -618,7 +634,7 @@ class BadgeCell: UITableViewCell {
             
             progressLabel.centerYAnchor.constraint(equalTo: progressBar.centerYAnchor),
             progressLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -15),
-            progressLabel.widthAnchor.constraint(equalToConstant: 45)
+            progressLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 45)
         ])
     }
     

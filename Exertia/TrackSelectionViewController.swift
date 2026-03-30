@@ -24,9 +24,7 @@ class TrackSelectionViewController: UIViewController {
     }
 
     let tracks: [Track] = [
-        Track(title: "Earth's Twin",  videoName: "planet_green"),
-        Track(title: "Mars Colony",   videoName: "mars_colony"),
-        Track(title: "Destroyer",     videoName: "destroyer_planet")
+        Track(title: "Nova-Station",  videoName: "Nova-Station"),
     ]
     var currentIndex = 0
 
@@ -407,22 +405,37 @@ class TrackSelectionViewController: UIViewController {
     }
 
     func playVideo(named videoName: String) {
-        guard let path = Bundle.main.path(forResource: videoName, ofType: "mp4") else { return }
+        guard let path = Bundle.main.path(forResource: videoName, ofType: "mp4") else {
+            print("❌ Video not found: \(videoName).mp4")
+            return
+        }
         player?.pause()
         playerLayer?.removeFromSuperlayer()
-        player = AVPlayer(url: URL(fileURLWithPath: path))
-        playerLayer = AVPlayerLayer(player: player)
-        videoContainerView.layoutIfNeeded()
-        playerLayer?.frame         = videoContainerView.bounds
-        playerLayer?.videoGravity  = .resizeAspectFill
-        playerLayer?.cornerRadius  = 20
-        playerLayer?.masksToBounds = true
-        videoContainerView.layer.addSublayer(playerLayer!)
-        player?.play()
-        NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: player?.currentItem, queue: .main
-        ) { [weak self] _ in self?.player?.seek(to: .zero); self?.player?.play() }
+
+        // Preload asset for faster playback start
+        let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+        asset.loadValuesAsynchronously(forKeys: ["playable"]) { [weak self] in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                let item = AVPlayerItem(asset: asset)
+                // Buffer ahead for smooth start
+                item.preferredForwardBufferDuration = 2.0
+                self.player = AVPlayer(playerItem: item)
+                self.player?.automaticallyWaitsToMinimizeStalling = false
+                self.playerLayer = AVPlayerLayer(player: self.player)
+                self.videoContainerView.layoutIfNeeded()
+                self.playerLayer?.frame         = self.videoContainerView.bounds
+                self.playerLayer?.videoGravity  = .resizeAspectFill
+                self.playerLayer?.cornerRadius  = 20
+                self.playerLayer?.masksToBounds = true
+                self.videoContainerView.layer.addSublayer(self.playerLayer!)
+                self.player?.play()
+                NotificationCenter.default.addObserver(
+                    forName: .AVPlayerItemDidPlayToEndTime,
+                    object: self.player?.currentItem, queue: .main
+                ) { [weak self] _ in self?.player?.seek(to: .zero); self?.player?.play() }
+            }
+        }
     }
 
     // MARK: — IBActions
@@ -444,21 +457,31 @@ class TrackSelectionViewController: UIViewController {
     }
     @IBAction func startButtonTapped(_ sender: UIButton) {
         view.endEditing(true)
-        let trackIds     = ["track_001", "track_002", "track_003"]
-        let displayNames = ["Earth's Twin", "Mars Colony", "Destroyer"]
-        DifficultySettings.shared.setSelectedTrack(
-            id: trackIds[currentIndex],
-            displayName: displayNames[currentIndex]
-        )
-        DifficultySettings.shared.setDistanceTarget(km: distanceKm)
 
-        let diffVC = DifficultySelectionViewController()
-        let nav    = UINavigationController(rootViewController: diffVC)
-        nav.setNavigationBarHidden(true, animated: false)
-        nav.modalPresentationStyle = .fullScreen
-        diffVC.onDifficultySelected = { [weak nav] in
-            nav?.pushViewController(CameraViewController(), animated: true)
+        // Bounce animation
+        UIView.animate(withDuration: 0.1, animations: {
+            sender.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        }) { _ in
+            UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.5,
+                           initialSpringVelocity: 0.5, options: [], animations: {
+                sender.transform = .identity
+            }) { [weak self] _ in
+                guard let self = self else { return }
+                DifficultySettings.shared.setSelectedTrack(
+                    id: "nova_station",
+                    displayName: "Nova-Station"
+                )
+                DifficultySettings.shared.setDistanceTarget(km: self.distanceKm)
+
+                let diffVC = DifficultySelectionViewController()
+                let nav    = UINavigationController(rootViewController: diffVC)
+                nav.setNavigationBarHidden(true, animated: false)
+                nav.modalPresentationStyle = .fullScreen
+                diffVC.onDifficultySelected = { [weak nav] in
+                    nav?.pushViewController(CameraViewController(), animated: true)
+                }
+                self.present(nav, animated: true)
+            }
         }
-        present(nav, animated: true)
     }
 }

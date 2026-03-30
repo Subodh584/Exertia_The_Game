@@ -60,10 +60,10 @@ class CalendarDayCell: UICollectionViewCell {
             dateLabel.topAnchor.constraint(equalTo: dayLabel.bottomAnchor, constant: 4),
             dateLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-            medalImageView.topAnchor.constraint(equalTo: dayLabel.bottomAnchor, constant: 2),
+            medalImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2),
             medalImageView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            medalImageView.widthAnchor.constraint(equalToConstant: 28),
-            medalImageView.heightAnchor.constraint(equalToConstant: 28)
+            medalImageView.widthAnchor.constraint(equalToConstant: 36),
+            medalImageView.heightAnchor.constraint(equalToConstant: 36)
         ])
     }
 
@@ -80,18 +80,19 @@ class CalendarDayCell: UICollectionViewCell {
         medalImageView.image = nil
         medalImageView.isHidden = true
         dateLabel.isHidden = false
+        dayLabel.isHidden = false
 
         if targetMet {
-            // Replace date number with medal
+            // Replace both day label and date with medal
             dateLabel.isHidden = true
+            dayLabel.isHidden = true
             medalImageView.isHidden = false
             medalImageView.image = UIImage(systemName: "medal.fill")
-            medalImageView.tintColor = .neonYellow
 
             if isToday {
-                dayLabel.textColor = .neonPink
+                medalImageView.tintColor = .neonPink
             } else {
-                dayLabel.textColor = UIColor.white.withAlphaComponent(0.7)
+                medalImageView.tintColor = .neonYellow
             }
         } else if isToday {
             dayLabel.textColor = .neonPink

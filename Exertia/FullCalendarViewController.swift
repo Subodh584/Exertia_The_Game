@@ -369,16 +369,44 @@ class FullCalendarViewController: UIViewController,
     // MARK: Month nav
     @objc private func prevMonth() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        currentMonthDate = istCalendar.date(byAdding: .month, value: -1, to: currentMonthDate) ?? Date()
-        updateMonthLabel()
-        collectionView.reloadData()
+        animateMonthTransition(direction: .right) {
+            self.currentMonthDate = self.istCalendar.date(byAdding: .month, value: -1, to: self.currentMonthDate) ?? Date()
+            self.updateMonthLabel()
+            self.collectionView.reloadData()
+        }
     }
 
     @objc private func nextMonth() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        currentMonthDate = istCalendar.date(byAdding: .month, value: 1, to: currentMonthDate) ?? Date()
-        updateMonthLabel()
-        collectionView.reloadData()
+        animateMonthTransition(direction: .left) {
+            self.currentMonthDate = self.istCalendar.date(byAdding: .month, value: 1, to: self.currentMonthDate) ?? Date()
+            self.updateMonthLabel()
+            self.collectionView.reloadData()
+        }
+    }
+
+    private enum SlideDirection { case left, right }
+
+    private func animateMonthTransition(direction: SlideDirection, update: @escaping () -> Void) {
+        let offset: CGFloat = direction == .left ? -collectionView.bounds.width : collectionView.bounds.width
+
+        // Slide out current content
+        UIView.animate(withDuration: 0.15, delay: 0, options: .curveEaseIn, animations: {
+            self.collectionView.transform = CGAffineTransform(translationX: offset, y: 0)
+            self.collectionView.alpha = 0
+        }) { _ in
+            // Update data while off-screen
+            update()
+
+            // Position on opposite side
+            self.collectionView.transform = CGAffineTransform(translationX: -offset, y: 0)
+
+            // Slide in new content
+            UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut, animations: {
+                self.collectionView.transform = .identity
+                self.collectionView.alpha = 1
+            })
+        }
     }
 
     private func updateMonthLabel() {

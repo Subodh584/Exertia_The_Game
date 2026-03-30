@@ -262,10 +262,7 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
                 let completed = sessions.filter { $0.completion_status == "completed" }
                 let converted: [GameSession] = completed.compactMap { s in
                     let date = ISODateParser.date(from: s.created_at ?? "") ?? Date()
-                    let track = s.track_id?
-                        .replacingOccurrences(of: "track_", with: "")
-                        .replacingOccurrences(of: "_", with: " ")
-                        .capitalized ?? "Unknown"
+                    let track = "Nova-Station"
                     return GameSession(
                         date: date,
                         durationMinutes:  s.duration_minutes ?? 0,

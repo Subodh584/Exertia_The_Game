@@ -61,8 +61,10 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private let weightStartLabel = UILabel()
     private let weightEndLabel = UILabel()
 
-    // Streak label reference
+    // Streak label references
     private var streakCountLabel: UILabel?
+    private var streakSubtitleLabel: UILabel?
+    private var bestStreakLabel: UILabel?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -82,6 +84,22 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         fetchRealUserName()
         fetchStatsData()
         fetchStreakCalendar()
+        animateCardsEntrance()
+    }
+
+    /// Staggered slide-up entrance for stats cards
+    private func animateCardsEntrance() {
+        let cards = stackContainer.arrangedSubviews
+        for (i, card) in cards.enumerated() {
+            card.alpha = 0
+            card.transform = CGAffineTransform(translationX: 0, y: 40)
+            UIView.animate(withDuration: 0.5, delay: Double(i) * 0.08,
+                           usingSpringWithDamping: 0.8, initialSpringVelocity: 0.3,
+                           options: .curveEaseOut, animations: {
+                card.alpha = 1
+                card.transform = .identity
+            })
+        }
     }
     
     // MARK: - Cached API data for display
@@ -110,6 +128,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var apiCurrentWeight: Double? = nil
     private var apiTargetWeight: Double? = nil
     private var apiCurrentStreak: Int = 0
+    private var apiLongestStreak: Int = 0
     // Dates from streak-calendar API where the daily target was met
     private var activeDateStrings: Set<String> = []
     // All completed sessions — used to build day-by-day stats for the calendar
@@ -120,14 +139,17 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
             Task {
                 do {
-                    let user = try await SupabaseManager.shared.getUser(userId: userId)
+                    async let userFetch = SupabaseManager.shared.getUser(userId: userId)
+                    async let streakFetch = SupabaseManager.shared.calculateLiveStreak(userId: userId)
+                    let (user, liveStreak) = try await (userFetch, streakFetch)
                     DispatchQueue.main.async {
                         self.nameLabel.text = user.display_name ?? user.username ?? "Player"
                         self.apiDailyTargetCalories = user.daily_target_calories ?? 500
                         self.apiDailyTargetDistance = user.daily_target_distance ?? 5.0
                         self.apiCurrentWeight = user.current_weight
                         self.apiTargetWeight = user.target_weight
-                        self.apiCurrentStreak = user.current_streak ?? 0
+                        self.apiLongestStreak = user.longest_streak ?? 0
+                        self.apiCurrentStreak = liveStreak
                         self.refreshUI()
                     }
                 } catch {
@@ -313,6 +335,13 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         view.addSubview(tabContainer)
         mainScroll.translatesAutoresizingMaskIntoConstraints = false
         tabContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        // Pull-to-refresh
+        let refreshControl = UIRefreshControl()
+        refreshControl.tintColor = .neonPink
+        refreshControl.addTarget(self, action: #selector(handlePullToRefresh), for: .valueChanged)
+        mainScroll.refreshControl = refreshControl
+
         mainScroll.addSubview(stackContainer)
         stackContainer.translatesAutoresizingMaskIntoConstraints = false
         stackContainer.axis = .vertical
@@ -510,7 +539,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             editBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
             editBtn.widthAnchor.constraint(equalToConstant: 28),
             editBtn.heightAnchor.constraint(equalToConstant: 28),
-            weightBar.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 14),
+            weightBar.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 28),
             weightBar.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
             weightBar.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
             weightBar.heightAnchor.constraint(equalToConstant: 12),
@@ -530,7 +559,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     func addStreakView() {
-        let card = glassCard(h: 195)
+        let card = glassCard(h: 155)
         card.clipsToBounds = false
 
         let fireImg = UIImageView(image: UIImage(named: "Streaks"))
@@ -547,8 +576,15 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         t2.text = "Keep going, you are almost there"
         t2.font = .systemFont(ofSize: 12)
         t2.textColor = .gray
+        streakSubtitleLabel = t2
 
-        let txtStack = UIStackView(arrangedSubviews: [t1, t2])
+        let bestLbl = UILabel()
+        bestLbl.text = "Best: 0 days"
+        bestLbl.font = .systemFont(ofSize: 11, weight: .medium)
+        bestLbl.textColor = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 0.8)
+        bestStreakLabel = bestLbl
+
+        let txtStack = UIStackView(arrangedSubviews: [t1, t2, bestLbl])
         txtStack.axis = .vertical
         txtStack.spacing = 2
         txtStack.alignment = .center
@@ -568,7 +604,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .horizontal
-        layout.itemSize = CGSize(width: 50, height: 75)
+        layout.itemSize = CGSize(width: 50, height: 50)
         layout.minimumLineSpacing = 10
         
         streakCollection = UICollectionView(frame: .zero, collectionViewLayout: layout)
@@ -579,6 +615,16 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         streakCollection.register(CalendarDayCell.self, forCellWithReuseIdentifier: "Cell")
         streakCollection.translatesAutoresizingMaskIntoConstraints = false
         
+        // Pulse animation on streak badge
+        let pulse = CABasicAnimation(keyPath: "transform.scale")
+        pulse.fromValue = 1.0
+        pulse.toValue = 1.1
+        pulse.duration = 1.0
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        fireImg.layer.add(pulse, forKey: "streakPulse")
+
         card.addSubview(fireImg)
         card.addSubview(txtStack)
         card.addSubview(calBtn)
@@ -600,10 +646,10 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             txtStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 42),
             txtStack.centerXAnchor.constraint(equalTo: card.centerXAnchor),
 
-            streakCollection.topAnchor.constraint(equalTo: txtStack.bottomAnchor, constant: 12),
+            streakCollection.topAnchor.constraint(equalTo: txtStack.bottomAnchor, constant: 6),
             streakCollection.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 15),
             streakCollection.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -15),
-            streakCollection.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -10)
+            streakCollection.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -4)
         ])
         stackContainer.addArrangedSubview(card)
         DispatchQueue.main.async { self.goToToday() }
@@ -847,20 +893,30 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
         // Weight goal from user profile
         if let current = apiCurrentWeight, let target = apiTargetWeight, target > 0 {
-            weightStartLabel.text = String(format: "%.0f kg", current)
-            weightEndLabel.text = String(format: "%.0f kg", target)
+            // Determine range: start = max(current, target), end = min(current, target)
+            let startWeight = max(current, target)  // heavier end (left)
+            let endWeight = min(current, target)    // lighter end (right/goal)
+            weightStartLabel.text = String(format: "%.0f kg", startWeight)
+            weightEndLabel.text = String(format: "%.0f kg", endWeight)
+
+            let totalRange = startWeight - endWeight
             let diff = current - target
-            if diff > 0 {
+            if abs(diff) < 0.1 {
+                weightMsg.text = "Goal reached! 🎉"
+            } else if diff > 0 {
                 weightMsg.text = String(format: "%.1f kg to go!", diff)
-            } else if diff == 0 {
-                weightMsg.text = "Goal reached!"
             } else {
                 weightMsg.text = String(format: "%.1f kg below target!", abs(diff))
             }
-            // Progress: 1.0 when current == target, 0.0 when far away
-            let maxDiff = max(current, target) * 0.2 // 20% of max as reference range
-            let progress = maxDiff > 0 ? Float(1.0 - min(abs(diff) / maxDiff, 1.0)) : 0
-            weightBar.progress = max(progress, 0.05)
+
+            // Progress: how far along the range from start to target
+            let progress: Float
+            if totalRange > 0 {
+                progress = Float((startWeight - current) / totalRange)
+            } else {
+                progress = 1.0
+            }
+            weightBar.progress = max(min(progress, 1.0), 0.05)
             bubbleLabel.text = String(format: "%.1f", current)
         } else {
             weightStartLabel.text = "-- kg"
@@ -871,10 +927,26 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         }
         moveBubble()
 
-        // Update streak label with real streak from user profile
+        // Update streak labels with live values
         streakCountLabel?.text = "\(apiCurrentStreak) Day Streak!"
+        bestStreakLabel?.text = "Best: \(apiLongestStreak) days"
+        if apiCurrentStreak == 0 {
+            streakSubtitleLabel?.text = "Start a new streak today!"
+        } else if apiCurrentStreak >= apiLongestStreak {
+            streakSubtitleLabel?.text = "You're on your best streak! 🔥"
+        } else {
+            streakSubtitleLabel?.text = "Keep going, you are almost there"
+        }
     }
     
+    @objc private func handlePullToRefresh() {
+        fetchStatsData()
+        fetchStreakCalendar()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.mainScroll.refreshControl?.endRefreshing()
+        }
+    }
+
     @objc func clickedCal() {
         showCalories = true
         animateToggle(b: calBtn, on: true, c: .neonPink)

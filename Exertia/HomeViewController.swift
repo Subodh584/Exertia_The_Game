@@ -21,6 +21,7 @@ class HomeViewController: UIViewController {
     private let currentTabIndex = 0
 
     let gameData = GameData.shared
+    private var hasShownCelebrationToday = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -61,11 +62,12 @@ class HomeViewController: UIViewController {
 
         Task {
             do {
-                async let statsFetch = SupabaseManager.shared.getUserStats(userId: userId)
-                async let userFetch  = SupabaseManager.shared.getUser(userId: userId)
-                async let sessFetch  = SupabaseManager.shared.getUserSessions(userId: userId)
+                async let statsFetch  = SupabaseManager.shared.getUserStats(userId: userId)
+                async let userFetch   = SupabaseManager.shared.getUser(userId: userId)
+                async let sessFetch   = SupabaseManager.shared.getUserSessions(userId: userId)
+                async let streakFetch = SupabaseManager.shared.calculateLiveStreak(userId: userId)
 
-                let (stats, user, sessions) = try await (statsFetch, userFetch, sessFetch)
+                let (stats, user, sessions, liveStreak) = try await (statsFetch, userFetch, sessFetch, streakFetch)
 
                 // Filter completed sessions whose created_at falls on TODAY in IST
                 let todaySessions = sessions.filter { s in
@@ -81,21 +83,45 @@ class HomeViewController: UIViewController {
                 // Update local GameData cache
                 self.gameData.stats.calories       = stats.total_calories
                 self.gameData.stats.runTimeMinutes = stats.total_minutes
-                self.gameData.stats.currentStreak  = user.current_streak ?? 0
+                self.gameData.stats.currentStreak  = liveStreak
+
+                // Check if daily target is met (both calories AND distance)
+                let dailyCalTarget = user.daily_target_calories ?? 500
+                let dailyDistTarget = user.daily_target_distance ?? 5.0
+                let targetMetNow = todayCalories >= dailyCalTarget && todayDistance >= dailyDistTarget
 
                 DispatchQueue.main.async {
-                    // Top-left streak + TODAY's cal badges (resets at IST midnight)
-                    self.streakLabel.text   = "\(user.current_streak ?? 0)"
-                    self.currencyLabel.text = "\(todayCalories)"
+                    self.removeShimmers()
+                    // Animate counters from current value to new value
+                    self.animateCounter(label: self.streakLabel, to: liveStreak, suffix: "")
+                    self.animateCounter(label: self.currencyLabel, to: todayCalories, suffix: "")
 
                     // "Today's stats" row — IST-filtered, resets at IST midnight
                     if todaySessions.isEmpty {
                         self.distanceLabel.text = "0 km"
                         self.caloriesLabel.text  = "0 cal"
                     } else {
-                        self.distanceLabel.text = String(format: "%.1f km", todayDistance)
-                        self.caloriesLabel.text  = "\(todayCalories) cal"
+                        self.animateDecimalCounter(label: self.distanceLabel, to: todayDistance, suffix: " km")
+                        self.animateCounter(label: self.caloriesLabel, to: todayCalories, suffix: " cal")
                     }
+
+                    // Pulse streak icon if streak is active
+                    if liveStreak > 0 {
+                        self.startStreakPulse()
+                    }
+
+                    // Show celebration if target was just met
+                    if targetMetNow && !self.hasShownCelebrationToday {
+                        self.hasShownCelebrationToday = true
+                        // Check for streak milestones first
+                        let milestones = [7, 14, 30, 50, 100]
+                        if milestones.contains(liveStreak) {
+                            CelebrationView.showMilestone(on: self, streak: liveStreak)
+                        } else {
+                            CelebrationView.show(on: self, streak: liveStreak)
+                        }
+                    }
+
                     print("✅ Home UI: today (IST) — \(String(format: "%.1f", todayDistance)) km, \(todayCalories) cal (\(todaySessions.count) sessions)")
                 }
             } catch {
@@ -281,15 +307,95 @@ class HomeViewController: UIViewController {
         streakLabel.text = "--"
         distanceLabel.text = "--"
         caloriesLabel.text = "-- cal"
+        // Add shimmer while loading
+        [currencyLabel, streakLabel, distanceLabel, caloriesLabel].forEach { addShimmer(to: $0) }
+    }
+
+    private func addShimmer(to view: UIView?) {
+        guard let view = view else { return }
+        view.layer.removeAnimation(forKey: "shimmer")
+        let shimmer = CABasicAnimation(keyPath: "opacity")
+        shimmer.fromValue = 1.0
+        shimmer.toValue = 0.3
+        shimmer.duration = 0.8
+        shimmer.autoreverses = true
+        shimmer.repeatCount = .infinity
+        shimmer.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        view.layer.add(shimmer, forKey: "shimmer")
+    }
+
+    private func removeShimmers() {
+        [currencyLabel, streakLabel, distanceLabel, caloriesLabel].forEach {
+            $0?.layer.removeAnimation(forKey: "shimmer")
+        }
     }
     
     @IBAction func playButtonTapped(_ sender: UIButton) {
-        let storyboard = UIStoryboard(name: "Main", bundle: nil)
-        if let trackVC = storyboard.instantiateViewController(withIdentifier: "TrackSelectionViewController") as? TrackSelectionViewController {
-            
-            trackVC.modalPresentationStyle = .fullScreen
-            trackVC.modalTransitionStyle = .crossDissolve
-            self.present(trackVC, animated: true, completion: nil)
+        // Bounce animation on tap
+        bounceButton(sender) {
+            let storyboard = UIStoryboard(name: "Main", bundle: nil)
+            if let trackVC = storyboard.instantiateViewController(withIdentifier: "TrackSelectionViewController") as? TrackSelectionViewController {
+                trackVC.modalPresentationStyle = .fullScreen
+                trackVC.modalTransitionStyle = .crossDissolve
+                self.present(trackVC, animated: true, completion: nil)
+            }
+        }
+    }
+
+    // MARK: - Animations
+
+    /// Animates an integer counter from 0 to target value
+    private func animateCounter(label: UILabel, to target: Int, suffix: String, duration: Double = 0.8) {
+        guard target > 0 else { label.text = "0\(suffix)"; return }
+        let steps = min(target, 30)
+        let interval = duration / Double(steps)
+        for i in 0...steps {
+            let value = Int(Double(target) * Double(i) / Double(steps))
+            DispatchQueue.main.asyncAfter(deadline: .now() + interval * Double(i)) {
+                label.text = "\(value)\(suffix)"
+            }
+        }
+    }
+
+    /// Animates a decimal counter (e.g. distance)
+    private func animateDecimalCounter(label: UILabel, to target: Double, suffix: String, duration: Double = 0.8) {
+        guard target > 0 else { label.text = "0.0\(suffix)"; return }
+        let steps = 30
+        let interval = duration / Double(steps)
+        for i in 0...steps {
+            let value = target * Double(i) / Double(steps)
+            DispatchQueue.main.asyncAfter(deadline: .now() + interval * Double(i)) {
+                label.text = String(format: "%.1f\(suffix)", value)
+            }
+        }
+    }
+
+    /// Pulse animation on the streak icon when streak > 0
+    private func startStreakPulse() {
+        guard let streakPill = streakLabel.superview else { return }
+        // Remove existing pulse if any
+        streakPill.layer.removeAnimation(forKey: "streakPulse")
+        let pulse = CABasicAnimation(keyPath: "transform.scale")
+        pulse.fromValue = 1.0
+        pulse.toValue = 1.08
+        pulse.duration = 0.8
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        streakPill.layer.add(pulse, forKey: "streakPulse")
+    }
+
+    /// Bounce effect for buttons
+    private func bounceButton(_ button: UIView, completion: @escaping () -> Void) {
+        UIView.animate(withDuration: 0.1, animations: {
+            button.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        }) { _ in
+            UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.5,
+                           initialSpringVelocity: 0.5, options: [], animations: {
+                button.transform = .identity
+            }) { _ in
+                completion()
+            }
         }
     }
 }

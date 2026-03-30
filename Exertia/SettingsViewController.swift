@@ -473,7 +473,7 @@ class SettingsViewController: UIViewController {
 
         Task {
             do {
-                try await SupabaseManager.shared.changePassword(newPassword: newPw)
+                try await SupabaseManager.shared.changePassword(currentPassword: current, newPassword: newPw)
                 await MainActor.run {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                     self.showAlert("Password Updated", "Your password has been changed successfully.") {
@@ -506,23 +506,48 @@ class SettingsViewController: UIViewController {
     }
 
     @objc private func deleteTapped() {
-        let modal = DeleteConfirmModalController { [weak self] password in
-            guard let self = self else { return }
-            Task {
-                do {
-                    try await SupabaseManager.shared.deleteAccount()
-                    await MainActor.run { self.navigateToLogin() }
-                } catch {
-                    await MainActor.run {
-                        UINotificationFeedbackGenerator().notificationOccurred(.error)
-                        self.showAlert("Could Not Delete Account", error.localizedDescription)
+        if SupabaseManager.shared.isOAuthUser {
+            // OAuth user — re-authenticate with Google before deleting
+            let alert = UIAlertController(
+                title: "Delete Account",
+                message: "This action is permanent. You will be asked to sign in with Google again to confirm your identity.",
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Continue", style: .destructive) { [weak self] _ in
+                guard let self = self else { return }
+                Task {
+                    do {
+                        try await SupabaseManager.shared.deleteAccountOAuth()
+                        await MainActor.run { self.navigateToLogin() }
+                    } catch {
+                        await MainActor.run {
+                            UINotificationFeedbackGenerator().notificationOccurred(.error)
+                            self.showAlert("Could Not Delete Account", error.localizedDescription)
+                        }
+                    }
+                }
+            })
+            present(alert, animated: true)
+        } else {
+            // Email+password user — ask for password
+            let modal = DeleteConfirmModalController { [weak self] password in
+                guard let self = self else { return }
+                Task {
+                    do {
+                        try await SupabaseManager.shared.deleteAccount(password: password)
+                        await MainActor.run { self.navigateToLogin() }
+                    } catch {
+                        await MainActor.run {
+                            UINotificationFeedbackGenerator().notificationOccurred(.error)
+                            self.showAlert("Could Not Delete Account", error.localizedDescription)
+                        }
                     }
                 }
             }
+            modal.modalPresentationStyle = .overFullScreen
+            modal.modalTransitionStyle   = .crossDissolve
+            present(modal, animated: true)
         }
-        modal.modalPresentationStyle = .overFullScreen
-        modal.modalTransitionStyle   = .crossDissolve
-        present(modal, animated: true)
     }
 
     private func navigateToLogin() {

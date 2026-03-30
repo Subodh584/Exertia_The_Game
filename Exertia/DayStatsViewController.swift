@@ -19,10 +19,8 @@ class DayStatsViewController: UIViewController {
         let f = DateFormatter(); f.dateFormat = "h:mm a"; f.timeZone = istTZ; return f
     }()
     // Use ISODateParser.date(from:) for flexible ISO8601 parsing
-    private static let trackFmt: (String) -> String = { raw in
-        raw.replacingOccurrences(of: "track_", with: "")
-           .replacingOccurrences(of: "_", with: " ")
-           .capitalized
+    private static let trackFmt: (String) -> String = { _ in
+        "Nova-Station"
     }
 
     // MARK: Lifecycle
