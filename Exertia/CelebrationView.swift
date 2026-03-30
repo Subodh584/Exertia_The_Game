@@ -105,9 +105,20 @@ final class CelebrationView: UIView {
             streakLabel.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -28)
         ])
 
-        // Tap to dismiss
-        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissTapped))
-        addGestureRecognizer(tap)
+        // Close button (X) at top-right of card
+        let closeBtn = UIButton(type: .system)
+        closeBtn.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        closeBtn.tintColor = UIColor.white.withAlphaComponent(0.6)
+        closeBtn.translatesAutoresizingMaskIntoConstraints = false
+        closeBtn.addTarget(self, action: #selector(dismissTapped), for: .touchUpInside)
+        containerView.addSubview(closeBtn)
+
+        NSLayoutConstraint.activate([
+            closeBtn.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 12),
+            closeBtn.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
+            closeBtn.widthAnchor.constraint(equalToConstant: 28),
+            closeBtn.heightAnchor.constraint(equalToConstant: 28)
+        ])
     }
 
     // MARK: - Confetti Emitter
@@ -190,10 +201,7 @@ final class CelebrationView: UIView {
             self.emojiLabel.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
         })
 
-        // Auto-dismiss after 4 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak self] in
-            self?.dismissAnimation()
-        }
+        // No auto-dismiss — user must tap the X button
     }
 
     @objc private func dismissTapped() {

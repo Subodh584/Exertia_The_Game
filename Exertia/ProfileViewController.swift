@@ -574,6 +574,9 @@ class BadgeCell: UITableViewCell {
         
         progressLabel.font = .systemFont(ofSize: 10)
         progressLabel.textColor = .gray
+        progressLabel.lineBreakMode = .byClipping
+        progressLabel.adjustsFontSizeToFitWidth = true
+        progressLabel.minimumScaleFactor = 0.7
         progressLabel.translatesAutoresizingMaskIntoConstraints = false
         
         containerView.addSubview(iconContainer)
@@ -618,7 +621,7 @@ class BadgeCell: UITableViewCell {
             
             progressLabel.centerYAnchor.constraint(equalTo: progressBar.centerYAnchor),
             progressLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -15),
-            progressLabel.widthAnchor.constraint(equalToConstant: 45)
+            progressLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 45)
         ])
     }
     
