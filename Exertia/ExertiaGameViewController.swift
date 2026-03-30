@@ -817,11 +817,49 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                 
                 // DAE exports from Blender lose their PBR/Metallic nodes. Let's restore them!
                 if let materials = node.geometry?.materials {
+
+                    // Detect face/visor region by node name or material name
+                    let nodeName = (node.name ?? "").lowercased()
+                    let isFaceNode = nodeName.contains("visor")     ||
+                                     nodeName.contains("face")      ||
+                                     nodeName.contains("glass")     ||
+                                     nodeName.contains("lens")      ||
+                                     nodeName.contains("mask")      ||
+                                     nodeName.contains("faceplate") ||
+                                     nodeName.contains("shield")    ||
+                                     nodeName.contains("head")
+
                     for material in materials {
                         material.lightingModel = .physicallyBased
                         material.metalness.contents = 0.8 // High metal finish
                         material.roughness.contents = 0.2 // Smooth reflection
                         material.isDoubleSided = true
+
+                        // Check material name for face/dark keywords
+                        let matName = (material.name ?? "").lowercased()
+                        let isFaceMaterial = matName.contains("visor")  ||
+                                             matName.contains("face")   ||
+                                             matName.contains("glass")  ||
+                                             matName.contains("lens")   ||
+                                             matName.contains("dark")   ||
+                                             matName.contains("black")
+
+                        // Check if diffuse is a plain dark/black UIColor
+                        var isDarkColor = false
+                        if let col = material.diffuse.contents as? UIColor {
+                            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                            col.getRed(&r, green: &g, blue: &b, alpha: &a)
+                            isDarkColor = (0.299 * r + 0.587 * g + 0.114 * b) < 0.15
+                        }
+
+                        // Force the entire face region + any black material to white
+                        // This eliminates z-fighting between the helmet and visor surfaces
+                        if isFaceNode || isFaceMaterial || isDarkColor {
+                            material.diffuse.contents   = UIColor.white
+                            material.specular.contents  = UIColor.white
+                            material.metalness.contents = 0.9
+                            material.roughness.contents = 0.1
+                        }
                     }
                 }
             }
@@ -1867,17 +1905,24 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
 
     private func setupEndGameButton() {
         let button = UIButton(type: .system)
-        button.setTitle("  END  ", for: .normal)
+
+        // Pause icon + label
+        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+        let icon = UIImage(systemName: "pause.fill", withConfiguration: config)
+        button.setImage(icon, for: .normal)
+        button.setTitle("  PAUSE", for: .normal)
         button.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .bold)
-        button.setTitleColor(UIColor(red: 1.0, green: 0.15, blue: 0.25, alpha: 1.0), for: .normal)
-        button.backgroundColor = UIColor(red: 0.12, green: 0.02, blue: 0.04, alpha: 0.9)
+        button.tintColor = UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0)
+        button.setTitleColor(UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0), for: .normal)
+        button.backgroundColor = UIColor(red: 0.0, green: 0.12, blue: 0.15, alpha: 0.9)
         button.layer.cornerRadius = 10
         button.layer.borderWidth = 1.0
-        button.layer.borderColor = UIColor(red: 1.0, green: 0.15, blue: 0.25, alpha: 0.5).cgColor
-        button.layer.shadowColor = UIColor(red: 1.0, green: 0.15, blue: 0.25, alpha: 1.0).cgColor
+        button.layer.borderColor = UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 0.4).cgColor
+        button.layer.shadowColor = UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0).cgColor
         button.layer.shadowRadius = 6
-        button.layer.shadowOpacity = 0.4
+        button.layer.shadowOpacity = 0.35
         button.layer.shadowOffset = .zero
+        button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 12)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(endGameButtonTapped), for: .touchUpInside)
         view.addSubview(button)
@@ -1886,13 +1931,13 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         NSLayoutConstraint.activate([
             button.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             button.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            button.heightAnchor.constraint(equalToConstant: 32)
+            button.heightAnchor.constraint(equalToConstant: 36)
         ])
     }
 
     @objc private func endGameButtonTapped() {
-        guard isGameRunning else { return }
-        finalizeAndSaveSession(completionStatus: "completed")
+        guard isGameRunning, !isPaused else { return }
+        pauseGame()
     }
 
     private func finalizeAndSaveSession(completionStatus: String) {
