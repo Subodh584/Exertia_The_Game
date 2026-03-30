@@ -335,6 +335,13 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         view.addSubview(tabContainer)
         mainScroll.translatesAutoresizingMaskIntoConstraints = false
         tabContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        // Pull-to-refresh
+        let refreshControl = UIRefreshControl()
+        refreshControl.tintColor = .neonPink
+        refreshControl.addTarget(self, action: #selector(handlePullToRefresh), for: .valueChanged)
+        mainScroll.refreshControl = refreshControl
+
         mainScroll.addSubview(stackContainer)
         stackContainer.translatesAutoresizingMaskIntoConstraints = false
         stackContainer.axis = .vertical
@@ -886,20 +893,30 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
         // Weight goal from user profile
         if let current = apiCurrentWeight, let target = apiTargetWeight, target > 0 {
-            weightStartLabel.text = String(format: "%.0f kg", current)
-            weightEndLabel.text = String(format: "%.0f kg", target)
+            // Determine range: start = max(current, target), end = min(current, target)
+            let startWeight = max(current, target)  // heavier end (left)
+            let endWeight = min(current, target)    // lighter end (right/goal)
+            weightStartLabel.text = String(format: "%.0f kg", startWeight)
+            weightEndLabel.text = String(format: "%.0f kg", endWeight)
+
+            let totalRange = startWeight - endWeight
             let diff = current - target
-            if diff > 0 {
+            if abs(diff) < 0.1 {
+                weightMsg.text = "Goal reached! 🎉"
+            } else if diff > 0 {
                 weightMsg.text = String(format: "%.1f kg to go!", diff)
-            } else if diff == 0 {
-                weightMsg.text = "Goal reached!"
             } else {
                 weightMsg.text = String(format: "%.1f kg below target!", abs(diff))
             }
-            // Progress: 1.0 when current == target, 0.0 when far away
-            let maxDiff = max(current, target) * 0.2 // 20% of max as reference range
-            let progress = maxDiff > 0 ? Float(1.0 - min(abs(diff) / maxDiff, 1.0)) : 0
-            weightBar.progress = max(progress, 0.05)
+
+            // Progress: how far along the range from start to target
+            let progress: Float
+            if totalRange > 0 {
+                progress = Float((startWeight - current) / totalRange)
+            } else {
+                progress = 1.0
+            }
+            weightBar.progress = max(min(progress, 1.0), 0.05)
             bubbleLabel.text = String(format: "%.1f", current)
         } else {
             weightStartLabel.text = "-- kg"
@@ -922,6 +939,14 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         }
     }
     
+    @objc private func handlePullToRefresh() {
+        fetchStatsData()
+        fetchStreakCalendar()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.mainScroll.refreshControl?.endRefreshing()
+        }
+    }
+
     @objc func clickedCal() {
         showCalories = true
         animateToggle(b: calBtn, on: true, c: .neonPink)
