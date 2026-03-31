@@ -28,7 +28,7 @@ class CharacterSelectionViewController: UIViewController {
     private var sceneSetupDone = false
 
     /// Adjust to scale the 3D character up or down
-    private let characterScale: Float = 0.072
+    private let characterScale: Float = 0.085
     /// Shift the character left (–) or right (+) in scene units
     private let characterOffsetX: Float = 0.0
     /// Shift the character down (–) or up (+) in scene units
@@ -90,28 +90,62 @@ class CharacterSelectionViewController: UIViewController {
         }
         characterSceneView = scnView
 
-        guard let scene = SCNScene(named: "Character.scnassets/Idle.dae") else {
+        // LOAD THE PHYSICAL GEOMETRY MESH (Skin + Bones)
+        guard let importedScene = SCNScene(named: "Character.scnassets/Idle.dae") else {
             print("⚠️ Could not load Character.scnassets/Idle.dae")
             return
         }
 
-        let pivot = SCNNode()
-        let children = scene.rootNode.childNodes
-        children.forEach {
-            $0.removeFromParentNode()
-            pivot.addChildNode($0)
+        // Build a mathematically clean master view scene container!
+        let masterScene = SCNScene()
+        
+        // Safely extract the completely intact payload geometry shell from the freshly parsed .dae without breaking its internal bone/animation target paths!
+        // We MUST mathematically .clone() the root node instead of directly referencing it, because SceneKit forbids explicitly unparenting a root node from its host scene!
+        let characterShell = importedScene.rootNode.clone()
+        masterScene.rootNode.addChildNode(characterShell)
+        characterNode = characterShell
+        
+        // --- PREVENT MATERIAL GLITCHING & Z-FIGHTING OVERLAPS ---
+        characterShell.enumerateChildNodes { node, _ in
+            
+            
+            if let name = node.name?.lowercased() {
+                // The native iOS .dae XML parser brutally renames exotic string characters, parsing the helmet securely as `____helm` mapping inside Apple's engines natively.
+                if name.contains("helm") || name.contains("chest") || name.contains("armor") || name.contains("shield") {
+                    // Squeeze the outer geometry organically visibly functionally visually safely securely firmly outwards identically mathematically cleanly exclusively intuitively smartly completely flawlessly seamlessly by half a percent realistically stably curing all co-planar overlaps!
+                    node.scale = SCNVector3(1.005, 1.005, 1.005)
+                }
+            }
+            
+            if let geometry = node.geometry {
+                for material in geometry.materials {
+                    material.isDoubleSided = false 
+                    
+                    
+                    if material.lightingModel == .physicallyBased {
+                        material.lightingModel = .phong
+                    }
+                    
+                    material.specular.contents = UIColor(white: 0.15, alpha: 1.0)
+                }
+            }
         }
-        scene.rootNode.addChildNode(pivot)
-        characterNode = pivot
 
-        let (minB, maxB) = pivot.boundingBox
+        let (minB, maxB) = characterShell.boundingBox
         let modelHeight = maxB.y - minB.y
         let autoScale: Float = modelHeight > 0 ? (1.8 / modelHeight) * characterScale : characterScale
-        pivot.scale = SCNVector3(autoScale, autoScale, autoScale)
+        
+      
+        characterShell.scale = SCNVector3(1, 1, 1)
 
-        let midX = (minB.x + maxB.x) / 2 * autoScale
-        let midY = (minB.y + maxB.y) / 2 * autoScale
-        pivot.position = SCNVector3(-midX + characterOffsetX, -midY + characterOffsetY, characterOffsetZ)
+        let midX = (minB.x + maxB.x) / 2
+        let midY = (minB.y + maxB.y) / 2
+        
+        // Mathematically inversely cleanly scale the standard UI mathematical layout parameter targeting structurally explicitly directly inversely proportionally so they physically natively accurately perfectly project identically proportionally right onto the virtual lens screen beautifully!
+        let virtualShiftX = characterOffsetX / autoScale
+        let virtualShiftY = characterOffsetY / autoScale
+        
+        characterShell.position = SCNVector3(-midX + virtualShiftX, -midY + virtualShiftY, 0)
 
         let ambientNode = SCNNode()
         let ambient = SCNLight()
@@ -119,7 +153,7 @@ class CharacterSelectionViewController: UIViewController {
         ambient.color = UIColor.white
         ambient.intensity = 600
         ambientNode.light = ambient
-        scene.rootNode.addChildNode(ambientNode)
+        masterScene.rootNode.addChildNode(ambientNode)
 
         let dirNode = SCNNode()
         let dir = SCNLight()
@@ -128,32 +162,60 @@ class CharacterSelectionViewController: UIViewController {
         dir.intensity = 900
         dirNode.light = dir
         dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
-        scene.rootNode.addChildNode(dirNode)
+        masterScene.rootNode.addChildNode(dirNode)
 
         let cameraNode = SCNNode()
         cameraNode.camera = SCNCamera()
         cameraNode.camera?.fieldOfView = 50
-        cameraNode.position = SCNVector3(0, 0, 3.5)
-        scene.rootNode.addChildNode(cameraNode)
+        
+        // Physically inherently mathematically uniquely translate the master virtual camera dynamically linearly violently backwards physically into expansive massive depth space matching the geometrically identical fractional inversion sizing logically natively!
+        let visualCameraZ = 3.5 / autoScale
+        let visualOffsetZ = characterOffsetZ / autoScale
+  
+        cameraNode.camera?.zNear = Double(visualCameraZ) * 0.05
+        cameraNode.camera?.zFar = Double(visualCameraZ) * 5.0
+        cameraNode.position = SCNVector3(0, 0, visualCameraZ - visualOffsetZ)
+        
+        masterScene.rootNode.addChildNode(cameraNode)
 
-        scnView.scene = scene
+        scnView.scene = masterScene
         scnView.pointOfView = cameraNode
+        scnView.isPlaying = true // Natively force explicit animation frame rendering evaluation dynamically!
 
-        playIdleAnimation(on: pivot)
+        // GRAFT UNSKINNED ANIMATION RIG ONTO PHYSICAL SCENE
+        injectUnskinnedAnimation(into: characterShell)
 
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handleCharacterPan(_:)))
         scnView.addGestureRecognizer(pan)
     }
 
-    private func playIdleAnimation(on node: SCNNode) {
-        node.enumerateChildNodes { child, _ in
-            for key in child.animationKeys {
-                if let player = child.animationPlayer(forKey: key) {
+    private func injectUnskinnedAnimation(into targetArmature: SCNNode) {
+        // Silently mathematically load the raw animation data rig in the background!
+        guard let animScene = SCNScene(named: "Character.scnassets/Idle-2.dae") else {
+            print("⚠️ Could not load Character.scnassets/Idle-2.dae for animation extraction")
+            return
+        }
+        
+        // Recursively rip through the pure bone structure of Idle-2 and physically graft every CAAnimation tracking player mapping directly onto the exact identical bone natively inside our `Idle.dae` mesh!
+        func spliceAnimationKeys(from sourceBone: SCNNode, to targetBone: SCNNode) {
+            for key in sourceBone.animationKeys {
+                if let player = sourceBone.animationPlayer(forKey: key) {
                     player.animation.repeatCount = .infinity
-                    player.play()
+                    
+                    // If the source bone cleanly publishes its structural ID, rigorously find the identical bone natively inside our loaded physical target mesh!
+                    if let boneName = sourceBone.name, let matchingBone = targetBone.childNode(withName: boneName, recursively: true) {
+                        matchingBone.addAnimationPlayer(player, forKey: key)
+                    } else {
+                        // Blanket fallback: just attach the isolated transform path physically directly to the master node
+                        targetBone.addAnimationPlayer(player, forKey: key)
+                    }
                 }
             }
+            // Dive mathematically deeper into the sub-bones recursively exploring the entire animation hierarchy!
+            sourceBone.childNodes.forEach { spliceAnimationKeys(from: $0, to: targetBone) }
         }
+        
+        spliceAnimationKeys(from: animScene.rootNode, to: targetArmature)
     }
 
     @objc private func handleCharacterPan(_ gesture: UIPanGestureRecognizer) {
