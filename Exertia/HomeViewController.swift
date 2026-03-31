@@ -48,9 +48,14 @@ class HomeViewController: UIViewController {
         // Dynamically scale the image to be much bigger and ground it cleanly onto the podium
         let screenHeight = view.bounds.height
         let scale: CGFloat = screenHeight > 800 ? 1.35 : 1.2 // Larger screens get a bigger pop
-        let yOffset = characterImageView.bounds.height * 0.02 // A precise, microscopic shift down (2%) so it hovers just above the stage
         
-        characterImageView.transform = CGAffineTransform(translationX: 0, y: yOffset).scaledBy(x: scale, y: scale)
+        // Push both the character and the underlying stage cleanly downwards to safely clear the "EXERTIA" logo overhead!
+        // Taller screens get a structurally larger drop to prevent visually crowding the massive header space natively
+        let layoutDropOffset: CGFloat = screenHeight > 800 ? 50 : 30
+        
+        // Apply perfectly identical downwards Cartesian drops to rigidly preserve their geometric spatial relationship, while uniquely scaling the character!
+        stageHighlightView.transform = CGAffineTransform(translationX: 0, y: layoutDropOffset)
+        characterImageView.transform = CGAffineTransform(translationX: 0, y: layoutDropOffset).scaledBy(x: scale, y: scale)
         
         setupRocketAnimation()
     }
