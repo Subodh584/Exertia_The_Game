@@ -1,5 +1,4 @@
 import UIKit
-import SceneKit
 
 class HomeViewController: UIViewController {
     private struct CachedHomeSnapshot: Codable {
@@ -15,21 +14,6 @@ class HomeViewController: UIViewController {
     @IBOutlet weak var profileButton: UIButton!
     @IBOutlet weak var distanceLabel: UILabel!
     @IBOutlet weak var caloriesLabel: UILabel!
-
-    // 3D character scene
-    private var characterSceneView: SCNView?
-    private var characterNode: SCNNode?
-    private var lastPanX: CGFloat = 0
-    private var sceneSetupDone = false
-
-    /// Adjust this to scale the 3D character up or down on the home screen
-    private let characterScale: Float = 0.072
-    /// Shift the character left (–) or right (+) in scene units
-    private let characterOffsetX: Float = 0.0
-    /// Shift the character down (–) or up (+) in scene units
-    private let characterOffsetY: Float = -0.9
-    /// Move the character closer (+) or further away (–) from the camera
-    private let characterOffsetZ: Float = 0.4
 
     private let tabBarContainer = UIView()
     private let tabBarStackView = UIStackView()
@@ -60,7 +44,116 @@ class HomeViewController: UIViewController {
         if tabWrappers.indices.contains(currentTabIndex) {
             moveIndicator(to: tabWrappers[currentTabIndex], animated: false)
         }
-        setupCharacterSceneView()
+        
+        // Dynamically scale the image to be much bigger and ground it cleanly onto the podium
+        let screenHeight = view.bounds.height
+        let scale: CGFloat = screenHeight > 800 ? 1.35 : 1.2 // Larger screens get a bigger pop
+        let yOffset = characterImageView.bounds.height * 0.02 // A precise, microscopic shift down (2%) so it hovers just above the stage
+        
+        characterImageView.transform = CGAffineTransform(translationX: 0, y: yOffset).scaledBy(x: scale, y: scale)
+        
+        setupRocketAnimation()
+    }
+    
+    private func setupRocketAnimation() {
+        if let newLogo = UIImage(named: "LOGO4"),
+           let logoView = view.subviews.first(where: { ($0 as? UIImageView)?.image == newLogo }) {
+            
+            // Set to exactly half the height of the logo as requested, capped gracefully at 60 points
+            let rocketSize: CGFloat = min(logoView.bounds.height * 0.50, 65)
+            let startX: CGFloat = -rocketSize * 2
+            let endX: CGFloat = view.bounds.width + rocketSize * 2
+            
+            let rocketView: UIView // We now use a clear UIView container to safely host the pre-rotated image
+            if let existingContainer = view.viewWithTag(999) {
+                rocketView = existingContainer
+                rocketView.layer.removeAllAnimations() // Flush old animations to cleanly re-run the loop
+            } else {
+                rocketView = UIView()
+                rocketView.tag = 999
+                
+                let innerImage = UIImageView(image: UIImage(named: "Rocket2") ?? UIImage(named: "rocket_image"))
+                innerImage.contentMode = .scaleAspectFit
+                
+                // The uploaded "Rocket2" asset is natively drawn pointing diagonally Up-Right (approx 45 degrees).
+                // We physically pre-rotate the image exactly 45 degrees clockwise inside the container so it lays completely flat, pointing perfectly RIGHT (+X).
+                // This absolute horizontal alignment guarantees `.rotateAuto` steers the nose strictly along the path!
+                innerImage.transform = CGAffineTransform(rotationAngle: CGFloat.pi / 4) // 45° clockwise
+                // UIKit rendering crash prevention: DO NOT use autoresizing masks on a pre-transformed view!
+                
+                rocketView.addSubview(innerImage)
+                view.insertSubview(rocketView, aboveSubview: logoView)
+            }
+            
+            // CRITICAL SIZING FIX: Explicitly constrain the mathematical container bounds
+            rocketView.bounds = CGRect(x: 0, y: 0, width: rocketSize, height: rocketSize)
+            // UIKit Rendering Bug Fix: Modifying the `.frame` property of a mathematically transformed view physically crushes its bounds geometry into a zero-dimensional scale making it instantly invisible!
+            // We correctly restrict mapping utilizing only its static `.bounds` and geometric `.center`!
+            rocketView.subviews.first?.bounds = CGRect(x: 0, y: 0, width: rocketSize, height: rocketSize)
+            rocketView.subviews.first?.center = CGPoint(x: rocketSize / 2, y: rocketSize / 2)
+            
+            rocketView.layer.zPosition = 999
+            
+            // Mathematically plot a beautiful 2D path: fly straight, loop-de-loop around the middle, fly out
+            let rocketPath = UIBezierPath()
+            let centerY = logoView.center.y
+            let midX = view.bounds.width / 2
+            let loopRadius: CGFloat = 45 // The size of the circular loop
+            
+            // 1. Enter from the left gently dipping into a playful little wave before returning to perfectly flat horizontally entering the loop
+            let enterStartX = startX + rocketSize / 2
+            rocketPath.move(to: CGPoint(x: enterStartX, y: centerY))
+            
+            let dipMidX = enterStartX + (midX - enterStartX) * 0.5
+            let dipDepth: CGFloat = 35 // A small, playful dipping amplitude
+            let bottomY = centerY + dipDepth // iOS Y goes DOWN, so adding depth pulls it downwards
+            
+            // Curve 1: Slide in perfectly horizontally, then gracefully dip downwards
+            let cp1A = CGPoint(x: enterStartX + 50, y: centerY) // Forces perfectly horizontal entry
+            let cp1B = CGPoint(x: dipMidX - 40, y: bottomY) // Forces perfectly horizontal sweeping bottom
+            rocketPath.addCurve(to: CGPoint(x: dipMidX, y: bottomY), controlPoint1: cp1A, controlPoint2: cp1B)
+            
+            // Curve 2: Perfectly transition from the dip's bottom back up to the perfectly flat entering line of the loop
+            let cp2A = CGPoint(x: dipMidX + 40, y: bottomY) // Purely horizontal continuous tangent
+            let cp2B = CGPoint(x: midX - 50, y: centerY) // Forces perfectly horizontal recovery into the circle!
+            rocketPath.addCurve(to: CGPoint(x: midX, y: centerY), controlPoint1: cp2A, controlPoint2: cp2B)
+            
+            // 2. Perform a perfect circular loop-the-loop upwards over the logo
+            // Counter-clockwise from the bottom guarantees a smooth upward swoop
+            rocketPath.addArc(withCenter: CGPoint(x: midX, y: centerY - loopRadius),
+                              radius: loopRadius,
+                              startAngle: CGFloat.pi / 2,
+                              endAngle: CGFloat.pi / 2 - (CGFloat.pi * 2),
+                              clockwise: false)
+            
+            // 3. Exit the loop with a magnificent, mathematically natural swoop!
+            // Reverting mathematically to the smooth parabolic J-Curve while safely preserving the upward nose-pitching exit tangent.
+            let exitY = centerY - 150 
+            let cp1 = CGPoint(x: midX + 120, y: centerY) // Flawlessly carries horizontal momentum securely out of the loop
+            let cp2 = CGPoint(x: endX - 100, y: exitY + 100) // Pulls the nose upward gracefully and naturally without mathematically snapping
+            
+            rocketPath.addCurve(to: CGPoint(x: endX + rocketSize / 2, y: exitY),
+                                controlPoint1: cp1,
+                                controlPoint2: cp2)
+            
+            // Park the rocket safely off-screen left. This brilliantly guarantees it stays physically invisible gracefully during its 2-second repeating rest interval!
+            rocketView.center = CGPoint(x: enterStartX, y: centerY)
+            
+            // Execute the path natively using CoreAnimation
+            let flightAnim = CAKeyframeAnimation(keyPath: "position")
+            flightAnim.path = rocketPath.cgPath
+            flightAnim.duration = 3.5 // Smooth enough for a big loop
+            flightAnim.calculationMode = .paced // Maintains absolutely consistent velocity
+            flightAnim.rotationMode = .rotateAuto // CRITICAL: This magically auto-steers the rocket's nose natively along the curvy path!
+            
+            // Group the animation into a nested layout to flawlessly inject a pure 2-second loop delay!
+            let groupAnim = CAAnimationGroup()
+            groupAnim.animations = [flightAnim]
+            groupAnim.duration = 3.5 + 2.0 // Exactly 3.5s of visible flight time + a pure 2.0s invisible math delay
+            groupAnim.repeatCount = .infinity
+            
+            rocketView.layer.add(groupAnim, forKey: "loopDeLoopFlight")
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -397,8 +490,32 @@ class HomeViewController: UIViewController {
     }
 
     private func updateCharacterUI() {
-        let selectedPlayer = gameData.getSelectedPlayer()
-        characterImageView.image = UIImage(named: selectedPlayer.fullBodyImageName)
+        characterImageView.image = UIImage(named: "HomePageMain")
+        characterImageView.contentMode = .scaleAspectFit
+        characterImageView.isHidden = false
+        stageHighlightView?.isHidden = false
+        
+        // Remove the 'Highlight' asset specifically by size signature
+        if let highlightSize = UIImage(named: "Highlight")?.size {
+            for subview in view.subviews {
+                if let imgView = subview as? UIImageView, 
+                   imgView != stageHighlightView, 
+                   imgView != characterImageView,
+                   imgView.image?.size == highlightSize {
+                    imgView.isHidden = true
+                }
+            }
+        }
+        
+        // Dynamically replace the old 'ExertiaHomePageTitle' logo with 'LOGO4'
+        if let newLogo = UIImage(named: "LOGO4"), let oldLogoSize = UIImage(named: "ExertiaHomePageTitle")?.size {
+            for subview in view.subviews {
+                if let imgView = subview as? UIImageView, imgView.image?.size == oldLogoSize {
+                    imgView.image = newLogo
+                    imgView.contentMode = .scaleAspectFit
+                }
+            }
+        }
     }
 
     private func showLoadingState() {
@@ -441,122 +558,7 @@ class HomeViewController: UIViewController {
         }
     }
 
-    // MARK: - 3D Character Scene
 
-    private func setupCharacterSceneView() {
-        guard !sceneSetupDone, characterImageView.frame.width > 0 else { return }
-        sceneSetupDone = true
-
-        // Hide the 2D image
-        characterImageView.isHidden = true
-
-        // Create SCNView matching the characterImageView frame
-        let scnView = SCNView(frame: characterImageView.frame)
-        scnView.backgroundColor = .clear
-        scnView.allowsCameraControl = false
-        scnView.autoenablesDefaultLighting = false
-        scnView.antialiasingMode = .multisampling4X
-
-        // Insert at the same level in the hierarchy, just above the image view
-        if let superview = characterImageView.superview,
-           let idx = superview.subviews.firstIndex(of: characterImageView) {
-            superview.insertSubview(scnView, at: idx + 1)
-        } else {
-            view.addSubview(scnView)
-        }
-        characterSceneView = scnView
-
-        // Load idle character model
-        guard let scene = SCNScene(named: "Character.scnassets/Idle.dae") else {
-            print("⚠️ Could not load Character.scnassets/Idle.dae")
-            return
-        }
-
-        // Move (not clone) all children into a pivot node so we can rotate cleanly
-        // Cloning leaves the originals in rootNode at full size — that was the bug
-        let pivot = SCNNode()
-        let children = scene.rootNode.childNodes
-        children.forEach {
-            $0.removeFromParentNode()
-            pivot.addChildNode($0)
-        }
-        scene.rootNode.addChildNode(pivot)
-        characterNode = pivot
-
-        // Auto-fit: measure the model's bounding box, scale so the full body
-        // fills ~1.8 scene units tall, then apply characterScale as a multiplier
-        let (minB, maxB) = pivot.boundingBox
-        let modelHeight = maxB.y - minB.y
-        let autoScale: Float = modelHeight > 0 ? (1.8 / modelHeight) * characterScale : characterScale
-        pivot.scale = SCNVector3(autoScale, autoScale, autoScale)
-
-        // Center the model horizontally and vertically in scene space
-        let midX = (minB.x + maxB.x) / 2 * autoScale
-        let midY = (minB.y + maxB.y) / 2 * autoScale
-        pivot.position = SCNVector3(-midX + characterOffsetX, -midY + characterOffsetY, characterOffsetZ)
-
-        // Ambient light
-        let ambientNode = SCNNode()
-        let ambient = SCNLight()
-        ambient.type = .ambient
-        ambient.color = UIColor.white
-        ambient.intensity = 600
-        ambientNode.light = ambient
-        scene.rootNode.addChildNode(ambientNode)
-
-        // Directional light
-        let dirNode = SCNNode()
-        let dir = SCNLight()
-        dir.type = .directional
-        dir.color = UIColor.white
-        dir.intensity = 900
-        dirNode.light = dir
-        dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
-        scene.rootNode.addChildNode(dirNode)
-
-        // Camera: positioned to frame a ~1.8-unit-tall character
-        let cameraNode = SCNNode()
-        cameraNode.camera = SCNCamera()
-        cameraNode.camera?.fieldOfView = 50
-        cameraNode.position = SCNVector3(0, 0, 3.5)
-        scene.rootNode.addChildNode(cameraNode)
-
-        scnView.scene = scene
-        scnView.pointOfView = cameraNode
-
-        // Play embedded idle animation
-        playIdleAnimation(on: pivot)
-
-        // Pan gesture for Y-axis rotation
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleCharacterPan(_:)))
-        scnView.addGestureRecognizer(pan)
-    }
-
-    private func playIdleAnimation(on node: SCNNode) {
-        node.enumerateChildNodes { child, _ in
-            for key in child.animationKeys {
-                if let player = child.animationPlayer(forKey: key) {
-                    player.animation.repeatCount = .infinity
-                    player.play()
-                }
-            }
-        }
-    }
-
-    @objc private func handleCharacterPan(_ gesture: UIPanGestureRecognizer) {
-        guard let node = characterNode else { return }
-        let translation = gesture.translation(in: gesture.view)
-        switch gesture.state {
-        case .began:
-            lastPanX = translation.x
-        case .changed:
-            let delta = translation.x - lastPanX
-            lastPanX = translation.x
-            node.eulerAngles.y += Float(delta) * 0.01
-        default:
-            break
-        }
-    }
 
     // MARK: - Animations
 
