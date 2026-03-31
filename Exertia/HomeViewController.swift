@@ -58,13 +58,13 @@ class HomeViewController: UIViewController {
         characterImageView.transform = CGAffineTransform(translationX: 0, y: layoutDropOffset).scaledBy(x: scale, y: scale)
         
         setupRocketAnimation()
+        setupStarField()
     }
     
     private func setupRocketAnimation() {
         if let newLogo = UIImage(named: "LOGO4"),
            let logoView = view.subviews.first(where: { ($0 as? UIImageView)?.image == newLogo }) {
             
-            // Set to exactly half the height of the logo as requested, capped gracefully at 60 points
             let rocketSize: CGFloat = min(logoView.bounds.height * 0.50, 65)
             let startX: CGFloat = -rocketSize * 2
             let endX: CGFloat = view.bounds.width + rocketSize * 2
@@ -161,6 +161,104 @@ class HomeViewController: UIViewController {
         }
     }
     
+    private func setupStarField() {
+        let starView: UIView
+        // Prevent stacking natively duplicate emitter layers explicitly across layout passes!
+        if let existing = view.viewWithTag(777) {
+            starView = existing
+            starView.frame = view.bounds
+            // Natively structurally resize the dynamic emitter constraints if the screen violently rotates
+            if let layers = starView.layer.sublayers {
+                for layer in layers {
+                    guard let emitter = layer as? CAEmitterLayer else { continue }
+                    if emitter.emitterShape == .line { // Shooting stars
+                        emitter.emitterPosition = CGPoint(x: view.bounds.width + 50, y: view.bounds.height / 4)
+                        emitter.emitterSize = CGSize(width: view.bounds.height, height: 10)
+                    } else { // Twinkling stars
+                        emitter.emitterPosition = CGPoint(x: view.bounds.width / 2, y: view.bounds.height / 2)
+                        emitter.emitterSize = view.bounds.size
+                    }
+                }
+            }
+            return
+        }
+        
+        starView = UIView(frame: view.bounds)
+        starView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        starView.isUserInteractionEnabled = false // Rigorously ensures it's purely natively visual and never mathematically intercepts touches!
+        starView.tag = 777
+        
+        // 1. Static Twinkling Stars Native Field
+        let twinkleEmitter = CAEmitterLayer()
+        twinkleEmitter.emitterPosition = CGPoint(x: view.bounds.width / 2, y: view.bounds.height / 2)
+        twinkleEmitter.emitterSize = view.bounds.size
+        twinkleEmitter.emitterShape = .rectangle
+        
+        let starCell = CAEmitterCell()
+        starCell.contents = createStarImage()?.cgImage
+        starCell.birthRate = 25 // Populating natively 25 tiny stars dynamically every second
+        starCell.lifetime = 3.0 // Lasting ~3s natively on average explicitly before dying
+        starCell.lifetimeRange = 2.0
+        // Crank base native brightness and structural variability extremely high so some distinct stars spawn fully opaque and massive, while others spawn natively microscopically dim!
+        starCell.color = UIColor(white: 1.0, alpha: 0.95).cgColor
+        starCell.alphaRange = 0.7 
+        starCell.alphaSpeed = -0.25 // Fade out natively gradually mathematically over time creating an aggressive dynamic twinkle!
+        starCell.scale = 0.18 // Boost base mathematical size significantly so the most brilliant stars physically visually pop!
+        starCell.scaleRange = 0.12 // Induce massive mathematical variation natively so some are microscopic and some are uniquely visibly enormous!
+        starCell.velocity = 0 // Stand explicitly completely still physically to just twinkle
+        
+        twinkleEmitter.emitterCells = [starCell]
+        starView.layer.addSublayer(twinkleEmitter)
+        
+        // 2. High-Velocity Massive Shooting Stars Field
+        let shootingStarEmitter = CAEmitterLayer()
+        // Anchor them explicitly natively off-screen completely to the absolute right, and vertically high up natively!
+        shootingStarEmitter.emitterPosition = CGPoint(x: view.bounds.width + 50, y: view.bounds.height / 4)
+        shootingStarEmitter.emitterSize = CGSize(width: view.bounds.height, height: 10)
+        shootingStarEmitter.emitterShape = .line
+        
+        let shootingCell = CAEmitterCell()
+        shootingCell.contents = createStarImage()?.cgImage
+        shootingCell.birthRate = 0.4 // Extraordinarily rare! ~1 huge shooting star natively every 2.5 seconds
+        shootingCell.lifetime = 1.5
+        shootingCell.color = UIColor.white.cgColor // Max brightness explicitly!
+        shootingCell.velocity = 600 // Screaming fast mathematically!
+        shootingCell.velocityRange = 200
+        // .pi is mathematically exactly Left! .pi * 0.85 sweeps them organically falling Left and explicitly mathematically downwards!
+        shootingCell.emissionLongitude = .pi * 0.85 
+        // Force the physical cell to physically visually point perfectly left and slightly mathematically down natively!
+        shootingCell.spin = 0
+        shootingCell.emissionRange = .pi * 0.05 // Tiny mathematical bit of random rotation geometric variation natively per star
+        shootingCell.scale = 0.25 // Make shooting stars structurally much, much larger than standard twinkles
+        shootingCell.scaleRange = 0.1
+        shootingCell.scaleSpeed = -0.08 // Subtly mathematically shrink physically as they rapidly fly geometrically out
+        shootingCell.alphaSpeed = -0.5 // Mathematically rigidly burn out very quickly realistically simulating atmospheric planetary entry!
+        
+        shootingStarEmitter.emitterCells = [shootingCell]
+        starView.layer.addSublayer(shootingStarEmitter)
+        
+        // Push explicitly strictly fundamentally beneath the massive character models but structurally strictly natively ABOVE the background image view layer!
+        view.insertSubview(starView, at: 1)
+    }
+    
+    // Dynamic structural native zero-dependency asset generator: geometrically directly paints a perfect mathematical radial glow pixel gradient via pure CoreGraphics!
+    private func createStarImage() -> UIImage? {
+        let size = CGSize(width: 8, height: 8)
+        UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
+        guard let context = UIGraphicsGetCurrentContext() else { return nil }
+        
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let colors = [UIColor.white.cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor] as CFArray
+        guard let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0.0, 1.0]) else { return nil }
+        
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        context.drawRadialGradient(gradient, startCenter: center, startRadius: 0, endCenter: center, endRadius: size.width / 2, options: .drawsBeforeStartLocation)
+        
+        let image = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return image
+    }
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         AudioManager.shared.playAppMusic()
