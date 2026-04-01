@@ -1032,19 +1032,19 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
         // Last Run card
         if let lastDist = apiLastSessionDistance, let lastCal = apiLastSessionCalories {
-            lastTimeLabel.text = String(format: "%.1f km", lastDist)
+            lastTimeLabel.text = formatDistanceKm(lastDist)
             lastCalLabel.text = "\(lastCal) cal"
         } else {
-            lastTimeLabel.text = "-- km"
+            lastTimeLabel.text = "-- m"
             lastCalLabel.text = "-- cal"
         }
 
         // Personal Best card
         if let bestDist = apiBestSessionDistance, let bestCal = apiBestSessionCalories {
-            bestTimeLabel.text = String(format: "%.1f km", bestDist)
+            bestTimeLabel.text = formatDistanceKm(bestDist)
             bestCalLabel.text = "\(bestCal) cal"
         } else {
-            bestTimeLabel.text = "-- km"
+            bestTimeLabel.text = "-- m"
             bestCalLabel.text = "-- cal"
         }
 

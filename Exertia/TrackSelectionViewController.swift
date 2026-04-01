@@ -29,8 +29,8 @@ class TrackSelectionViewController: UIViewController {
     var currentIndex = 0
 
     // MARK: — Distance / Calories goal
-    /// Realistic kcal per km for a moderate jog (~70 kg person)
-    private static let calPerKm: Double = 70
+    /// 10 kcal per 0.1 km = 100 kcal per km
+    private static let calPerKm: Double = 100
     private static let minKm:    Double = 0.1   // 100 m floor
     private static let maxKm:    Double = 42.2  // marathon cap
     private static let stepKm:   Double = 0.1   // 100 m per arrow tap

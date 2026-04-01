@@ -201,8 +201,14 @@ class SessionDetailViewController: UIViewController {
         icon.tintColor = .neonPink; icon.contentMode = .scaleAspectFit
         icon.translatesAutoresizingMaskIntoConstraints = false
 
-        let numLbl  = makeLbl(String(format: "%.2f", s.distanceCovered), size: 46, weight: .heavy, color: .white)
-        let unitLbl = makeLbl("km",  size: 18, weight: .semibold, color: UIColor.white.withAlphaComponent(0.55))
+        let distIsKm  = s.distanceCovered >= 1.0
+        let distNum   = distIsKm
+            ? String(format: "%.2f", s.distanceCovered)
+            : "\(Int((s.distanceCovered * 1000).rounded()))"
+        let distUnit  = distIsKm ? "km" : "m"
+
+        let numLbl  = makeLbl(distNum,  size: 46, weight: .heavy, color: .white)
+        let unitLbl = makeLbl(distUnit, size: 18, weight: .semibold, color: UIColor.white.withAlphaComponent(0.55))
         let subLbl  = makeLbl("Distance Covered", size: 12, weight: .medium, color: UIColor.white.withAlphaComponent(0.4))
 
         card.addSubview(icon); card.addSubview(numLbl); card.addSubview(unitLbl); card.addSubview(subLbl)
@@ -232,11 +238,12 @@ class SessionDetailViewController: UIViewController {
             : "—"
 
         let items: [(String, String, String, UIColor)] = [
-            ("flame.fill",           "\(s.caloriesBurned)",     "Calories",  .systemOrange),
+            ("flame.fill",           "\(s.caloriesBurned)",      "Calories",  .systemOrange),
             ("stopwatch.fill",       "\(s.durationMinutes) min", "Duration",  .systemCyan),
-            ("arrow.up.circle.fill", "\(s.totalJumps)",         "Jumps",     .systemGreen),
-            ("arrow.down.circle.fill","\(s.totalCrouches)",     "Crouches",  .systemYellow),
-            ("speedometer",          speedStr,                   "Avg Speed", UIColor(red:0.7,green:0.5,blue:1,alpha:1))
+            ("figure.walk",          "\(s.totalSteps)",          "Steps",     UIColor(red: 0.0, green: 0.95, blue: 0.6, alpha: 1)),
+            ("arrow.up.circle.fill", "\(s.totalJumps)",          "Jumps",     .systemGreen),
+            ("arrow.down.circle.fill","\(s.totalCrouches)",      "Crouches",  .systemYellow),
+            ("speedometer",          speedStr,                    "Avg Speed", UIColor(red:0.7,green:0.5,blue:1,alpha:1))
         ]
 
         var col1: [UIView] = []; var col2: [UIView] = []

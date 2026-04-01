@@ -265,16 +265,17 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
                     let track = "Nova-Station"
                     return GameSession(
                         date: date,
-                        durationMinutes:  s.duration_minutes ?? 0,
-                        caloriesBurned:   s.calories_burned  ?? 0,
+                        durationMinutes:  s.duration_minutes  ?? 0,
+                        caloriesBurned:   s.calories_burned   ?? 0,
                         trackName:        track,
-                        trackId:          s.track_id         ?? "track_001",
-                        characterId:      s.character_id     ?? "p1",
-                        totalJumps:       s.total_jumps      ?? 0,
-                        totalCrouches:    s.total_crouches   ?? 0,
+                        trackId:          s.track_id          ?? "track_001",
+                        characterId:      s.character_id      ?? "p1",
+                        totalJumps:       s.total_jumps       ?? 0,
+                        totalCrouches:    s.total_crouches    ?? 0,
                         totalLeftLeans:   s.total_left_leans  ?? 0,
                         totalRightLeans:  s.total_right_leans ?? 0,
-                        distanceCovered:  s.distance_covered ?? 0,
+                        totalSteps:       s.total_steps       ?? 0,
+                        distanceCovered:  s.distance_covered  ?? 0,
                         averageSpeed:     s.average_speed,
                         characterImageName: "character1",
                         completionStatus: s.completion_status ?? "completed"
@@ -456,7 +457,7 @@ class HistoryRowCell: UITableViewCell {
     func configure(session: GameSession, isLatest: Bool, isBest: Bool, dateFmt: DateFormatter) {
         dateLbl.text  = dateFmt.string(from: session.date)
         trackLbl.text = session.trackName
-        distLbl.text  = String(format: "%.1f km", session.distanceCovered)
+        distLbl.text  = formatDistanceKm(session.distanceCovered)
         calLbl.text   = "\(session.caloriesBurned) kcal"
 
         newBadge.isHidden   = !isLatest

@@ -351,6 +351,7 @@ class DayStatsViewController: UIViewController {
             totalCrouches:      s.total_crouches    ?? 0,
             totalLeftLeans:     s.total_left_leans  ?? 0,
             totalRightLeans:    s.total_right_leans ?? 0,
+            totalSteps:         s.total_steps       ?? 0,
             distanceCovered:    s.distance_covered  ?? 0,
             averageSpeed:       s.average_speed,
             characterImageName: "character1",
