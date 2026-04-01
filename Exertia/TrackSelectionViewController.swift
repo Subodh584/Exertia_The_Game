@@ -48,8 +48,8 @@ class TrackSelectionViewController: UIViewController {
     private var minCalories: Int = 7
 
     // Goal controls built entirely in code
-    private let distField = UITextField()
-    private let calField  = UITextField()
+    private let distancePicker = CleanPickerView()
+    private let calPicker = CleanPickerView()
 
     // Flag so the ellipse scan only runs once after layout is real
     private var navEllipsesHidden = false
@@ -217,18 +217,8 @@ class TrackSelectionViewController: UIViewController {
 
     // MARK: — Goal controls row (Distance + Calories), built in code
     private func buildGoalControls() {
-        // Shared "Done" toolbar for the decimal pad keyboard
-        let toolbar = UIToolbar(); toolbar.sizeToFit()
-        let doneItem = UIBarButtonItem(barButtonSystemItem: .done,
-                                       target: self, action: #selector(dismissKeyboard))
-        toolbar.items = [UIBarButtonItem(barButtonSystemItem: .flexibleSpace,
-                                          target: nil, action: nil), doneItem]
-
-        distField.inputAccessoryView = toolbar
-        calField.inputAccessoryView  = toolbar
-
-        let distCol = makeGoalColumn(title: "Distance",       field: distField, isDistance: true)
-        let calCol  = makeGoalColumn(title: "Min. Calories",  field: calField,  isDistance: false)
+        let distCol = makeGoalColumn(picker: distancePicker, isDistance: true)
+        let calCol  = makeGoalColumn(picker: calPicker, isDistance: false)
 
         let row = UIStackView(arrangedSubviews: [distCol, calCol])
         row.axis         = .horizontal
@@ -245,16 +235,11 @@ class TrackSelectionViewController: UIViewController {
             row.heightAnchor.constraint(equalToConstant: 54)   // pill-only height, no label row
         ])
 
-        // Dismiss keyboard when tapping anywhere outside
-        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
-        tap.cancelsTouchesInView = false
-        view.addGestureRecognizer(tap)
-
         refreshGoalFields()
     }
 
-    /// One column: glass-pill stepper (no extra label — storyboard labels handle the titles).
-    private func makeGoalColumn(title: String, field: UITextField, isDistance: Bool) -> UIView {
+    /// One column: glass-pill picker
+    private func makeGoalColumn(picker: UIPickerView, isDistance: Bool) -> UIView {
         let col = UIView()
         col.translatesAutoresizingMaskIntoConstraints = false
 
@@ -262,23 +247,17 @@ class TrackSelectionViewController: UIViewController {
         let pill = makeGlassPill()
         col.addSubview(pill)
 
-        // Separate up / down buttons (tag: 10=dist▲ 11=dist▼ 20=cal▲ 21=cal▼)
+        // Separate up / down buttons
         let upBtn   = makePillArrow(sf: "chevron.up",   tag: isDistance ? 10 : 20)
         let downBtn = makePillArrow(sf: "chevron.down", tag: isDistance ? 11 : 21)
 
-        // Text field
-        field.keyboardType    = .decimalPad
-        field.textAlignment   = .center
-        field.textColor       = .white
-        field.font            = .systemFont(ofSize: 16, weight: .bold)
-        field.backgroundColor = .clear
-        field.tintColor       = .neonPink
-        field.translatesAutoresizingMaskIntoConstraints = false
-        field.addTarget(self, action: #selector(goalFieldBegan(_:)), for: .editingDidBegin)
-        field.addTarget(self, action: #selector(goalFieldEnded(_:)), for: .editingDidEnd)
-
-        // Pill interior: [▼] [field] [▲]
-        let pillRow = UIStackView(arrangedSubviews: [downBtn, field, upBtn])
+        // Picker view
+        picker.dataSource = self
+        picker.delegate   = self
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Pill interior: [▼] [picker] [▲]
+        let pillRow = UIStackView(arrangedSubviews: [downBtn, picker, upBtn])
         pillRow.axis      = .horizontal
         pillRow.alignment = .center
         pillRow.spacing   = 0
@@ -341,9 +320,8 @@ class TrackSelectionViewController: UIViewController {
     @objc private func arrowTapped(_ sender: UIButton) {
         AudioManager.shared.playEffect(.targetButton)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        view.endEditing(true)
         switch sender.tag {
-        case 10, 20: distanceKm += Self.stepKm   // ▲ (both distance and cal arrows move same step)
+        case 10, 20: distanceKm += Self.stepKm   // ▲
         case 11, 21: distanceKm -= Self.stepKm   // ▼
         default: break
         }
@@ -356,33 +334,17 @@ class TrackSelectionViewController: UIViewController {
         UIView.animate(withDuration: 0.15) { sender.alpha = 1 }
     }
 
-    // MARK: — Text field handlers
-    @objc private func goalFieldBegan(_ sender: UITextField) {
-        // Strip unit suffix so user edits a clean number
-        if sender === distField {
-            sender.text = String(format: "%.1f", distanceKm)
-        } else {
-            sender.text = "\(minCalories)"
-        }
-    }
-
-    @objc private func goalFieldEnded(_ sender: UITextField) {
-        let raw = sender.text ?? ""
-        if sender === distField {
-            if let v = Double(raw) { distanceKm = v }   // didSet clamps + syncs
-        } else {
-            if let cal = Double(raw) {
-                distanceKm = cal / Self.calPerKm         // back-calculate; didSet clamps + syncs
-            }
-        }
-        refreshGoalFields()
-    }
-
-    @objc private func dismissKeyboard() { view.endEditing(true) }
-
     private func refreshGoalFields() {
-        distField.text = String(format: "%.1f km", distanceKm)
-        calField.text  = "\(minCalories) kcal"
+        // Find correct row from distanceKm: 0.1 -> 0, 42.2 -> 421
+        let targetRow = Int(round((distanceKm - 0.1) * 10))
+        let row = max(0, min(421, targetRow))
+        
+        if distancePicker.selectedRow(inComponent: 0) != row {
+            distancePicker.selectRow(row, inComponent: 0, animated: true)
+        }
+        if calPicker.selectedRow(inComponent: 0) != row {
+            calPicker.selectRow(row, inComponent: 0, animated: true)
+        }
     }
 
     // MARK: — Storyboard junk cleanup
@@ -516,6 +478,61 @@ class TrackSelectionViewController: UIViewController {
                     nav?.pushViewController(CameraViewController(), animated: true)
                 }
                 self.present(nav, animated: true)
+            }
+        }
+    }
+}
+
+// MARK: - UIPickerView DataSource & Delegate
+extension TrackSelectionViewController: UIPickerViewDataSource, UIPickerViewDelegate {
+    func numberOfComponents(in pickerView: UIPickerView) -> Int {
+        return 1
+    }
+    
+    func pickerView(_ pickerView: UIPickerView, numberOfRowsInComponent component: Int) -> Int {
+        // From 0.1 to 42.2 in 0.1 increments = 422 rows
+        return 422
+    }
+    
+    func pickerView(_ pickerView: UIPickerView, rowHeightForComponent component: Int) -> CGFloat {
+        return 36
+    }
+    
+    func pickerView(_ pickerView: UIPickerView, viewForRow row: Int, forComponent component: Int, reusing view: UIView?) -> UIView {
+        let label = (view as? UILabel) ?? UILabel()
+        label.textAlignment = .center
+        label.textColor = .white
+        
+        // Exact same font styling as the older text field (bold size 16)
+        label.font = .systemFont(ofSize: 16, weight: .bold)
+        label.backgroundColor = .clear
+        
+        // Snap distance safely based on row calculation formula
+        let km = Double(row + 1) * 0.1
+        if pickerView === distancePicker {
+            label.text = String(format: "%.1f km", km)
+        } else {
+            let cal = Int((km * Self.calPerKm).rounded())
+            label.text = "\(cal) kcal"
+        }
+        return label
+    }
+    
+    func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        AudioManager.shared.playEffect(.targetButton) // Provide haptic / sound on tick
+        
+        let newDist = Double(row + 1) * 0.1
+        self.distanceKm = newDist // didSet already limits boundaries and updates the paired picker
+    }
+}
+
+class CleanPickerView: UIPickerView {
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        for subview in subviews {
+            if subview.frame.height <= self.frame.height, subview.backgroundColor != nil {
+                subview.backgroundColor = .clear
             }
         }
     }
