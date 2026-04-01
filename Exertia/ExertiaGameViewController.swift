@@ -71,6 +71,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var totalCrouches: Int = 0
     private var totalLeftLeans: Int = 0
     private var totalRightLeans: Int = 0
+    private var totalSpotRunningReps: Int = 0
     private var totalDistanceCovered: Float = 0.0
     private let sceneKitUnitsToMeters: Float = 0.1
     private var endGameButton: UIButton?
@@ -1422,6 +1423,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
     func playerJump() {
         guard isGameRunning, !isJumping else { return }
+        totalJumps += 1
         isJumping = true
         isJumpingUp = true
         isLanding = false
@@ -1564,6 +1566,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
     /// Called when a running rep is completed - adds 20% to current tier
     func onRunningRepCompleted() {
+        totalSpotRunningReps += 1
         let repBoost: Float = 0.2
         speedBarFill = min(3.0, speedBarFill + repBoost)
         
@@ -2145,6 +2148,8 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         let trackName  = DifficultySettings.shared.selectedTrackDisplayName
         let trackId    = DifficultySettings.shared.selectedTrackId
 
+        let totalSteps = totalSpotRunningReps * 2
+
         let summaryData = SessionSummaryData(
             trackName:        trackName,
             durationSeconds:  durationSeconds,
@@ -2156,7 +2161,8 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
             totalCrouches:    totalCrouches,
             totalLeftLeans:   totalLeftLeans,
             totalRightLeans:  totalRightLeans,
-            distanceMeters:   distanceMeters
+            distanceMeters:   distanceMeters,
+            totalSteps:       totalSteps
         )
 
         // Capture values for the closure (avoid capturing self strongly in summary)
@@ -2215,6 +2221,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         totalCrouches = 0
         totalLeftLeans = 0
         totalRightLeans = 0
+        totalSpotRunningReps = 0
         totalDistanceCovered = 0.0
     }
     

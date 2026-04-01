@@ -33,6 +33,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     private let tabIndicator = UIView()
     private let tableView = UITableView()
 
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
     private var isShowingCompleted = false
     private var inProgressBadges: [Badge] = []
     private var completedBadges: [Badge] = []
@@ -57,6 +58,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     func fetchRealProfileData() {
         guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
 
+        loadingIndicator.startAnimating()
         Task {
             // ── 1. Profile header (must always succeed) ──────────────────────
             do {
@@ -113,6 +115,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
                 }
 
                 DispatchQueue.main.async {
+                    self.loadingIndicator.stopAnimating()
                     self.inProgressBadges = inProgress
                     self.completedBadges  = completed
                     self.tableView.reloadData()
@@ -133,6 +136,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
                     print("✅ Badges: \(inProgress.count) in progress, \(completed.count) completed (catalogue: \(allBadges.count))")
                 }
             } catch {
+                DispatchQueue.main.async { self.loadingIndicator.stopAnimating() }
                 print("❌ Failed to fetch badges: \(error) — profile header still visible")
             }
         }
@@ -239,6 +243,15 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        loadingIndicator.color = .white
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: tableView.centerYAnchor)
         ])
     }
     
