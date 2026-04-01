@@ -63,6 +63,16 @@ struct AppSession: Codable {
     let created_at: String?
 }
 
+extension AppSession {
+    var countsTowardDailyProgress: Bool {
+        let status = completion_status?.lowercased() ?? ""
+        guard status == "completed" || status == "abandoned" else { return false }
+        let calories = calories_burned ?? 0
+        let distance = distance_covered ?? 0
+        return calories > 0 || distance > 0
+    }
+}
+
 struct AppUserStats: Codable {
     let total_sessions: Int
     let total_minutes: Int
@@ -587,4 +597,3 @@ struct AnyEncodable: Encodable {
         try _encode(encoder)
     }
 }
-
