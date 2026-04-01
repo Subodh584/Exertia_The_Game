@@ -15,6 +15,11 @@ class HomeViewController: UIViewController {
     @IBOutlet weak var distanceLabel: UILabel!
     @IBOutlet weak var caloriesLabel: UILabel!
 
+    /// Shift the EXERTIA logo left (–) or right (+) in points
+    private let logoOffsetX: CGFloat = 0.9
+    /// Shift the EXERTIA logo up (–) or down (+) in points
+    private let logoOffsetY: CGFloat = 0.0
+
     private let tabBarContainer = UIView()
     private let tabBarStackView = UIStackView()
     private let indicatorView = UIView()
@@ -664,6 +669,7 @@ class HomeViewController: UIViewController {
                 if let imgView = subview as? UIImageView, imgView.image?.size == oldLogoSize {
                     imgView.image = newLogo
                     imgView.contentMode = .scaleAspectFit
+                    imgView.transform = CGAffineTransform(translationX: logoOffsetX, y: logoOffsetY)
                 }
             }
         }

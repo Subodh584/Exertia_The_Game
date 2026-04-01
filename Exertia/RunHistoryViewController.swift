@@ -34,8 +34,9 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
     private var filterButtons: [UIButton] = []
     private let filterScroll  = UIScrollView()
 
-    private let tableView  = UITableView()
-    private let emptyLabel = UILabel()
+    private let tableView       = UITableView()
+    private let emptyLabel      = UILabel()
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
 
     // IST
     private static let istTZ = TimeZone(identifier: "Asia/Kolkata")!
@@ -51,6 +52,16 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         configureNavBar()
         configureFilterBar()
         configureTable()
+
+        loadingIndicator.color = .white
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+
         fetchSessionsFromAPI()
     }
 
@@ -245,6 +256,7 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
     // MARK: API
     func fetchSessionsFromAPI() {
         guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
+        loadingIndicator.startAnimating()
         Task {
             do {
                 let sessions = try await SupabaseManager.shared.getUserSessions(userId: userId)
@@ -272,10 +284,14 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
                 }.sorted { $0.date > $1.date }
 
                 DispatchQueue.main.async {
+                    self.loadingIndicator.stopAnimating()
                     self.allHistory = converted
                     self.applyFilter(animate: true)
                 }
-            } catch { print("❌ Run history fetch: \(error)") }
+            } catch {
+                DispatchQueue.main.async { self.loadingIndicator.stopAnimating() }
+                print("❌ Run history fetch: \(error)")
+            }
         }
     }
 

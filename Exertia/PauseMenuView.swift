@@ -21,6 +21,7 @@ struct SessionSummaryData {
     let totalLeftLeans: Int
     let totalRightLeans: Int
     let distanceMeters: Double
+    let totalSteps: Int
 
     var durationFormatted: String {
         let m = durationSeconds / 60
@@ -373,6 +374,7 @@ struct SessionSummaryView: View {
                             .padding(.vertical, 3)
                             .padding(.horizontal, 4)
 
+                        SummaryStatRow(icon: "figure.walk",      label: "STEPS",        value: "\(summary.totalSteps)",       color: PC.neonGreen)
                         SummaryStatRow(icon: "arrow.up",         label: "JUMPS",        value: "\(summary.totalJumps)",       color: PC.neonCyan)
                         SummaryStatRow(icon: "arrow.down",       label: "CROUCHES",     value: "\(summary.totalCrouches)",    color: PC.neonAmber)
                         SummaryStatRow(icon: "arrow.left",       label: "LEFT LEANS",   value: "\(summary.totalLeftLeans)",   color: PC.neonGreen)

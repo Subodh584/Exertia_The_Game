@@ -26,7 +26,6 @@ private struct CyberColors {
 struct DifficultySelectionView: View {
     @State private var selectedDifficulty: DifficultySettings.Difficulty = .medium
     @State private var skipDemo: Bool = false
-    @State private var appeared: Bool = false
     @State private var gridPulse: Bool = false
     var onDifficultySelected: ((DifficultySettings.Difficulty) -> Void)?
     var onDismiss: (() -> Void)?
@@ -100,7 +99,6 @@ struct DifficultySelectionView: View {
                     }
                     .padding(.horizontal, 22)
                     .padding(.top, 54)
-                    .opacity(appeared ? 1 : 0)
 
                     // ── Header ──
                     VStack(spacing: 14) {
@@ -160,8 +158,6 @@ struct DifficultySelectionView: View {
                         }
                     }
                     .padding(.top, 8)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : -20)
                     
                     // ── Difficulty Cards ──
                     VStack(spacing: 16) {
@@ -176,13 +172,6 @@ struct DifficultySelectionView: View {
                                         selectedDifficulty = difficulty
                                     }
                                 }
-                            )
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 30)
-                            .animation(
-                                .spring(response: 0.6, dampingFraction: 0.8)
-                                    .delay(Double(index) * 0.12 + 0.2),
-                                value: appeared
                             )
                         }
                     }
@@ -221,8 +210,6 @@ struct DifficultySelectionView: View {
                             )
                     )
                     .padding(.horizontal, 22)
-                    .opacity(appeared ? 1 : 0)
-                    .animation(.easeOut.delay(0.6), value: appeared)
                     
                     // ── Launch Button ──
                     Button(action: {
@@ -278,13 +265,10 @@ struct DifficultySelectionView: View {
                     }
                     .padding(.horizontal, 28)
                     .padding(.bottom, 50)
-                    .opacity(appeared ? 1 : 0)
-                    .animation(.easeOut.delay(0.7), value: appeared)
                 }
             }
         }
         .onAppear {
-            withAnimation { appeared = true }
             withAnimation(.easeInOut(duration: 4.0).repeatForever(autoreverses: true)) {
                 gridPulse = true
             }
@@ -299,6 +283,11 @@ struct DifficultySelectionView: View {
         }
     }
 }
+
+// MARK: - Locked Card Opacity
+/// Controls how visible locked difficulty cards (Easy, Hard) appear.
+/// 0.0 = invisible, 1.0 = fully visible. Raise this if the cards look too dark.
+private let lockedCardOpacity: Double = 1.00
 
 // MARK: - Liquid Glass Difficulty Card
 
@@ -495,7 +484,7 @@ struct LiquidGlassCard: View {
             )
             .shadow(color: isSelected && !isLocked ? accent.opacity(0.2) : .clear, radius: 20, y: 8)
             .scaleEffect(isSelected && !isLocked ? 1.02 : 1.0)
-            .opacity(isLocked ? 0.55 : 1.0)
+            .opacity(isLocked ? lockedCardOpacity : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
         .disabled(isLocked)
