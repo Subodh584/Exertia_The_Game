@@ -23,6 +23,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         let lastSessionDuration: Int?
         let lastSessionCalories: Int?
         let lastSessionDistance: Double?
+        let lastSessionStatus: String?
         let bestSessionDuration: Int?
         let bestSessionCalories: Int?
         let bestSessionDistance: Double?
@@ -67,6 +68,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     
     private let lastTimeLabel = UILabel()
     private let lastCalLabel = UILabel()
+    private let lastRunStatusLabel = UILabel()
     private let bestTimeLabel = UILabel()
     private let bestCalLabel = UILabel()
     
@@ -95,6 +97,8 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var streakCountLabel: UILabel?
     private var streakSubtitleLabel: UILabel?
     private var bestStreakLabel: UILabel?
+
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -111,6 +115,15 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         addStreakView()
         styleTabBar()
         initTabs()
+        loadingIndicator.color = .white
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+
         loadCachedStatsSnapshot()
         fetchRealUserName()
         fetchStatsData()
@@ -151,6 +164,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var apiLastSessionDuration: Int? = nil
     private var apiLastSessionCalories: Int? = nil
     private var apiLastSessionDistance: Double? = nil
+    private var apiLastSessionStatus: String? = nil
     private var apiBestSessionDuration: Int? = nil
     private var apiBestSessionCalories: Int? = nil
     private var apiBestSessionDistance: Double? = nil
@@ -229,6 +243,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         apiLastSessionDuration = snapshot.lastSessionDuration
         apiLastSessionCalories = snapshot.lastSessionCalories
         apiLastSessionDistance = snapshot.lastSessionDistance
+        apiLastSessionStatus = snapshot.lastSessionStatus
         apiBestSessionDuration = snapshot.bestSessionDuration
         apiBestSessionCalories = snapshot.bestSessionCalories
         apiBestSessionDistance = snapshot.bestSessionDistance
@@ -259,6 +274,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             lastSessionDuration: apiLastSessionDuration,
             lastSessionCalories: apiLastSessionCalories,
             lastSessionDistance: apiLastSessionDistance,
+            lastSessionStatus: apiLastSessionStatus,
             bestSessionDuration: apiBestSessionDuration,
             bestSessionCalories: apiBestSessionCalories,
             bestSessionDistance: apiBestSessionDistance,
@@ -304,6 +320,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     func fetchStatsData() {
         guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
 
+        DispatchQueue.main.async { self.loadingIndicator.startAnimating() }
         Task {
             do {
                 // Fetch aggregated stats
@@ -320,11 +337,16 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 // Fetch all sessions to find last run
                 let sessions = try await SupabaseManager.shared.getUserSessions(userId: userId)
                 let completed = sessions.filter { $0.completion_status == "completed" }
-                self.allCompletedSessions = completed   // stored for calendar day-stats
+                let calendarSessions = sessions.filter {
+                    let status = $0.completion_status?.lowercased() ?? ""
+                    return status == "completed" || status == "abandoned"
+                }
+                self.allCompletedSessions = calendarSessions   // stored for calendar day-stats
 
                 // Compute TODAY (IST) totals for the ring / big stat label
-                let todaySessions = completed.filter { s in
-                    guard let raw = s.created_at,
+                let todaySessions = sessions.filter { s in
+                    guard s.countsTowardDailyProgress,
+                          let raw = s.created_at,
                           let ts  = ISODateParser.date(from: raw) else { return false }
                     return Self.istCalendar.isDateInToday(ts)
                 }
@@ -332,12 +354,16 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 self.apiTodayDistance = todaySessions.compactMap { $0.distance_covered }.reduce(0, +)
                 print("📊 Stats today (IST): \(self.apiTodayCalories) cal, \(String(format: "%.2f", self.apiTodayDistance)) km (\(todaySessions.count) sessions)")
 
-                let sorted = completed.sorted { ($0.created_at ?? "") > ($1.created_at ?? "") }
+                let recentDisplayableSessions = sessions.filter {
+                    let status = $0.completion_status?.lowercased() ?? ""
+                    return status == "completed" || status == "abandoned"
+                }.sorted { ($0.created_at ?? "") > ($1.created_at ?? "") }
 
-                if let lastSession = sorted.first {
+                if let lastSession = recentDisplayableSessions.first {
                     self.apiLastSessionDuration = lastSession.duration_minutes
                     self.apiLastSessionCalories = lastSession.calories_burned
                     self.apiLastSessionDistance = lastSession.distance_covered
+                    self.apiLastSessionStatus = lastSession.completion_status
                 }
 
                 // If stats endpoint doesn't have best duration, compute from sessions
@@ -346,13 +372,17 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 }
 
                 DispatchQueue.main.async {
+                    self.loadingIndicator.stopAnimating()
                     self.refreshUI()
                     self.persistStatsSnapshot()
                     print("✅ Statistics UI hydrated with real API data!")
                 }
             } catch {
                 print("❌ Failed to fetch stats data: \(error). Using defaults.")
-                DispatchQueue.main.async { self.refreshUI() }
+                DispatchQueue.main.async {
+                    self.loadingIndicator.stopAnimating()
+                    self.refreshUI()
+                }
             }
         }
     }
@@ -610,7 +640,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         stack.distribution = .fillEqually
         
         runCard = glassCard(h: 130)
-        fillSmallCard(view: runCard!, title: "Last Run", tLabel: lastTimeLabel, cLabel: lastCalLabel)
+        fillSmallCard(view: runCard!, title: "Last Run", tLabel: lastTimeLabel, cLabel: lastCalLabel, statusLabel: lastRunStatusLabel)
         
         bestCard = glassCard(h: 130)
         fillSmallCard(view: bestCard!, title: "Personal Best", tLabel: bestTimeLabel, cLabel: bestCalLabel)
@@ -954,27 +984,53 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         }
     }
     
-    func fillSmallCard(view: UIView, title: String, tLabel: UILabel, cLabel: UILabel) {
+    func fillSmallCard(view: UIView, title: String, tLabel: UILabel, cLabel: UILabel, statusLabel: UILabel? = nil) {
         let l = UILabel()
         l.text = title
         l.font = .systemFont(ofSize: 14, weight: .bold)
         l.textColor = .white
+        l.setContentHuggingPriority(.required, for: .horizontal)
+
+        if let statusLabel {
+            statusLabel.font = .systemFont(ofSize: 9, weight: .bold)
+            statusLabel.textColor = .systemOrange
+            statusLabel.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.12)
+            statusLabel.layer.borderWidth = 1
+            statusLabel.layer.borderColor = UIColor.systemOrange.withAlphaComponent(0.45).cgColor
+            statusLabel.layer.cornerRadius = 8
+            statusLabel.clipsToBounds = true
+            statusLabel.textAlignment = .center
+            statusLabel.isHidden = true
+            statusLabel.translatesAutoresizingMaskIntoConstraints = false
+            statusLabel.heightAnchor.constraint(equalToConstant: 16).isActive = true
+            statusLabel.widthAnchor.constraint(equalToConstant: 62).isActive = true
+        }
+
         let img = UIImageView(image: UIImage(systemName: "chevron.right"))
         img.tintColor = .white
-        let top = UIStackView(arrangedSubviews: [l, UIView(), img])
+        img.setContentHuggingPriority(.required, for: .horizontal)
+
+        var topViews: [UIView] = [l]
+        if let statusLabel { topViews.append(statusLabel) }
+        let spacer = UIView()
+        topViews.append(spacer)
+        topViews.append(img)
+        let top = UIStackView(arrangedSubviews: topViews)
         top.distribution = .fill
-        
+        top.alignment = .center
+        top.spacing = 6
+
         let r1 = makeRow(icon: "Running", label: "Distance", c: .neonYellow, l: tLabel)
         let r2 = makeRow(icon: "fire", label: "Calories", c: .neonPink, l: cLabel)
-        
+
         let box = UIStackView(arrangedSubviews: [top, r1, r2])
         box.axis = .vertical
-        box.spacing = 10
+        box.spacing = 8
         box.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(box)
         NSLayoutConstraint.activate([
-            box.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 15),
-            box.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -15),
+            box.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
+            box.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
             box.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
@@ -1038,6 +1094,9 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             lastTimeLabel.text = "-- m"
             lastCalLabel.text = "-- cal"
         }
+        let lastStatus = apiLastSessionStatus?.lowercased() ?? ""
+        lastRunStatusLabel.text = lastStatus == "abandoned" ? "Abandoned" : nil
+        lastRunStatusLabel.isHidden = lastStatus != "abandoned"
 
         // Personal Best card
         if let bestDist = apiBestSessionDistance, let bestCal = apiBestSessionCalories {

@@ -15,6 +15,11 @@ class HomeViewController: UIViewController {
     @IBOutlet weak var distanceLabel: UILabel!
     @IBOutlet weak var caloriesLabel: UILabel!
 
+    /// Shift the EXERTIA logo left (–) or right (+) in points
+    private let logoOffsetX: CGFloat = 0.9
+    /// Shift the EXERTIA logo up (–) or down (+) in points
+    private let logoOffsetY: CGFloat = 0.0
+
     private let tabBarContainer = UIView()
     private let tabBarStackView = UIStackView()
     private let indicatorView = UIView()
@@ -362,9 +367,10 @@ class HomeViewController: UIViewController {
 
                 let (stats, user, sessions, liveStreak) = try await (statsFetch, userFetch, sessFetch, streakFetch)
 
-                // Filter completed sessions whose created_at falls on TODAY in IST
+                // Count both completed and abandoned sessions toward today's totals
+                // as long as Supabase recorded real distance/calories on them.
                 let todaySessions = sessions.filter { s in
-                    guard s.completion_status == "completed",
+                    guard s.countsTowardDailyProgress,
                           let raw = s.created_at,
                           let ts  = ISODateParser.date(from: raw) else { return false }
                     return Self.istCalendar.isDateInToday(ts)
@@ -664,6 +670,7 @@ class HomeViewController: UIViewController {
                 if let imgView = subview as? UIImageView, imgView.image?.size == oldLogoSize {
                     imgView.image = newLogo
                     imgView.contentMode = .scaleAspectFit
+                    imgView.transform = CGAffineTransform(translationX: logoOffsetX, y: logoOffsetY)
                 }
             }
         }

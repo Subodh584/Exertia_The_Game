@@ -22,6 +22,10 @@ class SessionDetailViewController: UIViewController {
     private let scrollView   = UIScrollView()
     private let stackContainer = UIStackView()
 
+    private var isAbandoned: Bool {
+        session?.completionStatus.lowercased() == "abandoned"
+    }
+
     // MARK: Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -90,9 +94,8 @@ class SessionDetailViewController: UIViewController {
         backBtn.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        // Personal Best badge top-right (if applicable)
-        if isBest {
-            let badge = buildBestBadge()
+        // Status / best badge top-right
+        if let badge = makeNavBadge() {
             navBar.addSubview(badge)
             NSLayoutConstraint.activate([
                 badge.trailingAnchor.constraint(equalTo: navBar.trailingAnchor, constant: -20),
@@ -171,8 +174,14 @@ class SessionDetailViewController: UIViewController {
         let trackLbl = makeLbl(s.trackName,                      size: 20, weight: .bold,    color: .white)
         let dateLbl  = makeLbl(Self.dateFmt.string(from: s.date), size: 13, weight: .medium,  color: UIColor.white.withAlphaComponent(0.5))
         let timeLbl  = makeLbl(Self.timeFmt.string(from: s.date), size: 13, weight: .medium,  color: UIColor.white.withAlphaComponent(0.35))
-
-        let infoStack = UIStackView(arrangedSubviews: [trackLbl, dateLbl, timeLbl])
+        let arranged: [UIView]
+        if isAbandoned {
+            let subtitle = makeLbl("Session ended early", size: 11, weight: .semibold, color: UIColor.systemOrange.withAlphaComponent(0.9))
+            arranged = [trackLbl, dateLbl, timeLbl, subtitle]
+        } else {
+            arranged = [trackLbl, dateLbl, timeLbl]
+        }
+        let infoStack = UIStackView(arrangedSubviews: arranged)
         infoStack.axis = .vertical; infoStack.spacing = 4
         infoStack.translatesAutoresizingMaskIntoConstraints = false
 
@@ -320,6 +329,39 @@ class SessionDetailViewController: UIViewController {
             sv.trailingAnchor.constraint(equalTo: v.trailingAnchor, constant: -8),
             sv.topAnchor.constraint(equalTo: v.topAnchor, constant: 5),
             sv.bottomAnchor.constraint(equalTo: v.bottomAnchor, constant: -5)
+        ])
+        return v
+    }
+
+    private func makeNavBadge() -> UIView? {
+        if isAbandoned {
+            return buildStatusBadge(text: "Abandoned", color: .systemOrange)
+        }
+        if isBest {
+            return buildBestBadge()
+        }
+        return nil
+    }
+
+    private func buildStatusBadge(text: String, color: UIColor) -> UIView {
+        let v = UIView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.backgroundColor = color.withAlphaComponent(0.15)
+        v.layer.cornerRadius = 12
+        v.layer.borderWidth = 1
+        v.layer.borderColor = color.withAlphaComponent(0.55).cgColor
+
+        let l = UILabel()
+        l.text = text
+        l.font = .systemFont(ofSize: 11, weight: .bold)
+        l.textColor = color
+        l.translatesAutoresizingMaskIntoConstraints = false
+        v.addSubview(l)
+        NSLayoutConstraint.activate([
+            l.leadingAnchor.constraint(equalTo: v.leadingAnchor, constant: 8),
+            l.trailingAnchor.constraint(equalTo: v.trailingAnchor, constant: -8),
+            l.topAnchor.constraint(equalTo: v.topAnchor, constant: 5),
+            l.bottomAnchor.constraint(equalTo: v.bottomAnchor, constant: -5)
         ])
         return v
     }

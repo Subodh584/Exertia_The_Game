@@ -23,13 +23,15 @@ class DayStatsViewController: UIViewController {
         "Nova-Station"
     }
 
+    private let abandonedOrange = UIColor(red: 1.0, green: 0.62, blue: 0.18, alpha: 1.0)
+
     // MARK: Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor(red: 13/255, green: 5/255, blue: 26/255, alpha: 1.0)
 
-        // Sort by time and find best (highest distance)
-        sortedSessions = sessions.sorted { ($0.created_at ?? "") < ($1.created_at ?? "") }
+        // Show newest sessions first, while still computing the best by distance.
+        sortedSessions = sessions.sorted { ($0.created_at ?? "") > ($1.created_at ?? "") }
         bestSessionIndex = sortedSessions.indices.max {
             (sortedSessions[$0].distance_covered ?? 0) < (sortedSessions[$1].distance_covered ?? 0)
         }
@@ -220,7 +222,8 @@ class DayStatsViewController: UIViewController {
     // MARK: Tappable session card
     private func buildSessionCard(_ s: AppSession, index: Int) -> UIView {
         let isBest = (index == bestSessionIndex)
-        let card   = glassCard(h: nil, isBest: isBest)
+        let isAbandoned = (s.completion_status?.lowercased() == "abandoned")
+        let card   = glassCard(h: nil, isBest: isBest, isAbandoned: isAbandoned)
 
         let timeStr  = s.created_at.flatMap { raw -> String? in
             guard let ts = ISODateParser.date(from: raw) else { return nil }
@@ -254,7 +257,10 @@ class DayStatsViewController: UIViewController {
         chevron.widthAnchor.constraint(equalToConstant: 10).isActive  = true
         chevron.heightAnchor.constraint(equalToConstant: 10).isActive = true
 
-        let row = UIStackView(arrangedSubviews: [leftStack, rightStack, chevron])
+        let statusLabel = makeStatusLabel(text: "Abandoned")
+        statusLabel.isHidden = !isAbandoned
+
+        let row = UIStackView(arrangedSubviews: [leftStack, UIView(), statusLabel, rightStack, chevron])
         row.axis = .horizontal; row.alignment = .center; row.spacing = 10
         row.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(row)
@@ -354,13 +360,13 @@ class DayStatsViewController: UIViewController {
             totalSteps:         s.total_steps       ?? 0,
             distanceCovered:    s.distance_covered  ?? 0,
             averageSpeed:       s.average_speed,
-            characterImageName: "character1",
+            characterImageName: "CharacterAssetThumbnail",
             completionStatus:   s.completion_status ?? "completed"
         )
     }
 
     // MARK: Helpers
-    private func glassCard(h: CGFloat?, isBest: Bool = false) -> UIView {
+    private func glassCard(h: CGFloat?, isBest: Bool = false, isAbandoned: Bool = false) -> UIView {
         let gold = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1)
         let v = UIView()
         v.translatesAutoresizingMaskIntoConstraints = false
@@ -369,10 +375,15 @@ class DayStatsViewController: UIViewController {
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
         blur.translatesAutoresizingMaskIntoConstraints = false
         blur.layer.cornerRadius = 20; blur.clipsToBounds = true
-        blur.layer.borderColor  = isBest
-            ? gold.withAlphaComponent(0.5).cgColor
-            : UIColor.white.withAlphaComponent(0.15).cgColor
-        blur.layer.borderWidth = isBest ? 1.5 : 1
+        if isAbandoned {
+            blur.layer.borderColor = abandonedOrange.withAlphaComponent(0.65).cgColor
+            blur.layer.borderWidth = 1.25
+        } else {
+            blur.layer.borderColor  = isBest
+                ? gold.withAlphaComponent(0.5).cgColor
+                : UIColor.white.withAlphaComponent(0.15).cgColor
+            blur.layer.borderWidth = isBest ? 1.5 : 1
+        }
         v.addSubview(blur)
         NSLayoutConstraint.activate([
             blur.topAnchor.constraint(equalTo: v.topAnchor),
@@ -387,6 +398,15 @@ class DayStatsViewController: UIViewController {
         let l = UILabel()
         l.text = text; l.font = .systemFont(ofSize: size, weight: weight)
         l.textColor = color; l.translatesAutoresizingMaskIntoConstraints = false
+        return l
+    }
+
+    private func makeStatusLabel(text: String) -> UILabel {
+        let l = UILabel()
+        l.text = text
+        l.font = .systemFont(ofSize: 10, weight: .semibold)
+        l.textColor = abandonedOrange
+        l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }
 }

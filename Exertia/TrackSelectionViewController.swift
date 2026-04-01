@@ -29,7 +29,7 @@ class TrackSelectionViewController: UIViewController {
     var currentIndex = 0
 
     // MARK: — Distance / Calories goal
-    /// 10 kcal per 0.1 km = 100 kcal per km
+    /// Goal conversion used by the UI: 0.1 km = 10 kcal
     private static let calPerKm: Double = 100
     private static let minKm:    Double = 0.1   // 100 m floor
     private static let maxKm:    Double = 42.2  // marathon cap
@@ -45,11 +45,15 @@ class TrackSelectionViewController: UIViewController {
         }
     }
     /// Slave — always in sync with distanceKm via the ratio. Do not set directly.
-    private var minCalories: Int = 7
+    private var minCalories: Int = 10
 
     // Goal controls built entirely in code
     private let distBtn = UIButton(type: .system)
     private let calBtn = UIButton(type: .system)
+    private let distEditBtn = UIButton(type: .system)
+    private let calEditBtn = UIButton(type: .system)
+    private let distTextField = UITextField()
+    private let calTextField = UITextField()
     private let distancePicker = CleanPickerView()
     private let calPicker = CleanPickerView()
     private let pickerOverlay = UIButton(type: .custom)
@@ -229,9 +233,11 @@ class TrackSelectionViewController: UIViewController {
 
         distBtn.addTarget(self, action: #selector(goalButtonTapped(_:)), for: .touchUpInside)
         calBtn.addTarget(self, action: #selector(goalButtonTapped(_:)), for: .touchUpInside)
+        distEditBtn.addTarget(self, action: #selector(goalEditTapped(_:)), for: .touchUpInside)
+        calEditBtn.addTarget(self, action: #selector(goalEditTapped(_:)), for: .touchUpInside)
 
-        let distCol = makeGoalColumn(btn: distBtn, picker: distancePicker)
-        let calCol  = makeGoalColumn(btn: calBtn, picker: calPicker)
+        let distCol = makeGoalColumn(btn: distBtn, editBtn: distEditBtn, picker: distancePicker, textField: distTextField, isDistance: true)
+        let calCol  = makeGoalColumn(btn: calBtn, editBtn: calEditBtn, picker: calPicker, textField: calTextField, isDistance: false)
 
         let row = UIStackView(arrangedSubviews: [distCol, calCol])
         row.axis         = .horizontal
@@ -263,7 +269,7 @@ class TrackSelectionViewController: UIViewController {
     }
 
     /// One column: glass-pill picker combined layout
-    private func makeGoalColumn(btn: UIButton, picker: UIPickerView) -> UIView {
+    private func makeGoalColumn(btn: UIButton, editBtn: UIButton, picker: UIPickerView, textField: UITextField, isDistance: Bool) -> UIView {
         let col = UIView()
         col.translatesAutoresizingMaskIntoConstraints = false
 
@@ -271,23 +277,51 @@ class TrackSelectionViewController: UIViewController {
         let pill = makeGlassPill()
         col.addSubview(pill)
 
-        // Text Button for closed state with native placement of the pencil icon
+        // Text button for closed state
         var config = UIButton.Configuration.plain()
-        config.image = UIImage(systemName: "pencil")
-        config.imagePlacement = .trailing
-        config.imagePadding = 6
-        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
         config.baseForegroundColor = .white
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12)
         btn.configuration = config
+        btn.contentHorizontalAlignment = .leading
         btn.translatesAutoresizingMaskIntoConstraints = false
-        
+
+        let pencilConfig = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+        editBtn.setImage(UIImage(systemName: "pencil", withConfiguration: pencilConfig), for: .normal)
+        editBtn.tintColor = UIColor.white.withAlphaComponent(0.9)
+        editBtn.translatesAutoresizingMaskIntoConstraints = false
+
+        // Inline text field (hidden by default, shown on pencil tap)
+        textField.font = .systemFont(ofSize: 16, weight: .bold)
+        textField.textColor = .white
+        textField.keyboardType = .decimalPad
+        textField.textAlignment = .left
+        textField.backgroundColor = .clear
+        textField.borderStyle = .none
+        textField.tintColor = .neonPink
+        textField.alpha = 0
+        textField.isHidden = true
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        textField.returnKeyType = .done
+        textField.tag = isDistance ? 100 : 200
+        textField.delegate = self
+
+        // Add a toolbar with Done button for decimal pad
+        let toolbar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 100, height: 44))
+        toolbar.barStyle = .default
+        let flexSpace = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let doneItem = UIBarButtonItem(title: "Done", style: .done, target: self, action: #selector(textFieldDoneTapped))
+        toolbar.items = [flexSpace, doneItem]
+        textField.inputAccessoryView = toolbar
+
         // Picker for open state
         picker.alpha = 0
         picker.isHidden = true
         picker.translatesAutoresizingMaskIntoConstraints = false
-        
+
         // Pill interior
         pill.addSubview(btn)
+        pill.addSubview(textField)
+        pill.addSubview(editBtn)
         pill.addSubview(picker)
 
         NSLayoutConstraint.activate([
@@ -299,13 +333,22 @@ class TrackSelectionViewController: UIViewController {
             btn.topAnchor.constraint(equalTo: pill.topAnchor),
             btn.bottomAnchor.constraint(equalTo: pill.bottomAnchor),
             btn.leadingAnchor.constraint(equalTo: pill.leadingAnchor),
-            btn.trailingAnchor.constraint(equalTo: pill.trailingAnchor),
-            
+            btn.trailingAnchor.constraint(equalTo: editBtn.leadingAnchor, constant: -4),
+
+            textField.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 14),
+            textField.trailingAnchor.constraint(equalTo: editBtn.leadingAnchor, constant: -4),
+            textField.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+
+            editBtn.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
+            editBtn.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+            editBtn.widthAnchor.constraint(equalToConstant: 22),
+            editBtn.heightAnchor.constraint(equalToConstant: 22),
+
             // Picker constrained strictly over the center
             picker.topAnchor.constraint(equalTo: pill.topAnchor),
             picker.bottomAnchor.constraint(equalTo: pill.bottomAnchor),
-            picker.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
-            picker.widthAnchor.constraint(equalTo: btn.widthAnchor)
+            picker.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 6),
+            picker.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -6)
         ])
         return col
     }
@@ -541,9 +584,7 @@ extension TrackSelectionViewController {
     @objc private func goalButtonTapped(_ sender: UIButton) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         AudioManager.shared.playEffect(.buttonTapped)
-        
-        let isDist = (sender === distBtn)
-        
+
         pickerOverlay.isHidden = false
         distancePicker.isHidden = false
         calPicker.isHidden = false
@@ -558,6 +599,75 @@ extension TrackSelectionViewController {
             self.calBtn.alpha = 0
             self.view.layoutIfNeeded()
         }
+    }
+
+    @objc private func goalEditTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.targetButton)
+        dismissInlinePickerIfNeeded()
+
+        let isDistance = (sender === distEditBtn)
+        let tf = isDistance ? distTextField : calTextField
+        let btn = isDistance ? distBtn : calBtn
+
+        // Pre-fill with current value
+        tf.text = isDistance
+            ? String(format: "%.1f", distanceKm)
+            : "\(minCalories)"
+
+        // Swap: hide button, show text field
+        tf.isHidden = false
+        UIView.animate(withDuration: 0.2) {
+            btn.alpha = 0
+            tf.alpha = 1
+        }
+        tf.becomeFirstResponder()
+        tf.selectAll(nil)
+    }
+
+    @objc private func textFieldDoneTapped() {
+        if distTextField.isFirstResponder {
+            commitTextField(distTextField)
+        } else if calTextField.isFirstResponder {
+            commitTextField(calTextField)
+        }
+    }
+
+    private func commitTextField(_ tf: UITextField) {
+        guard !tf.isHidden else { return }  // already committed
+        tf.resignFirstResponder()
+        let isDistance = (tf.tag == 100)
+        let btn = isDistance ? distBtn : calBtn
+
+        if let raw = tf.text?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+            if isDistance, let km = Double(raw) {
+                distanceKm = km
+            } else if !isDistance, let cal = Double(raw) {
+                distanceKm = cal / Self.calPerKm
+            }
+        }
+
+        // Swap back: hide text field, show button
+        UIView.animate(withDuration: 0.2) {
+            tf.alpha = 0
+            btn.alpha = 1
+        } completion: { _ in
+            tf.isHidden = true
+        }
+        refreshGoalFields()
+    }
+
+    private func dismissInlinePickerIfNeeded() {
+        guard !pickerOverlay.isHidden else { return }
+        pickerOverlay.alpha = 0
+        distancePicker.alpha = 0
+        calPicker.alpha = 0
+        distBtn.alpha = 1
+        calBtn.alpha = 1
+        rowHeightConstraint.constant = 54
+        pickerOverlay.isHidden = true
+        distancePicker.isHidden = true
+        calPicker.isHidden = true
+        view.layoutIfNeeded()
     }
     
     @objc private func dismissInlinePicker() {
@@ -577,6 +687,18 @@ extension TrackSelectionViewController {
             self.distancePicker.isHidden = true
             self.calPicker.isHidden = true
         }
+    }
+}
+
+// MARK: — UITextFieldDelegate
+extension TrackSelectionViewController: UITextFieldDelegate {
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        commitTextField(textField)
+        return true
+    }
+
+    func textFieldDidEndEditing(_ textField: UITextField) {
+        commitTextField(textField)
     }
 }
 

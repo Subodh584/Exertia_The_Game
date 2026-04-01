@@ -1,23 +1,14 @@
 import UIKit
 
-// MARK: - Filter Period
-private enum FilterPeriod: Int, CaseIterable {
-    case all, sevenDays, thirtyDays, ninetyDays
+// MARK: - Filter by Status
+private enum StatusFilter: Int, CaseIterable {
+    case all, completed, abandoned
 
     var title: String {
         switch self {
         case .all:        return "All"
-        case .sevenDays:  return "7 Days"
-        case .thirtyDays: return "30 Days"
-        case .ninetyDays: return "90 Days"
-        }
-    }
-    var days: Int? {
-        switch self {
-        case .all:        return nil
-        case .sevenDays:  return 7
-        case .thirtyDays: return 30
-        case .ninetyDays: return 90
+        case .completed:  return "Completed"
+        case .abandoned:  return "Abandoned"
         }
     }
 }
@@ -31,7 +22,7 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
     private var allHistory: [GameSession] = []
     private var filteredHistory: [GameSession] = []
     private var bestIndexInFiltered: Int? = nil
-    private var activeFilter: FilterPeriod = .all
+    private var activeFilter: StatusFilter = .all
 
     // Nav — mirrors Stats page
     private let navBar       = UIView()
@@ -43,8 +34,9 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
     private var filterButtons: [UIButton] = []
     private let filterScroll  = UIScrollView()
 
-    private let tableView  = UITableView()
-    private let emptyLabel = UILabel()
+    private let tableView       = UITableView()
+    private let emptyLabel      = UILabel()
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
 
     // IST
     private static let istTZ = TimeZone(identifier: "Asia/Kolkata")!
@@ -60,6 +52,16 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         configureNavBar()
         configureFilterBar()
         configureTable()
+
+        loadingIndicator.color = .white
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+
         fetchSessionsFromAPI()
     }
 
@@ -137,9 +139,9 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         chipStack.translatesAutoresizingMaskIntoConstraints = false
         filterScroll.addSubview(chipStack)
 
-        for (i, period) in FilterPeriod.allCases.enumerated() {
+        for (i, filter) in StatusFilter.allCases.enumerated() {
             let btn = UIButton()
-            btn.setTitle(period.title, for: .normal)
+            btn.setTitle(filter.title, for: .normal)
             btn.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
             btn.contentEdgeInsets = UIEdgeInsets(top: 7, left: 16, bottom: 7, right: 16)
             btn.layer.cornerRadius = 14
@@ -180,27 +182,25 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
 
     @objc private func filterTapped(_ sender: UIButton) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        activeFilter = FilterPeriod.allCases[sender.tag]
+        activeFilter = StatusFilter.allCases[sender.tag]
         filterButtons.enumerated().forEach { i, btn in styleChip(btn, selected: i == sender.tag) }
         applyFilter(animate: true)
     }
 
     // MARK: Apply filter to history list
     private func applyFilter(animate: Bool) {
-        let cutoff: Date?
-        if let days = activeFilter.days {
-            var cal = Calendar.current
-            cal.timeZone = Self.istTZ
-            cutoff = cal.date(byAdding: .day, value: -days, to: Date())
-        } else {
-            cutoff = nil
+        switch activeFilter {
+        case .all:
+            filteredHistory = allHistory
+        case .completed:
+            filteredHistory = allHistory.filter { $0.completionStatus == "completed" }
+        case .abandoned:
+            filteredHistory = allHistory.filter { $0.completionStatus == "abandoned" }
         }
 
-        filteredHistory = cutoff == nil
-            ? allHistory
-            : allHistory.filter { $0.date >= cutoff! }
-
-        bestIndexInFiltered = filteredHistory.indices.max {
+        // Best run is based on distance — only completed sessions are eligible
+        let completedIndices = filteredHistory.indices.filter { filteredHistory[$0].completionStatus == "completed" }
+        bestIndexInFiltered = completedIndices.max {
             filteredHistory[$0].distanceCovered < filteredHistory[$1].distanceCovered
         }
 
@@ -256,11 +256,13 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
     // MARK: API
     func fetchSessionsFromAPI() {
         guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
+        loadingIndicator.startAnimating()
         Task {
             do {
                 let sessions = try await SupabaseManager.shared.getUserSessions(userId: userId)
-                let completed = sessions.filter { $0.completion_status == "completed" }
-                let converted: [GameSession] = completed.compactMap { s in
+                let converted: [GameSession] = sessions.compactMap { s in
+                    // Include both completed and abandoned sessions
+                    guard s.completion_status == "completed" || s.completion_status == "abandoned" else { return nil }
                     let date = ISODateParser.date(from: s.created_at ?? "") ?? Date()
                     let track = "Nova-Station"
                     return GameSession(
@@ -277,16 +279,20 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
                         totalSteps:       s.total_steps       ?? 0,
                         distanceCovered:  s.distance_covered  ?? 0,
                         averageSpeed:     s.average_speed,
-                        characterImageName: "character1",
+                        characterImageName: "CharacterAssetThumbnail",
                         completionStatus: s.completion_status ?? "completed"
                     )
                 }.sorted { $0.date > $1.date }
 
                 DispatchQueue.main.async {
+                    self.loadingIndicator.stopAnimating()
                     self.allHistory = converted
                     self.applyFilter(animate: true)
                 }
-            } catch { print("❌ Run history fetch: \(error)") }
+            } catch {
+                DispatchQueue.main.async { self.loadingIndicator.stopAnimating() }
+                print("❌ Run history fetch: \(error)")
+            }
         }
     }
 
@@ -351,9 +357,10 @@ class HistoryRowCell: UITableViewCell {
     private let arrowImg   = UIImageView()
 
     // Badge stack — both pinned to the left, collapsed when both hidden
-    private let badgeStack = UIStackView()
-    private let newBadge   = BadgePill(text: "NEW",  color: .systemPink)
-    private let bestBadge  = BadgePill(text: "BEST", color: UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1))
+    private let badgeStack     = UIStackView()
+    private let newBadge       = BadgePill(text: "NEW",  color: .systemPink)
+    private let bestBadge      = BadgePill(text: "BEST", color: UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1))
+    private let abandonedBadge = BadgePill(text: "ABANDONED", color: .systemOrange)
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -413,6 +420,7 @@ class HistoryRowCell: UITableViewCell {
         badgeStack.alignment = .center
         badgeStack.addArrangedSubview(newBadge)
         badgeStack.addArrangedSubview(bestBadge)
+        badgeStack.addArrangedSubview(abandonedBadge)
         badgeStack.translatesAutoresizingMaskIntoConstraints = false
         blurView.contentView.addSubview(badgeStack)
 
@@ -460,15 +468,27 @@ class HistoryRowCell: UITableViewCell {
         distLbl.text  = formatDistanceKm(session.distanceCovered)
         calLbl.text   = "\(session.caloriesBurned) kcal"
 
-        newBadge.isHidden   = !isLatest
-        bestBadge.isHidden  = !isBest
-        badgeStack.isHidden = !isLatest && !isBest
+        let isAbandoned = session.completionStatus == "abandoned"
+
+        newBadge.isHidden       = !isLatest || isAbandoned
+        bestBadge.isHidden      = !isBest || isAbandoned
+        abandonedBadge.isHidden = !isAbandoned
+        badgeStack.isHidden     = newBadge.isHidden && bestBadge.isHidden && abandonedBadge.isHidden
 
         let gold = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1)
-        blurView.layer.borderColor = isBest
-            ? gold.withAlphaComponent(0.5).cgColor
-            : UIColor.white.withAlphaComponent(0.15).cgColor
-        blurView.layer.borderWidth = isBest ? 1.5 : 1.0
+        if isAbandoned {
+            blurView.layer.borderColor = UIColor.systemOrange.withAlphaComponent(0.4).cgColor
+            blurView.layer.borderWidth = 1.0
+            distLbl.textColor = .systemOrange
+        } else if isBest {
+            blurView.layer.borderColor = gold.withAlphaComponent(0.5).cgColor
+            blurView.layer.borderWidth = 1.5
+            distLbl.textColor = .neonPink
+        } else {
+            blurView.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+            blurView.layer.borderWidth = 1.0
+            distLbl.textColor = .neonPink
+        }
     }
 }
 
