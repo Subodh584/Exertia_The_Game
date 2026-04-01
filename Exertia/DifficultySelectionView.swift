@@ -29,6 +29,11 @@ struct DifficultySelectionView: View {
     @State private var appeared: Bool = false
     @State private var gridPulse: Bool = false
     var onDifficultySelected: ((DifficultySettings.Difficulty) -> Void)?
+    var onDismiss: (() -> Void)?
+
+    private func isLocked(_ difficulty: DifficultySettings.Difficulty) -> Bool {
+        difficulty == .easy || difficulty == .hard
+    }
     
     var body: some View {
         ZStack {
@@ -69,6 +74,34 @@ struct DifficultySelectionView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 28) {
                     
+                    // ── Back Button ──
+                    HStack {
+                        Button(action: { onDismiss?() }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .bold))
+                                Text("BACK")
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .tracking(1)
+                            }
+                            .foregroundColor(CyberColors.neonCyan)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(CyberColors.neonCyan.opacity(0.08))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .stroke(CyberColors.neonCyan.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 22)
+                    .padding(.top, 54)
+                    .opacity(appeared ? 1 : 0)
+
                     // ── Header ──
                     VStack(spacing: 14) {
                         // Cyberpunk icon
@@ -126,7 +159,7 @@ struct DifficultySelectionView: View {
                                 .frame(width: 40, height: 1)
                         }
                     }
-                    .padding(.top, 50)
+                    .padding(.top, 8)
                     .opacity(appeared ? 1 : 0)
                     .offset(y: appeared ? 0 : -20)
                     
@@ -136,7 +169,9 @@ struct DifficultySelectionView: View {
                             LiquidGlassCard(
                                 difficulty: difficulty,
                                 isSelected: selectedDifficulty == difficulty,
+                                isLocked: isLocked(difficulty),
                                 onTap: {
+                                    guard !isLocked(difficulty) else { return }
                                     withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                                         selectedDifficulty = difficulty
                                     }
@@ -270,6 +305,7 @@ struct DifficultySelectionView: View {
 struct LiquidGlassCard: View {
     let difficulty: DifficultySettings.Difficulty
     let isSelected: Bool
+    var isLocked: Bool = false
     let onTap: () -> Void
     
     private var accent: Color {
@@ -307,30 +343,30 @@ struct LiquidGlassCard: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 16) {
-                
+
                 // ── Icon container ──
                 ZStack {
                     // Glow behind icon
                     Circle()
-                        .fill(accent.opacity(isSelected ? 0.25 : 0.08))
+                        .fill(accent.opacity(isLocked ? 0.03 : (isSelected ? 0.25 : 0.08)))
                         .frame(width: 52, height: 52)
                         .blur(radius: isSelected ? 8 : 4)
-                    
+
                     Circle()
                         .fill(CyberColors.glassWhite)
                         .frame(width: 48, height: 48)
                         .overlay(
                             Circle()
                                 .stroke(
-                                    accent.opacity(isSelected ? 0.7 : 0.2),
+                                    accent.opacity(isLocked ? 0.08 : (isSelected ? 0.7 : 0.2)),
                                     lineWidth: 1.5
                                 )
                         )
-                    
-                    Image(systemName: iconName)
+
+                    Image(systemName: isLocked ? "lock.fill" : iconName)
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(isSelected ? accent : .white.opacity(0.5))
-                        .shadow(color: isSelected ? accent.opacity(0.6) : .clear, radius: 6)
+                        .foregroundColor(isLocked ? .white.opacity(0.2) : (isSelected ? accent : .white.opacity(0.5)))
+                        .shadow(color: isSelected && !isLocked ? accent.opacity(0.6) : .clear, radius: 6)
                 }
                 
                 // ── Text content ──
@@ -338,42 +374,69 @@ struct LiquidGlassCard: View {
                     HStack(spacing: 8) {
                         Text(difficulty.rawValue.uppercased())
                             .font(.system(size: 18, weight: .bold, design: .monospaced))
-                            .foregroundColor(isSelected ? .white : .white.opacity(0.7))
-                        
-                        Text(tierLabel)
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .tracking(1)
-                            .foregroundColor(accent.opacity(0.8))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .foregroundColor(isLocked ? .white.opacity(0.3) : (isSelected ? .white : .white.opacity(0.7)))
+
+                        if isLocked {
+                            // COMING SOON badge
+                            HStack(spacing: 4) {
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 7, weight: .bold))
+                                Text("COMING SOON")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .tracking(0.5)
+                            }
+                            .foregroundColor(Color.white.opacity(0.5))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
                             .background(
                                 Capsule()
-                                    .fill(accent.opacity(0.12))
+                                    .fill(Color.white.opacity(0.06))
                                     .overlay(
-                                        Capsule().stroke(accent.opacity(0.25), lineWidth: 0.5)
+                                        Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5)
                                     )
                             )
+                        } else {
+                            Text(tierLabel)
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .tracking(1)
+                                .foregroundColor(accent.opacity(0.8))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(accent.opacity(0.12))
+                                        .overlay(
+                                            Capsule().stroke(accent.opacity(0.25), lineWidth: 0.5)
+                                        )
+                                )
+                        }
                     }
-                    
+
                     Text(subtitle)
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .tracking(1.5)
-                        .foregroundColor(.white.opacity(0.35))
+                        .foregroundColor(isLocked ? .white.opacity(0.2) : .white.opacity(0.35))
                 }
-                
+
                 Spacer()
-                
-                // ── Selection indicator ──
+
+                // ── Selection indicator / Lock icon ──
                 ZStack {
-                    Circle()
-                        .stroke(accent.opacity(isSelected ? 0.8 : 0.2), lineWidth: 1.5)
-                        .frame(width: 24, height: 24)
-                    
-                    if isSelected {
+                    if isLocked {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.25))
+                    } else {
                         Circle()
-                            .fill(accent)
-                            .frame(width: 12, height: 12)
-                            .shadow(color: accent.opacity(0.8), radius: 6)
+                            .stroke(accent.opacity(isSelected ? 0.8 : 0.2), lineWidth: 1.5)
+                            .frame(width: 24, height: 24)
+
+                        if isSelected {
+                            Circle()
+                                .fill(accent)
+                                .frame(width: 12, height: 12)
+                                .shadow(color: accent.opacity(0.8), radius: 6)
+                        }
                     }
                 }
             }
@@ -430,10 +493,12 @@ struct LiquidGlassCard: View {
                         )
                 }
             )
-            .shadow(color: isSelected ? accent.opacity(0.2) : .clear, radius: 20, y: 8)
-            .scaleEffect(isSelected ? 1.02 : 1.0)
+            .shadow(color: isSelected && !isLocked ? accent.opacity(0.2) : .clear, radius: 20, y: 8)
+            .scaleEffect(isSelected && !isLocked ? 1.02 : 1.0)
+            .opacity(isLocked ? 0.55 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
+        .disabled(isLocked)
     }
 }
 
@@ -485,9 +550,23 @@ class DifficultySelectionViewController: UIViewController {
         navigationController?.setNavigationBarHidden(true, animated: false)
         
         // Create SwiftUI view
-        let difficultyView = DifficultySelectionView { [weak self] difficulty in
+        var difficultyView = DifficultySelectionView { [weak self] difficulty in
             print("✅ Difficulty selected: \(difficulty.rawValue)")
             self?.onDifficultySelected?()
+        }
+        difficultyView.onDismiss = { [weak self] in
+            // Walk up the presenter chain to find and dismiss back to HomeViewController
+            guard let self = self else { return }
+            var candidate = self.presentingViewController
+            while let current = candidate {
+                if current is HomeViewController {
+                    current.dismiss(animated: true)
+                    return
+                }
+                candidate = current.presentingViewController
+            }
+            // Fallback: dismiss just this nav controller
+            self.navigationController?.dismiss(animated: true)
         }
         
         // Host SwiftUI view in UIKit
