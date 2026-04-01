@@ -48,8 +48,13 @@ class TrackSelectionViewController: UIViewController {
     private var minCalories: Int = 7
 
     // Goal controls built entirely in code
+    private let distBtn = UIButton(type: .system)
+    private let calBtn = UIButton(type: .system)
     private let distancePicker = CleanPickerView()
     private let calPicker = CleanPickerView()
+    private let pickerOverlay = UIButton(type: .custom)
+    
+    private var rowHeightConstraint: NSLayoutConstraint!
 
     // Flag so the ellipse scan only runs once after layout is real
     private var navEllipsesHidden = false
@@ -217,8 +222,16 @@ class TrackSelectionViewController: UIViewController {
 
     // MARK: — Goal controls row (Distance + Calories), built in code
     private func buildGoalControls() {
-        let distCol = makeGoalColumn(picker: distancePicker, isDistance: true)
-        let calCol  = makeGoalColumn(picker: calPicker, isDistance: false)
+        distancePicker.dataSource = self
+        distancePicker.delegate = self
+        calPicker.dataSource = self
+        calPicker.delegate = self
+
+        distBtn.addTarget(self, action: #selector(goalButtonTapped(_:)), for: .touchUpInside)
+        calBtn.addTarget(self, action: #selector(goalButtonTapped(_:)), for: .touchUpInside)
+
+        let distCol = makeGoalColumn(btn: distBtn, picker: distancePicker)
+        let calCol  = makeGoalColumn(btn: calBtn, picker: calPicker)
 
         let row = UIStackView(arrangedSubviews: [distCol, calCol])
         row.axis         = .horizontal
@@ -228,18 +241,29 @@ class TrackSelectionViewController: UIViewController {
         view.addSubview(row)
         view.bringSubviewToFront(row)
 
+        rowHeightConstraint = row.heightAnchor.constraint(equalToConstant: 54)
+        
         NSLayoutConstraint.activate([
             row.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             row.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            row.bottomAnchor.constraint(equalTo: startButton.topAnchor, constant: -24), // iOS native padding
-            row.heightAnchor.constraint(equalToConstant: 54)   // pill-only height, no label row
+            row.bottomAnchor.constraint(equalTo: startButton.topAnchor, constant: -24),
+            rowHeightConstraint
         ])
+        
+        // Picker overlay button over the WHOLE screen to catch outside taps gracefully
+        pickerOverlay.frame = view.bounds
+        pickerOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        pickerOverlay.backgroundColor = UIColor(white: 0, alpha: 0.5)
+        pickerOverlay.alpha = 0
+        pickerOverlay.isHidden = true
+        pickerOverlay.addTarget(self, action: #selector(dismissInlinePicker), for: .touchUpInside)
+        view.insertSubview(pickerOverlay, belowSubview: row)
 
         refreshGoalFields()
     }
 
-    /// One column: glass-pill picker
-    private func makeGoalColumn(picker: UIPickerView, isDistance: Bool) -> UIView {
+    /// One column: glass-pill picker combined layout
+    private func makeGoalColumn(btn: UIButton, picker: UIPickerView) -> UIView {
         let col = UIView()
         col.translatesAutoresizingMaskIntoConstraints = false
 
@@ -247,22 +271,24 @@ class TrackSelectionViewController: UIViewController {
         let pill = makeGlassPill()
         col.addSubview(pill)
 
-        // Separate up / down buttons
-        let upBtn   = makePillArrow(sf: "chevron.up",   tag: isDistance ? 10 : 20)
-        let downBtn = makePillArrow(sf: "chevron.down", tag: isDistance ? 11 : 21)
-
-        // Picker view
-        picker.dataSource = self
-        picker.delegate   = self
+        // Text Button for closed state with native placement of the pencil icon
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(systemName: "pencil")
+        config.imagePlacement = .trailing
+        config.imagePadding = 6
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+        config.baseForegroundColor = .white
+        btn.configuration = config
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Picker for open state
+        picker.alpha = 0
+        picker.isHidden = true
         picker.translatesAutoresizingMaskIntoConstraints = false
         
-        // Pill interior: [▼] [picker] [▲]
-        let pillRow = UIStackView(arrangedSubviews: [downBtn, picker, upBtn])
-        pillRow.axis      = .horizontal
-        pillRow.alignment = .center
-        pillRow.spacing   = 0
-        pillRow.translatesAutoresizingMaskIntoConstraints = false
-        pill.addSubview(pillRow)
+        // Pill interior
+        pill.addSubview(btn)
+        pill.addSubview(picker)
 
         NSLayoutConstraint.activate([
             pill.topAnchor.constraint(equalTo: col.topAnchor),
@@ -270,13 +296,16 @@ class TrackSelectionViewController: UIViewController {
             pill.trailingAnchor.constraint(equalTo: col.trailingAnchor),
             pill.bottomAnchor.constraint(equalTo: col.bottomAnchor),
 
-            pillRow.topAnchor.constraint(equalTo: pill.topAnchor),
-            pillRow.bottomAnchor.constraint(equalTo: pill.bottomAnchor),
-            pillRow.leadingAnchor.constraint(equalTo: pill.leadingAnchor),
-            pillRow.trailingAnchor.constraint(equalTo: pill.trailingAnchor),
-
-            downBtn.widthAnchor.constraint(equalToConstant: 44),
-            upBtn.widthAnchor.constraint(equalToConstant: 44)
+            btn.topAnchor.constraint(equalTo: pill.topAnchor),
+            btn.bottomAnchor.constraint(equalTo: pill.bottomAnchor),
+            btn.leadingAnchor.constraint(equalTo: pill.leadingAnchor),
+            btn.trailingAnchor.constraint(equalTo: pill.trailingAnchor),
+            
+            // Picker constrained strictly over the center
+            picker.topAnchor.constraint(equalTo: pill.topAnchor),
+            picker.bottomAnchor.constraint(equalTo: pill.bottomAnchor),
+            picker.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
+            picker.widthAnchor.constraint(equalTo: btn.widthAnchor)
         ])
         return col
     }
@@ -303,35 +332,18 @@ class TrackSelectionViewController: UIViewController {
         return v
     }
 
-    private func makePillArrow(sf: String, tag: Int) -> UIButton {
-        let btn = UIButton(type: .system)
-        btn.tag = tag
-        let cfg = UIImage.SymbolConfiguration(pointSize: 11, weight: .bold)
-        btn.setImage(UIImage(systemName: sf, withConfiguration: cfg), for: .normal)
-        btn.tintColor = UIColor.white.withAlphaComponent(0.7)
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        btn.addTarget(self, action: #selector(arrowTapped(_:)),    for: .touchUpInside)
-        btn.addTarget(self, action: #selector(arrowPressed(_:)),   for: .touchDown)
-        btn.addTarget(self, action: #selector(arrowReleased(_:)),  for: [.touchUpInside, .touchUpOutside, .touchCancel])
-        return btn
-    }
-
-    // MARK: — Arrow tap handlers
-    @objc private func arrowTapped(_ sender: UIButton) {
-        AudioManager.shared.playEffect(.targetButton)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        switch sender.tag {
-        case 10, 20: distanceKm += Self.stepKm   // ▲
-        case 11, 21: distanceKm -= Self.stepKm   // ▼
-        default: break
-        }
-    }
-
-    @objc private func arrowPressed(_ sender: UIButton) {
-        UIView.animate(withDuration: 0.08) { sender.alpha = 0.3 }
-    }
-    @objc private func arrowReleased(_ sender: UIButton) {
-        UIView.animate(withDuration: 0.15) { sender.alpha = 1 }
+    // MARK: — Title Update Logic
+    private func updateButtonTitles() {
+        let font = UIFont.systemFont(ofSize: 16, weight: .bold)
+        
+        var distCfg = distBtn.configuration
+        distCfg?.attributedTitle = AttributedString(String(format: "%.1f km", distanceKm), attributes: AttributeContainer([.font: font]))
+        distBtn.configuration = distCfg
+        
+        var calCfg = calBtn.configuration
+        let cal = Int((distanceKm * Self.calPerKm).rounded())
+        calCfg?.attributedTitle = AttributedString("\(cal) kcal", attributes: AttributeContainer([.font: font]))
+        calBtn.configuration = calCfg
     }
 
     private func refreshGoalFields() {
@@ -345,6 +357,8 @@ class TrackSelectionViewController: UIViewController {
         if calPicker.selectedRow(inComponent: 0) != row {
             calPicker.selectRow(row, inComponent: 0, animated: true)
         }
+        
+        updateButtonTitles()
     }
 
     // MARK: — Storyboard junk cleanup
@@ -494,26 +508,21 @@ extension TrackSelectionViewController: UIPickerViewDataSource, UIPickerViewDele
         return 422
     }
     
-    func pickerView(_ pickerView: UIPickerView, rowHeightForComponent component: Int) -> CGFloat {
-        return 36
-    }
-    
     func pickerView(_ pickerView: UIPickerView, viewForRow row: Int, forComponent component: Int, reusing view: UIView?) -> UIView {
         let label = (view as? UILabel) ?? UILabel()
         label.textAlignment = .center
-        label.textColor = .white
-        
-        // Exact same font styling as the older text field (bold size 16)
-        label.font = .systemFont(ofSize: 16, weight: .bold)
         label.backgroundColor = .clear
         
-        // Snap distance safely based on row calculation formula
+        // Maintain the bold style, using a slightly striking color for the scroll effect
+        label.font = .systemFont(ofSize: 20, weight: .bold) 
+        label.textColor = UIColor(red: 0.8, green: 0.7, blue: 1, alpha: 1.0) 
+        
         let km = Double(row + 1) * 0.1
         if pickerView === distancePicker {
-            label.text = String(format: "%.1f km", km)
+            label.text = String(format: "%.1f", km) // We will just show numbers like original custom control
         } else {
             let cal = Int((km * Self.calPerKm).rounded())
-            label.text = "\(cal) kcal"
+            label.text = "\(cal)"
         }
         return label
     }
@@ -524,6 +533,50 @@ extension TrackSelectionViewController: UIPickerViewDataSource, UIPickerViewDele
         
         let newDist = Double(row + 1) * 0.1
         self.distanceKm = newDist // didSet already limits boundaries and updates the paired picker
+    }
+}
+
+// MARK: - Tap Behaviors
+extension TrackSelectionViewController {
+    @objc private func goalButtonTapped(_ sender: UIButton) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        AudioManager.shared.playEffect(.buttonTapped)
+        
+        let isDist = (sender === distBtn)
+        
+        pickerOverlay.isHidden = false
+        distancePicker.isHidden = false
+        calPicker.isHidden = false
+        
+        self.rowHeightConstraint.constant = 110 // Expands exactly to reveal roughly 3 perfectly framed options natively cut off by the pill mask!
+        
+        UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.2, options: .curveEaseInOut) {
+            self.pickerOverlay.alpha = 1
+            self.distancePicker.alpha = 1
+            self.calPicker.alpha = 1
+            self.distBtn.alpha = 0
+            self.calBtn.alpha = 0
+            self.view.layoutIfNeeded()
+        }
+    }
+    
+    @objc private func dismissInlinePicker() {
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        
+        self.rowHeightConstraint.constant = 54
+        
+        UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.2, options: .curveEaseInOut, animations: {
+            self.pickerOverlay.alpha = 0
+            self.distancePicker.alpha = 0
+            self.calPicker.alpha = 0
+            self.distBtn.alpha = 1
+            self.calBtn.alpha = 1
+            self.view.layoutIfNeeded()
+        }) { _ in
+            self.pickerOverlay.isHidden = true
+            self.distancePicker.isHidden = true
+            self.calPicker.isHidden = true
+        }
     }
 }
 
