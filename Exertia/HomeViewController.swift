@@ -33,9 +33,17 @@ class HomeViewController: UIViewController {
         setupCustomTabs()
         setupProfileDesign()
         updateCharacterUI()
-        if !applyCachedHomeSnapshot() {
-            showLoadingState()
-        }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleNavigateToHome),
+            name: .navigateToHome,
+            object: nil
+        )
+    }
+
+    @objc private func handleNavigateToHome() {
+        // Dismiss everything presented over HomeVC (TrackSelection → nav → CameraVC → GameVC → Summary)
+        presentedViewController?.dismiss(animated: true)
     }
 
     override func viewDidLayoutSubviews() {
