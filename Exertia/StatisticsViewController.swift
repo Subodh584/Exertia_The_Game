@@ -1240,7 +1240,8 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         tabContainer.backgroundColor = .clear
         tabContainer.subviews.filter { $0 is UIVisualEffectView }.forEach { $0.removeFromSuperview() }
         
-        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
+        // Liquid glass ultra-thin material
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
         blur.isUserInteractionEnabled = false
         blur.layer.cornerRadius = 35
         blur.clipsToBounds = true
@@ -1256,13 +1257,41 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         ])
         
         tabContainer.layer.cornerRadius = 35
-        tabContainer.layer.borderWidth = 1.0
-        tabContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        tabContainer.layer.borderWidth = 1.5
+        tabContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         
-        tabIndicator.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        // Fluid glowing ambient shadow
+        tabContainer.layer.shadowColor = UIColor.white.cgColor
+        tabContainer.layer.shadowRadius = 15
+        tabContainer.layer.shadowOpacity = 0.2
+        tabContainer.layer.shadowOffset = .zero
+        
+        tabIndicator.backgroundColor = UIColor.white.withAlphaComponent(0.25)
         tabIndicator.layer.cornerRadius = 30
         tabIndicator.layer.cornerCurve = .continuous
+        tabIndicator.layer.shadowColor = UIColor.white.cgColor
+        tabIndicator.layer.shadowRadius = 8
+        tabIndicator.layer.shadowOpacity = 0.4
+        tabIndicator.layer.shadowOffset = .zero
         tabContainer.insertSubview(tabIndicator, at: 1)
+        
+        // Gesture Recognizer for Swipe Navigation
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(handleTabSwipe(_:)))
+        swipeRight.direction = .right
+        tabContainer.addGestureRecognizer(swipeRight)
+    }
+
+    @objc private func handleTabSwipe(_ gesture: UISwipeGestureRecognizer) {
+        if gesture.direction == .right { // Swipe right goes backwards to Customize (index 1)
+            AudioManager.shared.playEffect(.buttonTapped)
+            let transition = CATransition()
+            transition.duration = 0.3
+            transition.type = .push
+            transition.subtype = .fromLeft
+            transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            view.window?.layer.add(transition, forKey: kCATransition)
+            self.dismiss(animated: false, completion: nil)
+        }
     }
     
     func initTabs() {
@@ -1353,7 +1382,8 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     func moveIndicator(to v: UIView, animated: Bool) {
         let frame = v.convert(v.bounds, to: tabContainer)
         let newFrame = frame.insetBy(dx: 4, dy: 4)
-        UIView.animate(withDuration: animated ? 0.4 : 0.0, delay: 0, usingSpringWithDamping: 0.75, initialSpringVelocity: 0.5, options: .curveEaseOut, animations: {
+        // Fluid spring (liquid glass feel) for indicator movement
+        UIView.animate(withDuration: animated ? 0.5 : 0.0, delay: 0, usingSpringWithDamping: 0.65, initialSpringVelocity: 0.8, options: .curveEaseOut, animations: {
             self.tabIndicator.frame = newFrame
         }, completion: nil)
         for (idx, icon) in tabIcons.enumerated() {

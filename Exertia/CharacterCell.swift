@@ -50,39 +50,81 @@ class CharacterCell: UICollectionViewCell {
         // Always clean up previous state first
         containerView.subviews.filter { $0 is UIVisualEffectView }.forEach { $0.removeFromSuperview() }
         containerView.subviews.filter { $0.tag == 902 }.forEach { $0.removeFromSuperview() }
+        containerView.layer.sublayers?.filter { $0 is CAGradientLayer && $0 !== glossLayer }.forEach { $0.removeFromSuperlayer() }
         glossLayer.removeFromSuperlayer()
 
         if isLocked {
-            // Character is completely hidden — just a solid dark cell
             thumbImageView.isHidden = true
-            containerView.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.12, alpha: 1)
 
-            // Lock icon — golden colour matching the character name label ("GLITCH" yellow)
-            let gold = UIColor(red: 0.96, green: 0.83, blue: 0.38, alpha: 1)
-            let cfg  = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
-            let lockImg = UIImageView(image: UIImage(systemName: "lock.fill", withConfiguration: cfg))
+            // Deep space gradient background
+            let gradientLayer = CAGradientLayer()
+            gradientLayer.colors = [
+                UIColor(red: 0.04, green: 0.06, blue: 0.14, alpha: 1).cgColor,
+                UIColor(red: 0.08, green: 0.12, blue: 0.22, alpha: 1).cgColor,
+                UIColor(red: 0.05, green: 0.08, blue: 0.16, alpha: 1).cgColor
+            ]
+            gradientLayer.locations = [0.0, 0.5, 1.0]
+            gradientLayer.startPoint = CGPoint(x: 0, y: 0)
+            gradientLayer.endPoint = CGPoint(x: 1, y: 1)
+            gradientLayer.frame = containerView.bounds
+            gradientLayer.cornerRadius = 20
+            containerView.layer.insertSublayer(gradientLayer, at: 0)
+            containerView.backgroundColor = .clear
+
+            // Frosted glass overlay
+            let frostedBlur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+            frostedBlur.frame = containerView.bounds
+            frostedBlur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            frostedBlur.alpha = 0.5
+            containerView.addSubview(frostedBlur)
+
+            // Dark silhouette behind the lock
+            let mysteryCfg = UIImage.SymbolConfiguration(pointSize: 46, weight: .regular)
+            let mysteryIcon = UIImageView(image: UIImage(systemName: "person.fill", withConfiguration: mysteryCfg))
+            mysteryIcon.tag = 902
+            mysteryIcon.tintColor = UIColor.black.withAlphaComponent(0.6)
+            mysteryIcon.contentMode = .scaleAspectFit
+            mysteryIcon.translatesAutoresizingMaskIntoConstraints = false
+            containerView.addSubview(mysteryIcon)
+            NSLayoutConstraint.activate([
+                mysteryIcon.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+                mysteryIcon.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+                mysteryIcon.widthAnchor.constraint(equalToConstant: 56),
+                mysteryIcon.heightAnchor.constraint(equalToConstant: 56)
+            ])
+
+            // Lock icon with a subtle glowing halo
+            let teal = UIColor(red: 0.0, green: 0.85, blue: 0.85, alpha: 1)
+            let lockCfg = UIImage.SymbolConfiguration(pointSize: 16, weight: .bold)
+            let lockImg = UIImageView(image: UIImage(systemName: "lock.fill", withConfiguration: lockCfg))
             lockImg.tag = 902
-            lockImg.tintColor = gold
+            lockImg.tintColor = teal
             lockImg.contentMode = .scaleAspectFit
             lockImg.translatesAutoresizingMaskIntoConstraints = false
+            // Glow halo behind lock
+            lockImg.layer.shadowColor = teal.cgColor
+            lockImg.layer.shadowRadius = 8
+            lockImg.layer.shadowOpacity = 0.7
+            lockImg.layer.shadowOffset = .zero
             containerView.addSubview(lockImg)
             NSLayoutConstraint.activate([
                 lockImg.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
                 lockImg.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-                lockImg.widthAnchor.constraint(equalToConstant: 28),
-                lockImg.heightAnchor.constraint(equalToConstant: 28)
+                lockImg.widthAnchor.constraint(equalToConstant: 18),
+                lockImg.heightAnchor.constraint(equalToConstant: 18)
             ])
 
+            // Teal sci-fi border glow
             containerView.layer.borderWidth = 1.0
-            containerView.layer.borderColor = UIColor.white.withAlphaComponent(0.08).cgColor
-            self.layer.shadowColor   = UIColor.black.cgColor
-            self.layer.shadowRadius  = 4
-            self.layer.shadowOpacity = 0.2
+            containerView.layer.borderColor = UIColor.cyan.withAlphaComponent(0.2).cgColor
+            self.layer.shadowColor   = UIColor.cyan.cgColor
+            self.layer.shadowRadius  = 6
+            self.layer.shadowOpacity = 0.15
 
         } else {
             // Character is visible
             thumbImageView.isHidden = false
-            thumbImageView.image = UIImage(named: "CharacterAssetThumbnail")
+            thumbImageView.image = UIImage(named: "nobg")
             containerView.backgroundColor = .clear
 
             let blurStyle: UIBlurEffect.Style = isSelected ? .systemMaterialLight : .systemUltraThinMaterialDark

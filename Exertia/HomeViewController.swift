@@ -1,5 +1,4 @@
 import UIKit
-import SceneKit
 
 class HomeViewController: UIViewController {
     private struct CachedHomeSnapshot: Codable {
@@ -15,21 +14,6 @@ class HomeViewController: UIViewController {
     @IBOutlet weak var profileButton: UIButton!
     @IBOutlet weak var distanceLabel: UILabel!
     @IBOutlet weak var caloriesLabel: UILabel!
-
-    // 3D character scene
-    private var characterSceneView: SCNView?
-    private var characterNode: SCNNode?
-    private var lastPanX: CGFloat = 0
-    private var sceneSetupDone = false
-
-    /// Adjust this to scale the 3D character up or down on the home screen
-    private let characterScale: Float = 0.072
-    /// Shift the character left (–) or right (+) in scene units
-    private let characterOffsetX: Float = 0.0
-    /// Shift the character down (–) or up (+) in scene units
-    private let characterOffsetY: Float = -0.9
-    /// Move the character closer (+) or further away (–) from the camera
-    private let characterOffsetZ: Float = 0.4
 
     private let tabBarContainer = UIView()
     private let tabBarStackView = UIStackView()
@@ -68,13 +52,226 @@ class HomeViewController: UIViewController {
         if tabWrappers.indices.contains(currentTabIndex) {
             moveIndicator(to: tabWrappers[currentTabIndex], animated: false)
         }
-        setupCharacterSceneView()
+        
+        // Dynamically scale the image to be much bigger and ground it cleanly onto the podium
+        let screenHeight = view.bounds.height
+        let scale: CGFloat = screenHeight > 800 ? 1.35 : 1.2 // Larger screens get a bigger pop
+        
+        // Push both the character and the underlying stage cleanly downwards to safely clear the "EXERTIA" logo overhead!
+        // Taller screens get a structurally larger drop to prevent visually crowding the massive header space natively
+        let layoutDropOffset: CGFloat = screenHeight > 800 ? 50 : 30
+        
+        // Apply perfectly identical downwards Cartesian drops to rigidly preserve their geometric spatial relationship, while uniquely scaling the character!
+        stageHighlightView.transform = CGAffineTransform(translationX: 0, y: layoutDropOffset)
+        characterImageView.transform = CGAffineTransform(translationX: 0, y: layoutDropOffset).scaledBy(x: scale, y: scale)
+        
+        setupRocketAnimation()
+        setupStarField()
     }
     
+    private func setupRocketAnimation() {
+        if let newLogo = UIImage(named: "LOGO4"),
+           let logoView = view.subviews.first(where: { ($0 as? UIImageView)?.image == newLogo }) {
+            
+            let rocketSize: CGFloat = min(logoView.bounds.height * 0.50, 65)
+            let startX: CGFloat = -rocketSize * 2
+            let endX: CGFloat = view.bounds.width + rocketSize * 2
+            
+            let rocketView: UIView // We now use a clear UIView container to safely host the pre-rotated image
+            if let existingContainer = view.viewWithTag(999) {
+                rocketView = existingContainer
+                rocketView.layer.removeAllAnimations() // Flush old animations to cleanly re-run the loop
+            } else {
+                rocketView = UIView()
+                rocketView.tag = 999
+                
+                let innerImage = UIImageView(image: UIImage(named: "Rocket2") ?? UIImage(named: "rocket_image"))
+                innerImage.contentMode = .scaleAspectFit
+                
+                // The uploaded "Rocket2" asset is natively drawn pointing diagonally Up-Right (approx 45 degrees).
+                // We physically pre-rotate the image exactly 45 degrees clockwise inside the container so it lays completely flat, pointing perfectly RIGHT (+X).
+                // This absolute horizontal alignment guarantees `.rotateAuto` steers the nose strictly along the path!
+                innerImage.transform = CGAffineTransform(rotationAngle: CGFloat.pi / 4) // 45° clockwise
+                // UIKit rendering crash prevention: DO NOT use autoresizing masks on a pre-transformed view!
+                
+                rocketView.addSubview(innerImage)
+                view.insertSubview(rocketView, aboveSubview: logoView)
+            }
+            
+            // CRITICAL SIZING FIX: Explicitly constrain the mathematical container bounds
+            rocketView.bounds = CGRect(x: 0, y: 0, width: rocketSize, height: rocketSize)
+            // UIKit Rendering Bug Fix: Modifying the `.frame` property of a mathematically transformed view physically crushes its bounds geometry into a zero-dimensional scale making it instantly invisible!
+            // We correctly restrict mapping utilizing only its static `.bounds` and geometric `.center`!
+            rocketView.subviews.first?.bounds = CGRect(x: 0, y: 0, width: rocketSize, height: rocketSize)
+            rocketView.subviews.first?.center = CGPoint(x: rocketSize / 2, y: rocketSize / 2)
+            
+            rocketView.layer.zPosition = 999
+            
+            // Mathematically plot a beautiful 2D path: fly straight, loop-de-loop around the middle, fly out
+            let rocketPath = UIBezierPath()
+            let centerY = logoView.center.y
+            let midX = view.bounds.width / 2
+            let loopRadius: CGFloat = 45 // The size of the circular loop
+            
+            // 1. Enter from the left gently dipping into a playful little wave before returning to perfectly flat horizontally entering the loop
+            let enterStartX = startX + rocketSize / 2
+            rocketPath.move(to: CGPoint(x: enterStartX, y: centerY))
+            
+            let dipMidX = enterStartX + (midX - enterStartX) * 0.5
+            let dipDepth: CGFloat = 35 // A small, playful dipping amplitude
+            let bottomY = centerY + dipDepth // iOS Y goes DOWN, so adding depth pulls it downwards
+            
+            // Curve 1: Slide in perfectly horizontally, then gracefully dip downwards
+            let cp1A = CGPoint(x: enterStartX + 50, y: centerY) // Forces perfectly horizontal entry
+            let cp1B = CGPoint(x: dipMidX - 40, y: bottomY) // Forces perfectly horizontal sweeping bottom
+            rocketPath.addCurve(to: CGPoint(x: dipMidX, y: bottomY), controlPoint1: cp1A, controlPoint2: cp1B)
+            
+            // Curve 2: Perfectly transition from the dip's bottom back up to the perfectly flat entering line of the loop
+            let cp2A = CGPoint(x: dipMidX + 40, y: bottomY) // Purely horizontal continuous tangent
+            let cp2B = CGPoint(x: midX - 50, y: centerY) // Forces perfectly horizontal recovery into the circle!
+            rocketPath.addCurve(to: CGPoint(x: midX, y: centerY), controlPoint1: cp2A, controlPoint2: cp2B)
+            
+            // 2. Perform a perfect circular loop-the-loop upwards over the logo
+            // Counter-clockwise from the bottom guarantees a smooth upward swoop
+            rocketPath.addArc(withCenter: CGPoint(x: midX, y: centerY - loopRadius),
+                              radius: loopRadius,
+                              startAngle: CGFloat.pi / 2,
+                              endAngle: CGFloat.pi / 2 - (CGFloat.pi * 2),
+                              clockwise: false)
+            
+            // 3. Exit the loop with a magnificent, mathematically natural swoop!
+            // Reverting mathematically to the smooth parabolic J-Curve while safely preserving the upward nose-pitching exit tangent.
+            let exitY = centerY - 150 
+            let cp1 = CGPoint(x: midX + 120, y: centerY) // Flawlessly carries horizontal momentum securely out of the loop
+            let cp2 = CGPoint(x: endX - 100, y: exitY + 100) // Pulls the nose upward gracefully and naturally without mathematically snapping
+            
+            rocketPath.addCurve(to: CGPoint(x: endX + rocketSize / 2, y: exitY),
+                                controlPoint1: cp1,
+                                controlPoint2: cp2)
+            
+            // Park the rocket safely off-screen left. This brilliantly guarantees it stays physically invisible gracefully during its 2-second repeating rest interval!
+            rocketView.center = CGPoint(x: enterStartX, y: centerY)
+            
+            // Execute the path natively using CoreAnimation
+            let flightAnim = CAKeyframeAnimation(keyPath: "position")
+            flightAnim.path = rocketPath.cgPath
+            flightAnim.duration = 3.5 // Smooth enough for a big loop
+            flightAnim.calculationMode = .paced // Maintains absolutely consistent velocity
+            flightAnim.rotationMode = .rotateAuto // CRITICAL: This magically auto-steers the rocket's nose natively along the curvy path!
+            
+            // Group the animation into a nested layout to flawlessly inject a pure 2-second loop delay!
+            let groupAnim = CAAnimationGroup()
+            groupAnim.animations = [flightAnim]
+            groupAnim.duration = 3.5 + 1 // Exactly 3.5s of visible flight time + a pure 2.0s invisible math delay
+            groupAnim.repeatCount = .infinity
+            
+            rocketView.layer.add(groupAnim, forKey: "loopDeLoopFlight")
+        }
+    }
+    
+    private func setupStarField() {
+        let starView: UIView
+        // Prevent stacking natively duplicate emitter layers explicitly across layout passes!
+        if let existing = view.viewWithTag(777) {
+            starView = existing
+            starView.frame = view.bounds
+            // Natively structurally resize the dynamic emitter constraints if the screen violently rotates
+            if let layers = starView.layer.sublayers {
+                for layer in layers {
+                    guard let emitter = layer as? CAEmitterLayer else { continue }
+                    if emitter.emitterShape == .line { // Shooting stars
+                        emitter.emitterPosition = CGPoint(x: view.bounds.width + 50, y: view.bounds.height / 4)
+                        emitter.emitterSize = CGSize(width: view.bounds.height, height: 10)
+                    } else { // Twinkling stars
+                        emitter.emitterPosition = CGPoint(x: view.bounds.width / 2, y: view.bounds.height / 2)
+                        emitter.emitterSize = view.bounds.size
+                    }
+                }
+            }
+            return
+        }
+        
+        starView = UIView(frame: view.bounds)
+        starView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        starView.isUserInteractionEnabled = false // Rigorously ensures it's purely natively visual and never mathematically intercepts touches!
+        starView.tag = 777
+        
+        // 1. Static Twinkling Stars Native Field
+        let twinkleEmitter = CAEmitterLayer()
+        twinkleEmitter.emitterPosition = CGPoint(x: view.bounds.width / 2, y: view.bounds.height / 2)
+        twinkleEmitter.emitterSize = view.bounds.size
+        twinkleEmitter.emitterShape = .rectangle
+        
+        let starCell = CAEmitterCell()
+        starCell.contents = createStarImage()?.cgImage
+        starCell.birthRate = 25 // Populating natively 25 tiny stars dynamically every second
+        starCell.lifetime = 3.0 // Lasting ~3s natively on average explicitly before dying
+        starCell.lifetimeRange = 2.0
+        // Crank base native brightness and structural variability extremely high so some distinct stars spawn fully opaque and massive, while others spawn natively microscopically dim!
+        starCell.color = UIColor(white: 1.0, alpha: 0.95).cgColor
+        starCell.alphaRange = 0.7 
+        starCell.alphaSpeed = -0.25 // Fade out natively gradually mathematically over time creating an aggressive dynamic twinkle!
+        starCell.scale = 0.18 // Boost base mathematical size significantly so the most brilliant stars physically visually pop!
+        starCell.scaleRange = 0.12 // Induce massive mathematical variation natively so some are microscopic and some are uniquely visibly enormous!
+        starCell.velocity = 0 // Stand explicitly completely still physically to just twinkle
+        
+        twinkleEmitter.emitterCells = [starCell]
+        starView.layer.addSublayer(twinkleEmitter)
+        
+        // 2. High-Velocity Massive Shooting Stars Field
+        let shootingStarEmitter = CAEmitterLayer()
+        // Anchor them explicitly natively off-screen completely to the absolute right, and vertically high up natively!
+        shootingStarEmitter.emitterPosition = CGPoint(x: view.bounds.width + 50, y: view.bounds.height / 4)
+        shootingStarEmitter.emitterSize = CGSize(width: view.bounds.height, height: 10)
+        shootingStarEmitter.emitterShape = .line
+        
+        let shootingCell = CAEmitterCell()
+        shootingCell.contents = createStarImage()?.cgImage
+        shootingCell.birthRate = 0.4 // Extraordinarily rare! ~1 huge shooting star natively every 2.5 seconds
+        shootingCell.lifetime = 1.5
+        shootingCell.color = UIColor.white.cgColor // Max brightness explicitly!
+        shootingCell.velocity = 600 // Screaming fast mathematically!
+        shootingCell.velocityRange = 200
+        // .pi is mathematically exactly Left! .pi * 0.85 sweeps them organically falling Left and explicitly mathematically downwards!
+        shootingCell.emissionLongitude = .pi * 0.85 
+        // Force the physical cell to physically visually point perfectly left and slightly mathematically down natively!
+        shootingCell.spin = 0
+        shootingCell.emissionRange = .pi * 0.05 // Tiny mathematical bit of random rotation geometric variation natively per star
+        shootingCell.scale = 0.25 // Make shooting stars structurally much, much larger than standard twinkles
+        shootingCell.scaleRange = 0.1
+        shootingCell.scaleSpeed = -0.08 // Subtly mathematically shrink physically as they rapidly fly geometrically out
+        shootingCell.alphaSpeed = -0.5 // Mathematically rigidly burn out very quickly realistically simulating atmospheric planetary entry!
+        
+        shootingStarEmitter.emitterCells = [shootingCell]
+        starView.layer.addSublayer(shootingStarEmitter)
+        
+        // Push explicitly strictly fundamentally beneath the massive character models but structurally strictly natively ABOVE the background image view layer!
+        view.insertSubview(starView, at: 1)
+    }
+    
+    // Dynamic structural native zero-dependency asset generator: geometrically directly paints a perfect mathematical radial glow pixel gradient via pure CoreGraphics!
+    private func createStarImage() -> UIImage? {
+        let size = CGSize(width: 8, height: 8)
+        UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
+        guard let context = UIGraphicsGetCurrentContext() else { return nil }
+        
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let colors = [UIColor.white.cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor] as CFArray
+        guard let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0.0, 1.0]) else { return nil }
+        
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        context.drawRadialGradient(gradient, startCenter: center, startRadius: 0, endCenter: center, endRadius: size.width / 2, options: .drawsBeforeStartLocation)
+        
+        let image = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return image
+    }
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         AudioManager.shared.playAppMusic()
         updateCharacterUI()
+        setupRocketAnimation()
         if !applyCachedHomeSnapshot() {
             showLoadingState()
         }
@@ -244,7 +441,7 @@ class HomeViewController: UIViewController {
         ])
         
         tabBarContainer.backgroundColor = .clear
-        let blurEffect = UIBlurEffect(style: .systemThinMaterialDark)
+        let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialDark) // Liquid glass
         let blurView = UIVisualEffectView(effect: blurEffect)
         blurView.translatesAutoresizingMaskIntoConstraints = false
         blurView.layer.cornerRadius = 35
@@ -260,15 +457,51 @@ class HomeViewController: UIViewController {
         ])
         
         tabBarContainer.layer.cornerRadius = 35
-        tabBarContainer.layer.borderWidth = 1.0
-        tabBarContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        tabBarContainer.layer.borderWidth = 1.5
+        tabBarContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         
-        indicatorView.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        // Fluid glowing ambient shadow
+        tabBarContainer.layer.shadowColor = UIColor.white.cgColor
+        tabBarContainer.layer.shadowRadius = 15
+        tabBarContainer.layer.shadowOpacity = 0.2
+        tabBarContainer.layer.shadowOffset = .zero
+        
+        indicatorView.backgroundColor = UIColor.white.withAlphaComponent(0.25)
         indicatorView.layer.cornerRadius = 30
         indicatorView.layer.cornerCurve = .continuous
+        indicatorView.layer.shadowColor = UIColor.white.cgColor
+        indicatorView.layer.shadowRadius = 8
+        indicatorView.layer.shadowOpacity = 0.4
+        indicatorView.layer.shadowOffset = .zero
         tabBarContainer.insertSubview(indicatorView, at: 1)
         
         view.bringSubviewToFront(tabBarContainer)
+        
+        // Gesture Recognizers for Swipe Navigation
+        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(handleTabSwipe(_:)))
+        swipeLeft.direction = .left
+        tabBarContainer.addGestureRecognizer(swipeLeft)
+        
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(handleTabSwipe(_:)))
+        swipeRight.direction = .right
+        tabBarContainer.addGestureRecognizer(swipeRight)
+    }
+
+    @objc private func handleTabSwipe(_ gesture: UISwipeGestureRecognizer) {
+        if gesture.direction == .left { // Swipe left goes to next tab (Customize)
+            AudioManager.shared.playEffect(.buttonTapped)
+            let sb = UIStoryboard(name: "Main", bundle: nil)
+            if let vc = sb.instantiateViewController(withIdentifier: "CharacterSelectionViewController") as? CharacterSelectionViewController {
+                vc.modalPresentationStyle = .fullScreen
+                let transition = CATransition()
+                transition.duration = 0.3
+                transition.type = .push
+                transition.subtype = .fromRight
+                transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                view.window?.layer.add(transition, forKey: kCATransition)
+                self.present(vc, animated: false)
+            }
+        }
     }
     
     func setupCustomTabs() {
@@ -367,7 +600,8 @@ class HomeViewController: UIViewController {
         let targetFrame = targetView.convert(targetView.bounds, to: tabBarContainer)
         let paddedFrame = targetFrame.insetBy(dx: 4, dy: 4)
         
-        UIView.animate(withDuration: animated ? 0.4 : 0.0, delay: 0, usingSpringWithDamping: 0.75, initialSpringVelocity: 0.5, options: .curveEaseOut, animations: {
+        // Fluid spring (liquid glass feel) for indicator movement
+        UIView.animate(withDuration: animated ? 0.5 : 0.0, delay: 0, usingSpringWithDamping: 0.65, initialSpringVelocity: 0.8, options: .curveEaseOut, animations: {
             self.indicatorView.frame = paddedFrame
         }, completion: nil)
         
@@ -401,12 +635,38 @@ class HomeViewController: UIViewController {
         profileButton.layoutIfNeeded()
         profileButton.layer.cornerRadius = profileButton.frame.height / 2
         profileButton.layer.masksToBounds = true
+        profileButton.layer.borderWidth = 1
+        profileButton.layer.borderColor = UIColor.white.withAlphaComponent(0.8).cgColor
         profileButton.imageView?.contentMode = .scaleAspectFit
     }
 
     private func updateCharacterUI() {
-        let selectedPlayer = gameData.getSelectedPlayer()
-        characterImageView.image = UIImage(named: selectedPlayer.fullBodyImageName)
+        characterImageView.image = UIImage(named: "HomePageMain")
+        characterImageView.contentMode = .scaleAspectFit
+        characterImageView.isHidden = false
+        stageHighlightView?.isHidden = false
+        
+        // Remove the 'Highlight' asset specifically by size signature
+        if let highlightSize = UIImage(named: "Highlight")?.size {
+            for subview in view.subviews {
+                if let imgView = subview as? UIImageView, 
+                   imgView != stageHighlightView, 
+                   imgView != characterImageView,
+                   imgView.image?.size == highlightSize {
+                    imgView.isHidden = true
+                }
+            }
+        }
+        
+        // Dynamically replace the old 'ExertiaHomePageTitle' logo with 'LOGO4'
+        if let newLogo = UIImage(named: "LOGO4"), let oldLogoSize = UIImage(named: "ExertiaHomePageTitle")?.size {
+            for subview in view.subviews {
+                if let imgView = subview as? UIImageView, imgView.image?.size == oldLogoSize {
+                    imgView.image = newLogo
+                    imgView.contentMode = .scaleAspectFit
+                }
+            }
+        }
     }
 
     private func showLoadingState() {
@@ -449,122 +709,7 @@ class HomeViewController: UIViewController {
         }
     }
 
-    // MARK: - 3D Character Scene
 
-    private func setupCharacterSceneView() {
-        guard !sceneSetupDone, characterImageView.frame.width > 0 else { return }
-        sceneSetupDone = true
-
-        // Hide the 2D image
-        characterImageView.isHidden = true
-
-        // Create SCNView matching the characterImageView frame
-        let scnView = SCNView(frame: characterImageView.frame)
-        scnView.backgroundColor = .clear
-        scnView.allowsCameraControl = false
-        scnView.autoenablesDefaultLighting = false
-        scnView.antialiasingMode = .multisampling4X
-
-        // Insert at the same level in the hierarchy, just above the image view
-        if let superview = characterImageView.superview,
-           let idx = superview.subviews.firstIndex(of: characterImageView) {
-            superview.insertSubview(scnView, at: idx + 1)
-        } else {
-            view.addSubview(scnView)
-        }
-        characterSceneView = scnView
-
-        // Load idle character model
-        guard let scene = SCNScene(named: "Character.scnassets/Idle.dae") else {
-            print("⚠️ Could not load Character.scnassets/Idle.dae")
-            return
-        }
-
-        // Move (not clone) all children into a pivot node so we can rotate cleanly
-        // Cloning leaves the originals in rootNode at full size — that was the bug
-        let pivot = SCNNode()
-        let children = scene.rootNode.childNodes
-        children.forEach {
-            $0.removeFromParentNode()
-            pivot.addChildNode($0)
-        }
-        scene.rootNode.addChildNode(pivot)
-        characterNode = pivot
-
-        // Auto-fit: measure the model's bounding box, scale so the full body
-        // fills ~1.8 scene units tall, then apply characterScale as a multiplier
-        let (minB, maxB) = pivot.boundingBox
-        let modelHeight = maxB.y - minB.y
-        let autoScale: Float = modelHeight > 0 ? (1.8 / modelHeight) * characterScale : characterScale
-        pivot.scale = SCNVector3(autoScale, autoScale, autoScale)
-
-        // Center the model horizontally and vertically in scene space
-        let midX = (minB.x + maxB.x) / 2 * autoScale
-        let midY = (minB.y + maxB.y) / 2 * autoScale
-        pivot.position = SCNVector3(-midX + characterOffsetX, -midY + characterOffsetY, characterOffsetZ)
-
-        // Ambient light
-        let ambientNode = SCNNode()
-        let ambient = SCNLight()
-        ambient.type = .ambient
-        ambient.color = UIColor.white
-        ambient.intensity = 600
-        ambientNode.light = ambient
-        scene.rootNode.addChildNode(ambientNode)
-
-        // Directional light
-        let dirNode = SCNNode()
-        let dir = SCNLight()
-        dir.type = .directional
-        dir.color = UIColor.white
-        dir.intensity = 900
-        dirNode.light = dir
-        dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
-        scene.rootNode.addChildNode(dirNode)
-
-        // Camera: positioned to frame a ~1.8-unit-tall character
-        let cameraNode = SCNNode()
-        cameraNode.camera = SCNCamera()
-        cameraNode.camera?.fieldOfView = 50
-        cameraNode.position = SCNVector3(0, 0, 3.5)
-        scene.rootNode.addChildNode(cameraNode)
-
-        scnView.scene = scene
-        scnView.pointOfView = cameraNode
-
-        // Play embedded idle animation
-        playIdleAnimation(on: pivot)
-
-        // Pan gesture for Y-axis rotation
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleCharacterPan(_:)))
-        scnView.addGestureRecognizer(pan)
-    }
-
-    private func playIdleAnimation(on node: SCNNode) {
-        node.enumerateChildNodes { child, _ in
-            for key in child.animationKeys {
-                if let player = child.animationPlayer(forKey: key) {
-                    player.animation.repeatCount = .infinity
-                    player.play()
-                }
-            }
-        }
-    }
-
-    @objc private func handleCharacterPan(_ gesture: UIPanGestureRecognizer) {
-        guard let node = characterNode else { return }
-        let translation = gesture.translation(in: gesture.view)
-        switch gesture.state {
-        case .began:
-            lastPanX = translation.x
-        case .changed:
-            let delta = translation.x - lastPanX
-            lastPanX = translation.x
-            node.eulerAngles.y += Float(delta) * 0.01
-        default:
-            break
-        }
-    }
 
     // MARK: - Animations
 
