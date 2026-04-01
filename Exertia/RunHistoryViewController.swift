@@ -276,7 +276,7 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
                         totalRightLeans:  s.total_right_leans ?? 0,
                         distanceCovered:  s.distance_covered ?? 0,
                         averageSpeed:     s.average_speed,
-                        characterImageName: "character1",
+                        characterImageName: "CharacterAssetThumbnail",
                         completionStatus: s.completion_status ?? "completed"
                     )
                 }.sorted { $0.date > $1.date }
