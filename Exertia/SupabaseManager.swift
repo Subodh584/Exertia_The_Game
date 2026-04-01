@@ -58,6 +58,7 @@ struct AppSession: Codable {
     let total_crouches: Int?
     let total_left_leans: Int?
     let total_right_leans: Int?
+    let total_steps: Int?
     let completion_status: String?
     let created_at: String?
 }
@@ -131,6 +132,7 @@ struct SessionInsert: Encodable {
     let total_crouches: Int
     let total_left_leans: Int
     let total_right_leans: Int
+    let total_steps: Int
     let completion_status: String
 }
 

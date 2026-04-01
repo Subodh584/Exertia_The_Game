@@ -2073,6 +2073,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
             crouches: totalCrouches,
             leftLeans: totalLeftLeans,
             rightLeans: totalRightLeans,
+            steps: totalSpotRunningReps * 2,
             distanceCovered: distanceMeters,
             averageSpeed: avgSpeed,
             completionStatus: completionStatus
@@ -2174,6 +2175,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         let capturedCrouches  = totalCrouches
         let capturedLeftLeans = totalLeftLeans
         let capturedRightLeans = totalRightLeans
+        let capturedSteps     = totalSteps
         let capturedCharacter = character
         let capturedTrack     = trackName
         let capturedTrackId   = trackId
@@ -2194,6 +2196,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                 crouches:        capturedCrouches,
                 leftLeans:       capturedLeftLeans,
                 rightLeans:      capturedRightLeans,
+                steps:           capturedSteps,
                 distanceCovered: capturedDist,
                 averageSpeed:    capturedSpeed,
                 completionStatus: "abandoned"
