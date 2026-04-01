@@ -154,7 +154,7 @@ class HomeViewController: UIViewController {
             // Group the animation into a nested layout to flawlessly inject a pure 2-second loop delay!
             let groupAnim = CAAnimationGroup()
             groupAnim.animations = [flightAnim]
-            groupAnim.duration = 3.5 + 2.0 // Exactly 3.5s of visible flight time + a pure 2.0s invisible math delay
+            groupAnim.duration = 3.5 + 1 // Exactly 3.5s of visible flight time + a pure 2.0s invisible math delay
             groupAnim.repeatCount = .infinity
             
             rocketView.layer.add(groupAnim, forKey: "loopDeLoopFlight")
@@ -432,7 +432,7 @@ class HomeViewController: UIViewController {
         ])
         
         tabBarContainer.backgroundColor = .clear
-        let blurEffect = UIBlurEffect(style: .systemThinMaterialDark)
+        let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialDark) // Liquid glass
         let blurView = UIVisualEffectView(effect: blurEffect)
         blurView.translatesAutoresizingMaskIntoConstraints = false
         blurView.layer.cornerRadius = 35
@@ -448,15 +448,51 @@ class HomeViewController: UIViewController {
         ])
         
         tabBarContainer.layer.cornerRadius = 35
-        tabBarContainer.layer.borderWidth = 1.0
-        tabBarContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        tabBarContainer.layer.borderWidth = 1.5
+        tabBarContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         
-        indicatorView.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        // Fluid glowing ambient shadow
+        tabBarContainer.layer.shadowColor = UIColor.white.cgColor
+        tabBarContainer.layer.shadowRadius = 15
+        tabBarContainer.layer.shadowOpacity = 0.2
+        tabBarContainer.layer.shadowOffset = .zero
+        
+        indicatorView.backgroundColor = UIColor.white.withAlphaComponent(0.25)
         indicatorView.layer.cornerRadius = 30
         indicatorView.layer.cornerCurve = .continuous
+        indicatorView.layer.shadowColor = UIColor.white.cgColor
+        indicatorView.layer.shadowRadius = 8
+        indicatorView.layer.shadowOpacity = 0.4
+        indicatorView.layer.shadowOffset = .zero
         tabBarContainer.insertSubview(indicatorView, at: 1)
         
         view.bringSubviewToFront(tabBarContainer)
+        
+        // Gesture Recognizers for Swipe Navigation
+        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(handleTabSwipe(_:)))
+        swipeLeft.direction = .left
+        tabBarContainer.addGestureRecognizer(swipeLeft)
+        
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(handleTabSwipe(_:)))
+        swipeRight.direction = .right
+        tabBarContainer.addGestureRecognizer(swipeRight)
+    }
+
+    @objc private func handleTabSwipe(_ gesture: UISwipeGestureRecognizer) {
+        if gesture.direction == .left { // Swipe left goes to next tab (Customize)
+            AudioManager.shared.playEffect(.buttonTapped)
+            let sb = UIStoryboard(name: "Main", bundle: nil)
+            if let vc = sb.instantiateViewController(withIdentifier: "CharacterSelectionViewController") as? CharacterSelectionViewController {
+                vc.modalPresentationStyle = .fullScreen
+                let transition = CATransition()
+                transition.duration = 0.3
+                transition.type = .push
+                transition.subtype = .fromRight
+                transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                view.window?.layer.add(transition, forKey: kCATransition)
+                self.present(vc, animated: false)
+            }
+        }
     }
     
     func setupCustomTabs() {
@@ -555,7 +591,8 @@ class HomeViewController: UIViewController {
         let targetFrame = targetView.convert(targetView.bounds, to: tabBarContainer)
         let paddedFrame = targetFrame.insetBy(dx: 4, dy: 4)
         
-        UIView.animate(withDuration: animated ? 0.4 : 0.0, delay: 0, usingSpringWithDamping: 0.75, initialSpringVelocity: 0.5, options: .curveEaseOut, animations: {
+        // Fluid spring (liquid glass feel) for indicator movement
+        UIView.animate(withDuration: animated ? 0.5 : 0.0, delay: 0, usingSpringWithDamping: 0.65, initialSpringVelocity: 0.8, options: .curveEaseOut, animations: {
             self.indicatorView.frame = paddedFrame
         }, completion: nil)
         
@@ -589,6 +626,8 @@ class HomeViewController: UIViewController {
         profileButton.layoutIfNeeded()
         profileButton.layer.cornerRadius = profileButton.frame.height / 2
         profileButton.layer.masksToBounds = true
+        profileButton.layer.borderWidth = 1
+        profileButton.layer.borderColor = UIColor.white.withAlphaComponent(0.8).cgColor
         profileButton.imageView?.contentMode = .scaleAspectFit
     }
 

@@ -106,27 +106,82 @@ class CharacterSelectionViewController: UIViewController {
         characterNode = characterShell
         
         // --- PREVENT MATERIAL GLITCHING & Z-FIGHTING OVERLAPS ---
+        // Shader modifier: nudge vertices outward along their normals by a tiny amount.
+        // This is the cleanest way to fix Z-fighting between flush/coplanar geometry
+        // without visibly distorting the model's shape.
+        let zFightShader = """
+        #pragma body
+        float offset = 0.0005;
+        _geometry.position.xyz += _geometry.normal * offset;
+        """
+        
+        let chestNodes: Set<String> = ["chest_armor_detail", "chest_armor_detail-001", "chest_armor_main"]
+        let darkSuit = UIColor(red: 0.12, green: 0.12, blue: 0.14, alpha: 1)
+        let exactPink = UIColor(red: 194/255.0, green: 149/255.0, blue: 144/255.0, alpha: 1.0) // #C29590
+        
         characterShell.enumerateChildNodes { node, _ in
-            
-            
-            if let name = node.name?.lowercased() {
-                // The native iOS .dae XML parser brutally renames exotic string characters, parsing the helmet securely as `____helm` mapping inside Apple's engines natively.
-                if name.contains("helm") || name.contains("chest") || name.contains("armor") || name.contains("shield") {
-                    // Squeeze the outer geometry organically visibly functionally visually safely securely firmly outwards identically mathematically cleanly exclusively intuitively smartly completely flawlessly seamlessly by half a percent realistically stably curing all co-planar overlaps!
-                    node.scale = SCNVector3(1.005, 1.005, 1.005)
+            if let name = node.name?.lowercased(),
+               let geometry = node.geometry {
+                
+                // Determine if this mesh is visually functioning as exterior armor
+                let isWhiteArmor = geometry.materials.contains { $0.name == "white_suit" }
+                
+                // Z-fight shader: Push overlapping armor/helmet parts micro-units outward 
+                // so they definitively sit on top of the black undersuit!
+                if name.contains("helm") || name.contains("chest") || name.contains("armor") || name.contains("shield") || isWhiteArmor {
+                    geometry.shaderModifiers = [.geometry: zFightShader]
                 }
-            }
-            
-            if let geometry = node.geometry {
+                
                 for material in geometry.materials {
-                    material.isDoubleSided = false 
+                    material.isDoubleSided = false
+                    material.lightingModel = .phong
                     
-                    
-                    if material.lightingModel == .physicallyBased {
-                        material.lightingModel = .phong
+                    // The Helmet shell renders beautifully with direct node targeting
+                    if name == "____helm" {
+                        material.diffuse.contents = UIColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
+                        material.specular.contents = UIColor(white: 0.15, alpha: 1.0)
                     }
-                    
-                    material.specular.contents = UIColor(white: 0.15, alpha: 1.0)
+                    // The Visor face plate
+                    else if name == "cube-001" {
+                        material.diffuse.contents = UIColor(red: 0.08, green: 0.08, blue: 0.10, alpha: 1)
+                        material.specular.contents = UIColor.white
+                        material.shininess = 1.0
+                    }
+                    // The Stomach plate
+                    else if name == "stomach_plate" {
+                        material.diffuse.contents = UIColor(red: 0.78, green: 0.78, blue: 0.80, alpha: 1)
+                        material.specular.contents = UIColor(white: 0.15, alpha: 1.0)
+                    }
+                    // The 3 Chest Armor nodes override unconditionally
+                    else if chestNodes.contains(name) {
+                        material.diffuse.contents = UIColor.white
+                        material.specular.contents = UIColor(white: 0.15, alpha: 1.0)
+                    }
+                    else if material.name == "undersuit" {
+                        material.diffuse.contents = darkSuit
+                        material.specular.contents = UIColor(white: 0.1, alpha: 1.0)
+                    } 
+                    else if material.name == "metallic_pink" {
+                        // User reported PBR looks brown in ambient light. 
+                        // Using strong .phong specular reflection over the exact hex prevents color muting.
+                        material.diffuse.contents = exactPink
+                        material.specular.contents = UIColor(white: 0.7, alpha: 1.0)
+                        material.shininess = 0.5
+                    } 
+                    else if material.name == "white_suit" {
+                        // Force all armor plates strictly white
+                        material.diffuse.contents = UIColor.white
+                        material.specular.contents = UIColor(white: 0.2, alpha: 1.0)
+                    } 
+                    else if material.name == "neon_glow" {
+                        // "make the eyes balck"
+                        material.diffuse.contents = UIColor.black
+                        material.emission.contents = UIColor.black
+                    } 
+                    else {
+                        // Unmapped material names [] just fallback to dark suit organically
+                        material.diffuse.contents = darkSuit
+                    }
                 }
             }
         }
@@ -147,6 +202,10 @@ class CharacterSelectionViewController: UIViewController {
         
         characterShell.position = SCNVector3(-midX + virtualShiftX, -midY + virtualShiftY, 0)
 
+        // VERY IMPORTANT: Since we restored native PBR materials, they need an environment to reflect,
+        // otherwise they turn pitch black when you spin the character.
+        masterScene.lightingEnvironment.contents = UIColor(white: 0.2, alpha: 1.0)
+        
         let ambientNode = SCNNode()
         let ambient = SCNLight()
         ambient.type = .ambient
@@ -191,8 +250,8 @@ class CharacterSelectionViewController: UIViewController {
 
     private func injectUnskinnedAnimation(into targetArmature: SCNNode) {
         // Silently mathematically load the raw animation data rig in the background!
-        guard let animScene = SCNScene(named: "Character.scnassets/Idle-2.dae") else {
-            print("⚠️ Could not load Character.scnassets/Idle-2.dae for animation extraction")
+        guard let animScene = SCNScene(named: "Character.scnassets/Shuffling.dae") else {
+            print("⚠️ Could not load Character.scnassets/Shuffling.dae for animation extraction")
             return
         }
         
@@ -387,7 +446,7 @@ class CharacterSelectionViewController: UIViewController {
         tabBarContainer.backgroundColor = .clear
         tabBarContainer.subviews.filter { $0 is UIVisualEffectView }.forEach { $0.removeFromSuperview() }
         
-        let blurEffect = UIBlurEffect(style: .systemThinMaterialDark)
+        let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialDark) // Liquid glass
         let blurView = UIVisualEffectView(effect: blurEffect)
         blurView.translatesAutoresizingMaskIntoConstraints = false
         blurView.layer.cornerRadius = 35
@@ -403,13 +462,74 @@ class CharacterSelectionViewController: UIViewController {
         ])
         
         tabBarContainer.layer.cornerRadius = 35
-        tabBarContainer.layer.borderWidth = 1.0
-        tabBarContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        tabBarContainer.layer.borderWidth = 1.5
+        tabBarContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         
-        indicatorView.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        // Fluid glowing ambient shadow
+        tabBarContainer.layer.shadowColor = UIColor.white.cgColor
+        tabBarContainer.layer.shadowRadius = 15
+        tabBarContainer.layer.shadowOpacity = 0.2
+        tabBarContainer.layer.shadowOffset = .zero
+        
+        indicatorView.backgroundColor = UIColor.white.withAlphaComponent(0.25)
         indicatorView.layer.cornerRadius = 30
         indicatorView.layer.cornerCurve = .continuous
+        indicatorView.layer.shadowColor = UIColor.white.cgColor
+        indicatorView.layer.shadowRadius = 8
+        indicatorView.layer.shadowOpacity = 0.4
+        indicatorView.layer.shadowOffset = .zero
         tabBarContainer.insertSubview(indicatorView, at: 1)
+        
+        // Gesture Recognizers for Swipe Navigation
+        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(handleTabSwipe(_:)))
+        swipeLeft.direction = .left
+        tabBarContainer.addGestureRecognizer(swipeLeft)
+        
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(handleTabSwipe(_:)))
+        swipeRight.direction = .right
+        tabBarContainer.addGestureRecognizer(swipeRight)
+    }
+
+    @objc private func handleTabSwipe(_ gesture: UISwipeGestureRecognizer) {
+        if gesture.direction == .left { // Swipe left goes to next tab (Statistics)
+            AudioManager.shared.playEffect(.buttonTapped)
+            let sb = UIStoryboard(name: "Main", bundle: nil)
+            if let vc = sb.instantiateViewController(withIdentifier: "StatisticsViewController") as? StatisticsViewController {
+                vc.modalPresentationStyle = .fullScreen
+                let transition = CATransition()
+                transition.duration = 0.3
+                transition.type = .push
+                transition.subtype = .fromRight
+                transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                view.window?.layer.add(transition, forKey: kCATransition)
+                self.present(vc, animated: false)
+            }
+        } else if gesture.direction == .right { // Swipe right goes purely back to previous tab (Home)
+            AudioManager.shared.playEffect(.buttonTapped)
+            var candidate = self.presentingViewController
+            while candidate != nil {
+                if candidate is HomeViewController {
+                    let transition = CATransition()
+                    transition.duration = 0.3
+                    transition.type = .push
+                    transition.subtype = .fromLeft
+                    transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    view.window?.layer.add(transition, forKey: kCATransition)
+                    candidate?.dismiss(animated: false, completion: nil)
+                    return
+                }
+                candidate = candidate?.presentingViewController
+            }
+            
+            // Fallback backward push if HomeViewController isn't found
+            let transition = CATransition()
+            transition.duration = 0.3
+            transition.type = .push
+            transition.subtype = .fromLeft
+            transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            view.window?.layer.add(transition, forKey: kCATransition)
+            self.dismiss(animated: false, completion: nil)
+        }
     }
     
     func setupCustomTabs() {
@@ -500,7 +620,8 @@ class CharacterSelectionViewController: UIViewController {
     func moveIndicator(to targetView: UIView, animated: Bool) {
         let targetFrame = targetView.convert(targetView.bounds, to: tabBarContainer)
         let paddedFrame = targetFrame.insetBy(dx: 4, dy: 4)
-        UIView.animate(withDuration: animated ? 0.4 : 0.0, delay: 0, usingSpringWithDamping: 0.75, initialSpringVelocity: 0.5, options: .curveEaseOut, animations: {
+        // Fluid spring (liquid glass feel) for indicator movement
+        UIView.animate(withDuration: animated ? 0.5 : 0.0, delay: 0, usingSpringWithDamping: 0.65, initialSpringVelocity: 0.8, options: .curveEaseOut, animations: {
             self.indicatorView.frame = paddedFrame
         }, completion: nil)
         for (i, icon) in tabIcons.enumerated() {
