@@ -455,6 +455,27 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         
         inProgressButton.addTarget(self, action: #selector(tabChanged(_:)), for: .touchUpInside)
         completedButton.addTarget(self, action: #selector(tabChanged(_:)), for: .touchUpInside)
+
+        // Swipe gestures for badge tabs
+        let swipeLeft = UISwipeGestureRecognizer(target: self, action: #selector(badgeSwipedLeft))
+        swipeLeft.direction = .left
+        tableView.addGestureRecognizer(swipeLeft)
+
+        let swipeRight = UISwipeGestureRecognizer(target: self, action: #selector(badgeSwipedRight))
+        swipeRight.direction = .right
+        tableView.addGestureRecognizer(swipeRight)
+    }
+
+    @objc private func badgeSwipedLeft() {
+        if !isShowingCompleted {
+            tabChanged(completedButton)
+        }
+    }
+
+    @objc private func badgeSwipedRight() {
+        if isShowingCompleted {
+            tabChanged(inProgressButton)
+        }
     }
     
     @objc func backTapped() {
@@ -540,17 +561,38 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         AudioManager.shared.playEffect(.buttonTapped)
         let isCompletedTab = (sender == completedButton)
         if isCompletedTab == isShowingCompleted { return }
-        
+
+        let swipeDirection: UIView.AnimationOptions = isCompletedTab ? .transitionFlipFromRight : .transitionFlipFromLeft
+        let slideDirection: CGFloat = isCompletedTab ? 1 : -1
+
         isShowingCompleted = isCompletedTab
         updateTabSelection()
-        
-        UIView.animate(withDuration: 0.3) {
+
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.8,
+                       initialSpringVelocity: 0.5, options: .curveEaseOut) {
             self.tabIndicator.center.x = sender.center.x
         }
-        
-        UIView.transition(with: tableView, duration: 0.3, options: .transitionCrossDissolve, animations: {
-            self.tableView.reloadData()
-        }, completion: nil)
+
+        // Slide out + slide in animation
+        let snapshot = tableView.snapshotView(afterScreenUpdates: false)
+        if let snap = snapshot {
+            snap.frame = tableView.frame
+            tableView.superview?.addSubview(snap)
+
+            tableView.transform = CGAffineTransform(translationX: slideDirection * tableView.bounds.width, y: 0)
+            tableView.reloadData()
+
+            UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.85,
+                           initialSpringVelocity: 0.5, options: .curveEaseOut, animations: {
+                self.tableView.transform = .identity
+                snap.transform = CGAffineTransform(translationX: -slideDirection * self.tableView.bounds.width, y: 0)
+                snap.alpha = 0
+            }) { _ in
+                snap.removeFromSuperview()
+            }
+        } else {
+            tableView.reloadData()
+        }
     }
     
     func updateTabSelection() {
