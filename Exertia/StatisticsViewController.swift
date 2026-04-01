@@ -95,6 +95,8 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var streakCountLabel: UILabel?
     private var streakSubtitleLabel: UILabel?
     private var bestStreakLabel: UILabel?
+
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -111,6 +113,15 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         addStreakView()
         styleTabBar()
         initTabs()
+        loadingIndicator.color = .white
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+
         loadCachedStatsSnapshot()
         fetchRealUserName()
         fetchStatsData()
@@ -304,6 +315,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     func fetchStatsData() {
         guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
 
+        DispatchQueue.main.async { self.loadingIndicator.startAnimating() }
         Task {
             do {
                 // Fetch aggregated stats
@@ -346,13 +358,17 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 }
 
                 DispatchQueue.main.async {
+                    self.loadingIndicator.stopAnimating()
                     self.refreshUI()
                     self.persistStatsSnapshot()
                     print("✅ Statistics UI hydrated with real API data!")
                 }
             } catch {
                 print("❌ Failed to fetch stats data: \(error). Using defaults.")
-                DispatchQueue.main.async { self.refreshUI() }
+                DispatchQueue.main.async {
+                    self.loadingIndicator.stopAnimating()
+                    self.refreshUI()
+                }
             }
         }
     }

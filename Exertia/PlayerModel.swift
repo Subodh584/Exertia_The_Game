@@ -100,6 +100,7 @@ class GameData {
         crouches: Int,
         leftLeans: Int,
         rightLeans: Int,
+        steps: Int,
         distanceCovered: Double,
         averageSpeed: Double?,
         completionStatus: String = "completed"
@@ -129,7 +130,7 @@ class GameData {
         print("📊 Local stats updated! Syncing with Supabase...")
         print("   Track: \(track) (\(trackId)) | Character: \(characterId)")
         print("   Duration: \(duration)m | Calories: \(calories) | Distance: \(String(format: "%.1f", distanceCovered))m")
-        print("   Jumps: \(jumps) | Crouches: \(crouches) | Left: \(leftLeans) | Right: \(rightLeans)")
+        print("   Jumps: \(jumps) | Crouches: \(crouches) | Left: \(leftLeans) | Right: \(rightLeans) | Steps: \(steps)")
 
         let distanceKm = distanceCovered / 1000.0
 
@@ -152,6 +153,7 @@ class GameData {
                     total_crouches: crouches,
                     total_left_leans: leftLeans,
                     total_right_leans: rightLeans,
+                    total_steps: steps,
                     completion_status: completionStatus
                 )
 
