@@ -281,8 +281,10 @@ class FullCalendarViewController: UIViewController,
         }
 
         let gold = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1)
+        let orange = UIColor(red: 1.0, green: 0.62, blue: 0.18, alpha: 1.0)
         for (color, title) in [
             (gold,           "Target Met"),
+            (orange,         "Abandoned"),
             (UIColor.neonPink, "Today"),
             (UIColor.white.withAlphaComponent(0.2), "No Run")
         ] {
@@ -316,12 +318,14 @@ class FullCalendarViewController: UIViewController,
                 let key       = dateKeyFmt.string(from: date)
                 let isToday   = cal.isDateInToday(date)
                 let targetMet = activeDateStrings.contains(key)
-                let hasSessions = sessionsByDate[key] != nil
+                let daySessions = sessionsByDate[key] ?? []
+                let hasSessions = !daySessions.isEmpty
+                let hasAbandonedSession = daySessions.contains { ($0.completion_status?.lowercased() ?? "") == "abandoned" }
 
-                cell.configure(date: date, isToday: isToday, targetMet: targetMet)
+                cell.configure(date: date, isToday: isToday, targetMet: targetMet, hasAbandonedSession: hasAbandonedSession)
 
                 // Subtle dot if there are sessions but target not met
-                if hasSessions && !targetMet && !isToday {
+                if hasSessions && !targetMet && !isToday && !hasAbandonedSession {
                     cell.showSessionDot(true)
                 } else {
                     cell.showSessionDot(false)

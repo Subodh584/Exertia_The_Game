@@ -367,9 +367,10 @@ class HomeViewController: UIViewController {
 
                 let (stats, user, sessions, liveStreak) = try await (statsFetch, userFetch, sessFetch, streakFetch)
 
-                // Filter completed sessions whose created_at falls on TODAY in IST
+                // Count both completed and abandoned sessions toward today's totals
+                // as long as Supabase recorded real distance/calories on them.
                 let todaySessions = sessions.filter { s in
-                    guard s.completion_status == "completed",
+                    guard s.countsTowardDailyProgress,
                           let raw = s.created_at,
                           let ts  = ISODateParser.date(from: raw) else { return false }
                     return Self.istCalendar.isDateInToday(ts)
