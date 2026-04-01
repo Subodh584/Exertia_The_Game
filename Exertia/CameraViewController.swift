@@ -186,6 +186,9 @@ class CameraViewController: UIViewController {
   
   // SceneKit game view controller (new Exertia game)
   var exertiaGameVC: ExertiaGameViewController?
+
+  // Clap-to-pause detector
+  private var clapToPauseDetector: ClapToPause?
   
   private var lastDetector: Detector?
 
@@ -470,6 +473,19 @@ class CameraViewController: UIViewController {
     runningDetector = SpotRunningDetector()
     runningDetector?.onRepCompleted = { [weak self] repCount in
       self?.handleSpotRunningRep(repCount)
+    }
+
+    // Clap-to-Pause Detector
+    clapToPauseDetector = ClapToPause()
+    clapToPauseDetector?.onClapDetected = { [weak self] in
+      DispatchQueue.main.async {
+        guard self?.currentStage == .gamePlaying else { return }
+        if self?.exertiaGameVC?.isPaused == true {
+          self?.exertiaGameVC?.resumeGame()
+        } else {
+          self?.exertiaGameVC?.pauseGame()
+        }
+      }
     }
   }
   
@@ -768,6 +784,11 @@ class CameraViewController: UIViewController {
           // Process for spot running detection (during running test OR game)
           if strongSelf.currentStage == .spotRunningTest || strongSelf.currentStage == .gamePlaying {
             strongSelf.runningDetector?.processPose(pose)
+          }
+
+          // Process clap-to-pause (only during game)
+          if strongSelf.currentStage == .gamePlaying {
+            strongSelf.clapToPauseDetector?.processPose(pose)
           }
           
           // Always draw skeleton overlay
