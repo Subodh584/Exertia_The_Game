@@ -427,6 +427,240 @@ public class UIUtilities {
   }
 }
 
+final class AudioManager: NSObject {
+  enum MusicTrack: String {
+    case app
+    case game
+  }
+
+  enum SoundEffect: String {
+    case buttonTapped = "button-tapped"
+    case gameStart = "game-start"
+    case pauseResume = "pause-resume"
+    case targetButton = "target-button"
+    case characterSelected = "character-selected"
+  }
+
+  static let shared = AudioManager()
+
+  private let musicMutedKey = "audio_music_muted"
+  private let musicVolumeKey = "audio_music_volume"
+  private let sfxMutedKey = "audio_sfx_muted"
+  private let sfxVolumeKey = "audio_sfx_volume"
+  private var musicPlayer: AVAudioPlayer?
+  private var currentTrack: MusicTrack?
+  private var activeSFXPlayers: [AVAudioPlayer] = []
+  private weak var managedAVPlayer: AVPlayer?
+  private var pausedTrackForBackground: MusicTrack?
+
+  private override init() {
+    super.init()
+  }
+
+  func configureAudioSession() {
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+      try session.setActive(true)
+    } catch {
+      print("❌ Failed to configure audio session: \(error)")
+    }
+  }
+
+  func applySavedSettings() {
+    updateMusicState()
+  }
+
+  func playAppMusic() {
+    playMusic(track: .app)
+  }
+
+  func playGameMusic() {
+    playMusic(track: .game)
+  }
+
+  func stopMusic() {
+    musicPlayer?.stop()
+    musicPlayer?.currentTime = 0
+    musicPlayer = nil
+    currentTrack = nil
+  }
+
+  func setMusicMuted(_ muted: Bool) {
+    UserDefaults.standard.set(muted, forKey: musicMutedKey)
+    updateMusicState()
+  }
+
+  func setMusicVolume(_ volume: Float) {
+    UserDefaults.standard.set(volume, forKey: musicVolumeKey)
+    updateMusicState()
+  }
+
+  func setSFXMuted(_ muted: Bool) {
+    UserDefaults.standard.set(muted, forKey: sfxMutedKey)
+  }
+
+  func setSFXVolume(_ volume: Float) {
+    UserDefaults.standard.set(volume, forKey: sfxVolumeKey)
+  }
+
+  func playEffect(_ effect: SoundEffect) {
+    guard !isSFXMuted, let url = sfxURL(for: effect) else { return }
+
+    do {
+      let player = try AVAudioPlayer(contentsOf: url)
+      player.volume = sfxVolume
+      player.delegate = self
+      player.prepareToPlay()
+      activeSFXPlayers.append(player)
+      player.play()
+    } catch {
+      print("❌ Failed to play sfx \(effect.rawValue): \(error)")
+    }
+  }
+
+  func applyMutedState(to player: AVPlayer?) {
+    managedAVPlayer = player
+    player?.isMuted = isMusicMuted
+    player?.volume = isMusicMuted ? 0 : musicVolume
+  }
+
+  func refreshMusicMix() {
+    updateMusicState()
+  }
+
+  func pauseForAppBackground() {
+    pausedTrackForBackground = currentTrack
+    musicPlayer?.pause()
+    managedAVPlayer?.pause()
+    activeSFXPlayers.forEach { $0.stop() }
+    activeSFXPlayers.removeAll()
+  }
+
+  func resumeAfterAppForeground() {
+    applyMutedState(to: managedAVPlayer)
+
+    guard !isMusicMuted,
+          let track = pausedTrackForBackground ?? currentTrack else { return }
+
+    pausedTrackForBackground = nil
+    playMusic(track: track)
+  }
+
+  private func playMusic(track: MusicTrack) {
+    guard !isMusicMuted else {
+      stopMusic()
+      return
+    }
+
+    if currentTrack == track, let player = musicPlayer {
+      player.volume = musicVolume
+      if !player.isPlaying {
+        player.play()
+      }
+      return
+    }
+
+    guard let url = musicURL(for: track) else {
+      print("❌ Missing audio file for \(track.rawValue) music")
+      return
+    }
+
+    do {
+      let player = try AVAudioPlayer(contentsOf: url)
+      player.numberOfLoops = -1
+      player.volume = musicVolume
+      player.prepareToPlay()
+      player.play()
+      musicPlayer = player
+      currentTrack = track
+    } catch {
+      print("❌ Failed to play \(track.rawValue) music: \(error)")
+    }
+  }
+
+  private func updateMusicState() {
+    applyMutedState(to: managedAVPlayer)
+    guard let player = musicPlayer else { return }
+
+    if isMusicMuted {
+      player.pause()
+    } else {
+      player.volume = musicVolume
+      if !player.isPlaying {
+        player.play()
+      }
+    }
+  }
+
+  private var isMusicMuted: Bool {
+    UserDefaults.standard.bool(forKey: musicMutedKey)
+  }
+
+  private var musicVolume: Float {
+    UserDefaults.standard.object(forKey: musicVolumeKey) as? Float ?? 0.8
+  }
+
+  private var isSFXMuted: Bool {
+    UserDefaults.standard.bool(forKey: sfxMutedKey)
+  }
+
+  private var sfxVolume: Float {
+    UserDefaults.standard.object(forKey: sfxVolumeKey) as? Float ?? 0.8
+  }
+
+  private func musicURL(for track: MusicTrack) -> URL? {
+    let candidateNames: [String]
+
+    switch track {
+    case .app:
+      candidateNames = ["app_music", "App_Audio", "app_audio"]
+    case .game:
+      candidateNames = ["game_music", "Game_Audio", "game_audio"]
+    }
+
+    let extensions = ["mp3", "m4a", "aac", "wav"]
+
+    for name in candidateNames {
+      for ext in extensions {
+        if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Audio") {
+          return url
+        }
+        if let url = Bundle.main.url(forResource: name, withExtension: ext) {
+          return url
+        }
+      }
+    }
+
+    return nil
+  }
+
+  private func sfxURL(for effect: SoundEffect) -> URL? {
+    let extensions = ["mp3", "m4a", "aac", "wav"]
+
+    for ext in extensions {
+      if let url = Bundle.main.url(forResource: effect.rawValue, withExtension: ext, subdirectory: "Audio") {
+        return url
+      }
+      if let url = Bundle.main.url(forResource: effect.rawValue, withExtension: ext) {
+        return url
+      }
+    }
+
+    return nil
+  }
+}
+
+extension AudioManager: AVAudioPlayerDelegate {
+  func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+    activeSFXPlayers.removeAll { $0 === player }
+  }
+
+  func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+    activeSFXPlayers.removeAll { $0 === player }
+  }
+}
+
 // MARK: - Constants
 
 private enum Constants {

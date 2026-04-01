@@ -15,6 +15,7 @@ class SplashViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        AudioManager.shared.playAppMusic()
         animateOpeningSequence()
     }
 

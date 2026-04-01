@@ -2,6 +2,11 @@ import UIKit
 import SceneKit
 
 class HomeViewController: UIViewController {
+    private struct CachedHomeSnapshot: Codable {
+        let todayCalories: Int
+        let todayDistance: Double
+        let liveStreak: Int
+    }
 
     @IBOutlet weak var characterImageView: UIImageView!
     @IBOutlet weak var stageHighlightView: UIImageView!
@@ -33,9 +38,10 @@ class HomeViewController: UIViewController {
     private var tabLabels: [UILabel] = []
     private var tabWrappers: [UIView] = []
     private let currentTabIndex = 0
+    private static let homeCacheKeyPrefix = "home.cache."
+    private static let celebrationKeyPrefix = "home.celebration."
 
     let gameData = GameData.shared
-    private var hasShownCelebrationToday = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -67,7 +73,11 @@ class HomeViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        updateUI()
+        AudioManager.shared.playAppMusic()
+        updateCharacterUI()
+        if !applyCachedHomeSnapshot() {
+            showLoadingState()
+        }
         fetchHomeData()
         if tabWrappers.indices.contains(currentTabIndex) {
             tabBarContainer.layoutIfNeeded()
@@ -81,7 +91,67 @@ class HomeViewController: UIViewController {
         c.timeZone = TimeZone(identifier: "Asia/Kolkata")!
         return c
     }()
+
+    private static let istDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = istCalendar
+        formatter.timeZone = istCalendar.timeZone
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
     // Use ISODateParser.date(from:) for flexible ISO8601 parsing
+
+    private var homeCacheKey: String? {
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return nil }
+        return Self.homeCacheKeyPrefix + userId
+    }
+
+    private var celebrationKey: String? {
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return nil }
+        return Self.celebrationKeyPrefix + userId
+    }
+
+    private var todayISTKey: String {
+        Self.istDateFormatter.string(from: Date())
+    }
+
+    private func persistHomeSnapshot(todayCalories: Int, todayDistance: Double, liveStreak: Int) {
+        guard let key = homeCacheKey else { return }
+        let snapshot = CachedHomeSnapshot(todayCalories: todayCalories, todayDistance: todayDistance, liveStreak: liveStreak)
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    @discardableResult
+    private func applyCachedHomeSnapshot() -> Bool {
+        guard let key = homeCacheKey,
+              let data = UserDefaults.standard.data(forKey: key),
+              let snapshot = try? JSONDecoder().decode(CachedHomeSnapshot.self, from: data) else { return false }
+
+        removeShimmers()
+        streakLabel.text = "\(snapshot.liveStreak)"
+        currencyLabel.text = "\(snapshot.todayCalories)"
+        distanceLabel.text = String(format: "%.1f km", snapshot.todayDistance)
+        caloriesLabel.text = "\(snapshot.todayCalories) cal"
+
+        if snapshot.liveStreak > 0 {
+            startStreakPulse()
+        } else {
+            streakLabel.superview?.layer.removeAnimation(forKey: "streakPulse")
+        }
+        return true
+    }
+
+    private func hasShownCelebrationToday() -> Bool {
+        guard let key = celebrationKey else { return false }
+        return UserDefaults.standard.string(forKey: key) == todayISTKey
+    }
+
+    private func markCelebrationShownToday() {
+        guard let key = celebrationKey else { return }
+        UserDefaults.standard.set(todayISTKey, forKey: key)
+    }
 
     func fetchHomeData() {
         guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
@@ -137,8 +207,8 @@ class HomeViewController: UIViewController {
                     }
 
                     // Show celebration if target was just met
-                    if targetMetNow && !self.hasShownCelebrationToday {
-                        self.hasShownCelebrationToday = true
+                    if targetMetNow && !self.hasShownCelebrationToday() {
+                        self.markCelebrationShownToday()
                         // Check for streak milestones first
                         let milestones = [7, 14, 30, 50, 100]
                         if milestones.contains(liveStreak) {
@@ -147,6 +217,12 @@ class HomeViewController: UIViewController {
                             CelebrationView.show(on: self, streak: liveStreak)
                         }
                     }
+
+                    self.persistHomeSnapshot(
+                        todayCalories: todayCalories,
+                        todayDistance: todayDistance,
+                        liveStreak: liveStreak
+                    )
 
                     print("✅ Home UI: today (IST) — \(String(format: "%.1f", todayDistance)) km, \(todayCalories) cal (\(todaySessions.count) sessions)")
                 }
@@ -261,6 +337,7 @@ class HomeViewController: UIViewController {
     }
 
     @objc func tabTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         let index = sender.tag
         moveIndicator(to: tabWrappers[index], animated: true)
         
@@ -311,6 +388,7 @@ class HomeViewController: UIViewController {
     }
     
     @IBAction func profileButtonTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         let sb = UIStoryboard(name: "Main", bundle: nil)
         if let vc = sb.instantiateViewController(withIdentifier: "ProfileViewController") as? ProfileViewController {
             vc.modalPresentationStyle = .fullScreen
@@ -326,14 +404,16 @@ class HomeViewController: UIViewController {
         profileButton.imageView?.contentMode = .scaleAspectFit
     }
 
-    func updateUI() {
+    private func updateCharacterUI() {
         let selectedPlayer = gameData.getSelectedPlayer()
         characterImageView.image = UIImage(named: selectedPlayer.fullBodyImageName)
+    }
+
+    private func showLoadingState() {
         currencyLabel.text = "--"
         streakLabel.text = "--"
         distanceLabel.text = "--"
         caloriesLabel.text = "-- cal"
-        // Add shimmer while loading
         [currencyLabel, streakLabel, distanceLabel, caloriesLabel].forEach { addShimmer(to: $0) }
     }
 
@@ -357,6 +437,7 @@ class HomeViewController: UIViewController {
     }
     
     @IBAction func playButtonTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         // Bounce animation on tap
         bounceButton(sender) {
             let storyboard = UIStoryboard(name: "Main", bundle: nil)

@@ -225,6 +225,7 @@ class CharacterSelectionViewController: UIViewController {
     }
     
     @objc func confirmAndGoHome() {
+        AudioManager.shared.playEffect(.characterSelected)
         let success = gameData.selectPlayer(at: currentViewingIndex)
         if success {
             let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -247,10 +248,12 @@ class CharacterSelectionViewController: UIViewController {
     }
     
     @IBAction func backButtonTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         self.dismiss(animated: true, completion: nil)
     }
     
     @objc func profileTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let sb = UIStoryboard(name: "Main", bundle: nil)
         if let vc = sb.instantiateViewController(withIdentifier: "ProfileViewController") as? ProfileViewController {
             vc.modalPresentationStyle = .fullScreen
@@ -403,6 +406,7 @@ class CharacterSelectionViewController: UIViewController {
     }
     
     @objc func tabTapped(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         let index = sender.tag
         moveIndicator(to: tabWrappers[index], animated: true)
         

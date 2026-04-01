@@ -17,6 +17,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // FORCE WAKE UP
         print("⚡️ APP LAUNCHED. WAKING UP SUPABASE...")
         _ = SupabaseManager.shared
+        AudioManager.shared.configureAudioSession()
+        AudioManager.shared.applySavedSettings()
 
         // NOTE: Do NOT call setUserOnline here — the splash screen handles auth first.
         // Calling authenticated API here races with token refresh and can blacklist the refresh token.
@@ -40,4 +42,3 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 
 }
-

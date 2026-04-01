@@ -228,6 +228,7 @@ class CameraViewController: UIViewController {
 
   override func viewDidAppear(_ animated: Bool) {
     super.viewDidAppear(animated)
+    AudioManager.shared.stopMusic()
     startSession()
     
     // Check if demo should be skipped
@@ -626,6 +627,7 @@ class CameraViewController: UIViewController {
   // MARK: - Play Button Action
   
   @objc func playButtonTapped(_ sender: Any) {
+    AudioManager.shared.playEffect(.gameStart)
     // Set stage to game playing so detectors process poses
     currentStage = .gamePlaying
     

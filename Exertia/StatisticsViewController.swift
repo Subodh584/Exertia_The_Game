@@ -6,6 +6,36 @@ extension UIColor {
 }
 
 class StatisticsViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+    private struct CachedStatsSnapshot: Codable {
+        let userName: String?
+        let dailyTargetCalories: Int
+        let dailyTargetDistance: Double
+        let currentWeight: Double?
+        let targetWeight: Double?
+        let currentStreak: Int
+        let longestStreak: Int
+        let totalCalories: Int
+        let totalDistance: Double
+        let totalMinutes: Int
+        let completedSessions: Int
+        let todayCalories: Int
+        let todayDistance: Double
+        let lastSessionDuration: Int?
+        let lastSessionCalories: Int?
+        let lastSessionDistance: Double?
+        let bestSessionDuration: Int?
+        let bestSessionCalories: Int?
+        let bestSessionDistance: Double?
+        let activeDateStrings: [String]
+        let allCompletedSessions: [AppSession]
+    }
+
+    private enum WeightValidation {
+        static let minAllowedKg = 30.0
+        static let maxAllowedKg = 300.0
+        static let maxRelativeTargetChange = 0.25
+    }
+    private static let statsCacheKeyPrefix = "statistics.cache."
 
     private let gradientView = UIView()
     private let navBar = UIView()
@@ -81,6 +111,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         addStreakView()
         styleTabBar()
         initTabs()
+        loadCachedStatsSnapshot()
         fetchRealUserName()
         fetchStatsData()
         fetchStreakCalendar()
@@ -127,6 +158,117 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var apiDailyTargetDistance: Double = 5.0
     private var apiCurrentWeight: Double? = nil
     private var apiTargetWeight: Double? = nil
+
+    private func validateWeightInputs(current: Double, target: Double) -> String? {
+        guard current.isFinite, target.isFinite else {
+            return "Please enter valid weight values."
+        }
+
+        guard current >= WeightValidation.minAllowedKg,
+              current <= WeightValidation.maxAllowedKg else {
+            return String(
+                format: "Current weight must be between %.0f kg and %.0f kg.",
+                WeightValidation.minAllowedKg,
+                WeightValidation.maxAllowedKg
+            )
+        }
+
+        guard target >= WeightValidation.minAllowedKg,
+              target <= WeightValidation.maxAllowedKg else {
+            return String(
+                format: "Target weight must be between %.0f kg and %.0f kg.",
+                WeightValidation.minAllowedKg,
+                WeightValidation.maxAllowedKg
+            )
+        }
+
+        let minTarget = max(
+            WeightValidation.minAllowedKg,
+            current * (1.0 - WeightValidation.maxRelativeTargetChange)
+        )
+        let maxTarget = min(
+            WeightValidation.maxAllowedKg,
+            current * (1.0 + WeightValidation.maxRelativeTargetChange)
+        )
+
+        guard target >= minTarget, target <= maxTarget else {
+            return String(
+                format: "For a current weight of %.1f kg, your next target should stay between %.1f kg and %.1f kg.",
+                current,
+                minTarget,
+                maxTarget
+            )
+        }
+
+        return nil
+    }
+
+    private var statsCacheKey: String? {
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return nil }
+        return Self.statsCacheKeyPrefix + userId
+    }
+
+    private func loadCachedStatsSnapshot() {
+        guard let key = statsCacheKey,
+              let data = UserDefaults.standard.data(forKey: key),
+              let snapshot = try? JSONDecoder().decode(CachedStatsSnapshot.self, from: data) else { return }
+
+        nameLabel.text = snapshot.userName ?? "Player"
+        apiDailyTargetCalories = snapshot.dailyTargetCalories
+        apiDailyTargetDistance = snapshot.dailyTargetDistance
+        apiCurrentWeight = snapshot.currentWeight
+        apiTargetWeight = snapshot.targetWeight
+        apiCurrentStreak = snapshot.currentStreak
+        apiLongestStreak = snapshot.longestStreak
+        apiTotalCalories = snapshot.totalCalories
+        apiTotalDistance = snapshot.totalDistance
+        apiTotalMinutes = snapshot.totalMinutes
+        apiCompletedSessions = snapshot.completedSessions
+        apiTodayCalories = snapshot.todayCalories
+        apiTodayDistance = snapshot.todayDistance
+        apiLastSessionDuration = snapshot.lastSessionDuration
+        apiLastSessionCalories = snapshot.lastSessionCalories
+        apiLastSessionDistance = snapshot.lastSessionDistance
+        apiBestSessionDuration = snapshot.bestSessionDuration
+        apiBestSessionCalories = snapshot.bestSessionCalories
+        apiBestSessionDistance = snapshot.bestSessionDistance
+        activeDateStrings = Set(snapshot.activeDateStrings)
+        allCompletedSessions = snapshot.allCompletedSessions
+
+        refreshUI()
+        streakCollection?.reloadData()
+    }
+
+    private func persistStatsSnapshot() {
+        guard let key = statsCacheKey else { return }
+
+        let snapshot = CachedStatsSnapshot(
+            userName: nameLabel.text,
+            dailyTargetCalories: apiDailyTargetCalories,
+            dailyTargetDistance: apiDailyTargetDistance,
+            currentWeight: apiCurrentWeight,
+            targetWeight: apiTargetWeight,
+            currentStreak: apiCurrentStreak,
+            longestStreak: apiLongestStreak,
+            totalCalories: apiTotalCalories,
+            totalDistance: apiTotalDistance,
+            totalMinutes: apiTotalMinutes,
+            completedSessions: apiCompletedSessions,
+            todayCalories: apiTodayCalories,
+            todayDistance: apiTodayDistance,
+            lastSessionDuration: apiLastSessionDuration,
+            lastSessionCalories: apiLastSessionCalories,
+            lastSessionDistance: apiLastSessionDistance,
+            bestSessionDuration: apiBestSessionDuration,
+            bestSessionCalories: apiBestSessionCalories,
+            bestSessionDistance: apiBestSessionDistance,
+            activeDateStrings: Array(activeDateStrings),
+            allCompletedSessions: allCompletedSessions
+        )
+
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
     private var apiCurrentStreak: Int = 0
     private var apiLongestStreak: Int = 0
     // Dates from streak-calendar API where the daily target was met
@@ -151,6 +293,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                         self.apiLongestStreak = user.longest_streak ?? 0
                         self.apiCurrentStreak = liveStreak
                         self.refreshUI()
+                        self.persistStatsSnapshot()
                     }
                 } catch {
                     print("❌ Failed to fetch user name for stats page: \(error)")
@@ -204,6 +347,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
                 DispatchQueue.main.async {
                     self.refreshUI()
+                    self.persistStatsSnapshot()
                     print("✅ Statistics UI hydrated with real API data!")
                 }
             } catch {
@@ -223,6 +367,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 DispatchQueue.main.async {
                     self.activeDateStrings = active
                     self.streakCollection.reloadData()
+                    self.persistStatsSnapshot()
                     print("✅ Streak calendar: \(active.count) target-met days")
                 }
             } catch {
@@ -245,6 +390,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        AudioManager.shared.playAppMusic()
         refreshUI()
     }
     
@@ -655,9 +801,13 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         DispatchQueue.main.async { self.goToToday() }
     }
     
-    @objc func goBack() { self.dismiss(animated: true) }
+    @objc func goBack() {
+        AudioManager.shared.playEffect(.buttonTapped)
+        self.dismiss(animated: true)
+    }
     
     @objc func openProfile() {
+            AudioManager.shared.playEffect(.buttonTapped)
             let sb = UIStoryboard(name: "Main", bundle: nil)
             if let vc = sb.instantiateViewController(withIdentifier: "ProfileViewController") as? ProfileViewController {
                 vc.modalPresentationStyle = .fullScreen
@@ -666,8 +816,14 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             }
         }
     
-    @objc func openHistoryNormal() { openHistory(scrollToBest: false) }
-    @objc func openHistoryBest()   { openHistory(scrollToBest: true)  }
+    @objc func openHistoryNormal() {
+        AudioManager.shared.playEffect(.buttonTapped)
+        openHistory(scrollToBest: false)
+    }
+    @objc func openHistoryBest()   {
+        AudioManager.shared.playEffect(.buttonTapped)
+        openHistory(scrollToBest: true)
+    }
 
     private func openHistory(scrollToBest: Bool) {
         let vc = RunHistoryViewController()
@@ -678,6 +834,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
 
     @objc func openCalendar() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let vc = FullCalendarViewController()
         vc.activeDateStrings = activeDateStrings
         vc.sessionsByDate    = buildSessionsByDate()
@@ -948,12 +1105,14 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
 
     @objc func clickedCal() {
+        AudioManager.shared.playEffect(.buttonTapped)
         showCalories = true
         animateToggle(b: calBtn, on: true, c: .neonPink)
         animateToggle(b: timeBtn, on: false, c: .gray)
         refreshUI()
     }
     @objc func clickedTime() {
+        AudioManager.shared.playEffect(.buttonTapped)
         showCalories = false
         animateToggle(b: calBtn, on: false, c: .gray)
         animateToggle(b: timeBtn, on: true, c: .neonYellow)
@@ -962,9 +1121,10 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
     // MARK: - Edit Weight
     @objc func editWeightTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let modal = GlassEditModalController(
             title: "Update Weight",
-            subtitle: "Track your weight journey",
+            subtitle: "Track your weight journey with realistic goals",
             icon: "scalemass.fill",
             accentColor: .neonPink,
             fields: [
@@ -984,26 +1144,38 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                     label: "Target Weight",
                     unit: "kg"
                 )
-            ]
-        ) { [weak self] values in
-            guard let self = self,
-                  let current = Double(values[0]), current > 0,
-                  let target = Double(values[1]), target > 0,
-                  let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
-            Task {
-                do {
-                    let data: [String: AnyEncodable] = ["current_weight": AnyEncodable(current), "target_weight": AnyEncodable(target)]
-                    let _ = try await SupabaseManager.shared.updateUser(userId: userId, data: data)
-                    DispatchQueue.main.async {
-                        self.apiCurrentWeight = current
-                        self.apiTargetWeight = target
-                        self.refreshUI()
-                    }
-                } catch {
-                    print("❌ Failed to update weight: \(error)")
+            ],
+            validator: { [weak self] values in
+                guard let self = self else { return "Something went wrong. Please try again." }
+                guard let current = Double(values[0]), current > 0,
+                      let target = Double(values[1]), target > 0 else {
+                    return "Please enter valid weight values greater than 0."
                 }
-            }
-        }
+
+                return self.validateWeightInputs(current: current, target: target)
+            },
+            onSave: { [weak self] values in
+                guard let self = self,
+                      let current = Double(values[0]), current > 0,
+                      let target = Double(values[1]), target > 0,
+                      let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
+                Task {
+                    do {
+                        let data: [String: AnyEncodable] = ["current_weight": AnyEncodable(current), "target_weight": AnyEncodable(target)]
+                        let _ = try await SupabaseManager.shared.updateUser(userId: userId, data: data)
+                        DispatchQueue.main.async {
+                            self.apiCurrentWeight = current
+                            self.apiTargetWeight = target
+                            self.refreshUI()
+                            self.persistStatsSnapshot()
+                        }
+                    } catch {
+                        print("❌ Failed to update weight: \(error)")
+                    }
+                }
+            },
+            onValidationError: nil
+        )
         modal.modalPresentationStyle = .overCurrentContext
         modal.modalTransitionStyle = .crossDissolve
         present(modal, animated: true)
@@ -1011,6 +1183,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
     // MARK: - Edit Targets
     @objc func editTargetsTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let modal = GlassEditModalController(
             title: "Daily Targets",
             subtitle: "Set your daily fitness goals",
@@ -1033,29 +1206,31 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                     label: "Distance Target",
                     unit: "km"
                 )
-            ]
-        ) { [weak self] values in
-            guard let self = self,
-                  let cal = Int(values[0]), cal > 0,
-                  let dist = Double(values[1]), dist > 0,
-                  let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
-            Task {
-                do {
-                    let data: [String: AnyEncodable] = [
-                        "daily_target_calories": AnyEncodable(cal),
-                        "daily_target_distance": AnyEncodable(dist)
-                    ]
-                    let _ = try await SupabaseManager.shared.updateUser(userId: userId, data: data)
-                    DispatchQueue.main.async {
-                        self.apiDailyTargetCalories = cal
-                        self.apiDailyTargetDistance = dist
-                        self.refreshUI()
+            ],
+            onSave: { [weak self] values in
+                guard let self = self,
+                      let cal = Int(values[0]), cal > 0,
+                      let dist = Double(values[1]), dist > 0,
+                      let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
+                Task {
+                    do {
+                        let data: [String: AnyEncodable] = [
+                            "daily_target_calories": AnyEncodable(cal),
+                            "daily_target_distance": AnyEncodable(dist)
+                        ]
+                        let _ = try await SupabaseManager.shared.updateUser(userId: userId, data: data)
+                        DispatchQueue.main.async {
+                            self.apiDailyTargetCalories = cal
+                            self.apiDailyTargetDistance = dist
+                            self.refreshUI()
+                            self.persistStatsSnapshot()
+                        }
+                    } catch {
+                        print("❌ Failed to update targets: \(error)")
                     }
-                } catch {
-                    print("❌ Failed to update targets: \(error)")
                 }
             }
-        }
+        )
         modal.modalPresentationStyle = .overCurrentContext
         modal.modalTransitionStyle = .crossDissolve
         present(modal, animated: true)
@@ -1146,6 +1321,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     @objc func tapTab(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         let i = sender.tag
         moveIndicator(to: tabWrappers[i], animated: true)
         
@@ -1208,20 +1384,34 @@ class GlassEditModalController: UIViewController {
     private let iconName: String
     private let accentColor: UIColor
     private let fields: [FieldConfig]
+    private let validator: (([String]) -> String?)?
     private let onSave: ([String]) -> Void
+    private let onValidationError: ((String) -> Void)?
 
     private let dimView = UIView()
     private let cardView = UIView()
+    private let errorLabel = UILabel()
     private var textFields: [UITextField] = []
     private var cardBottomConstraint: NSLayoutConstraint!
 
-    init(title: String, subtitle: String, icon: String, accentColor: UIColor, fields: [FieldConfig], onSave: @escaping ([String]) -> Void) {
+    init(
+        title: String,
+        subtitle: String,
+        icon: String,
+        accentColor: UIColor,
+        fields: [FieldConfig],
+        validator: (([String]) -> String?)? = nil,
+        onSave: @escaping ([String]) -> Void,
+        onValidationError: ((String) -> Void)? = nil
+    ) {
         self.modalTitle = title
         self.subtitle = subtitle
         self.iconName = icon
         self.accentColor = accentColor
         self.fields = fields
+        self.validator = validator
         self.onSave = onSave
+        self.onValidationError = onValidationError
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -1323,6 +1513,14 @@ class GlassEditModalController: UIViewController {
         }
         cardView.addSubview(fieldsStack)
 
+        errorLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        errorLabel.textColor = .systemRed
+        errorLabel.textAlignment = .center
+        errorLabel.numberOfLines = 0
+        errorLabel.alpha = 0
+        errorLabel.translatesAutoresizingMaskIntoConstraints = false
+        cardView.addSubview(errorLabel)
+
         // Buttons
         let cancelBtn = makeActionButton(title: "Cancel", filled: false)
         cancelBtn.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
@@ -1361,7 +1559,11 @@ class GlassEditModalController: UIViewController {
             fieldsStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 28),
             fieldsStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -28),
 
-            btnStack.topAnchor.constraint(equalTo: fieldsStack.bottomAnchor, constant: 28),
+            errorLabel.topAnchor.constraint(equalTo: fieldsStack.bottomAnchor, constant: 14),
+            errorLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 28),
+            errorLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -28),
+
+            btnStack.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 18),
             btnStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 28),
             btnStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -28),
             btnStack.heightAnchor.constraint(equalToConstant: 50),
@@ -1496,19 +1698,43 @@ class GlassEditModalController: UIViewController {
     }
 
     @objc private func cancelTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         animateOut()
     }
 
     @objc private func saveTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let values = textFields.map { $0.text ?? "" }
         // Validate all fields are non-empty
         guard values.allSatisfy({ !$0.isEmpty }) else {
+            showValidationError("Please fill in all fields.")
             shakeCard()
             return
         }
+
+        if let errorMessage = validator?(values) {
+            showValidationError(errorMessage)
+            shakeCard()
+            onValidationError?(errorMessage)
+            return
+        }
+
+        clearValidationError()
         animateOut { [weak self] in
             self?.onSave(values)
         }
+    }
+
+    private func showValidationError(_ message: String) {
+        errorLabel.text = message
+        UIView.animate(withDuration: 0.2) {
+            self.errorLabel.alpha = 1
+        }
+    }
+
+    private func clearValidationError() {
+        errorLabel.text = nil
+        errorLabel.alpha = 0
     }
 
     private func shakeCard() {

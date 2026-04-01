@@ -74,6 +74,11 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var totalDistanceCovered: Float = 0.0
     private let sceneKitUnitsToMeters: Float = 0.1
     private var endGameButton: UIButton?
+    private var pauseGameButton: UIButton?
+    private var pauseOverlayView: UIView?
+    private var resumeGameButton: UIButton?
+    private var quitGameButton: UIButton?
+    private var isGamePaused = false
 
     // MARK: - Pause State
     var isPaused: Bool = false
@@ -310,6 +315,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        AudioManager.shared.playGameMusic()
         
         currentCameraOffsetY = cameraOffsetY
         currentCameraOffsetZ = cameraOffsetZ
@@ -325,6 +331,11 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
     override var prefersStatusBarHidden: Bool {
         return true
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        AudioManager.shared.stopMusic()
     }
     
     // MARK: - Setup Methods
@@ -1904,6 +1915,19 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     // MARK: - End Game Button & Session Finalization
 
     private func setupEndGameButton() {
+        let pauseButton = UIButton(type: .system)
+        pauseButton.setTitle("PAUSE", for: .normal)
+        pauseButton.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .bold)
+        pauseButton.setTitleColor(UIColor(red: 0.95, green: 0.95, blue: 1.0, alpha: 1.0), for: .normal)
+        pauseButton.backgroundColor = UIColor(red: 0.06, green: 0.08, blue: 0.16, alpha: 0.9)
+        pauseButton.layer.cornerRadius = 10
+        pauseButton.layer.borderWidth = 1.0
+        pauseButton.layer.borderColor = UIColor.white.withAlphaComponent(0.25).cgColor
+        pauseButton.translatesAutoresizingMaskIntoConstraints = false
+        pauseButton.addTarget(self, action: #selector(togglePauseTapped), for: .touchUpInside)
+        view.addSubview(pauseButton)
+        pauseGameButton = pauseButton
+
         let button = UIButton(type: .system)
 
         // Pause icon + label
@@ -1929,9 +1953,75 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         endGameButton = button
 
         NSLayoutConstraint.activate([
+            pauseButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            pauseButton.trailingAnchor.constraint(equalTo: button.leadingAnchor, constant: -12),
+            pauseButton.heightAnchor.constraint(equalToConstant: 32),
+
             button.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             button.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             button.heightAnchor.constraint(equalToConstant: 36)
+        ])
+
+        let overlay = UIView(frame: view.bounds)
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        overlay.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+        overlay.isHidden = true
+        view.addSubview(overlay)
+        pauseOverlayView = overlay
+
+        let card = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.layer.cornerRadius = 20
+        card.clipsToBounds = true
+        overlay.addSubview(card)
+
+        let title = UILabel()
+        title.text = "Game Paused"
+        title.font = UIFont.monospacedSystemFont(ofSize: 22, weight: .bold)
+        title.textColor = .white
+        title.translatesAutoresizingMaskIntoConstraints = false
+        card.contentView.addSubview(title)
+
+        let resumeButton = UIButton(type: .system)
+        resumeButton.setTitle("RESUME", for: .normal)
+        resumeButton.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 15, weight: .bold)
+        resumeButton.backgroundColor = UIColor.neonPink.withAlphaComponent(0.9)
+        resumeButton.setTitleColor(UIColor(red: 13/255, green: 5/255, blue: 26/255, alpha: 1.0), for: .normal)
+        resumeButton.layer.cornerRadius = 12
+        resumeButton.translatesAutoresizingMaskIntoConstraints = false
+        resumeButton.addTarget(self, action: #selector(togglePauseTapped), for: .touchUpInside)
+        card.contentView.addSubview(resumeButton)
+        resumeGameButton = resumeButton
+
+        let quitButton = UIButton(type: .system)
+        quitButton.setTitle("QUIT RUN", for: .normal)
+        quitButton.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 15, weight: .bold)
+        quitButton.backgroundColor = UIColor(red: 0.22, green: 0.05, blue: 0.08, alpha: 0.95)
+        quitButton.setTitleColor(.white, for: .normal)
+        quitButton.layer.cornerRadius = 12
+        quitButton.translatesAutoresizingMaskIntoConstraints = false
+        quitButton.addTarget(self, action: #selector(endGameButtonTapped), for: .touchUpInside)
+        card.contentView.addSubview(quitButton)
+        quitGameButton = quitButton
+
+        NSLayoutConstraint.activate([
+            card.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            card.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
+            card.widthAnchor.constraint(equalToConstant: 240),
+
+            title.topAnchor.constraint(equalTo: card.contentView.topAnchor, constant: 24),
+            title.centerXAnchor.constraint(equalTo: card.contentView.centerXAnchor),
+
+            resumeButton.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 20),
+            resumeButton.leadingAnchor.constraint(equalTo: card.contentView.leadingAnchor, constant: 20),
+            resumeButton.trailingAnchor.constraint(equalTo: card.contentView.trailingAnchor, constant: -20),
+            resumeButton.heightAnchor.constraint(equalToConstant: 46),
+
+            quitButton.topAnchor.constraint(equalTo: resumeButton.bottomAnchor, constant: 12),
+            quitButton.leadingAnchor.constraint(equalTo: card.contentView.leadingAnchor, constant: 20),
+            quitButton.trailingAnchor.constraint(equalTo: card.contentView.trailingAnchor, constant: -20),
+            quitButton.heightAnchor.constraint(equalToConstant: 46),
+            quitButton.bottomAnchor.constraint(equalTo: card.contentView.bottomAnchor, constant: -20)
         ])
     }
 
@@ -1940,7 +2030,22 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         pauseGame()
     }
 
+    @objc private func togglePauseTapped() {
+        guard loadingOverlay == nil else { return }
+        isGamePaused.toggle()
+        AudioManager.shared.playEffect(.pauseResume)
+
+        scene.isPaused = isGamePaused
+        sceneView.isPlaying = !isGamePaused
+        isGameRunning = !isGamePaused
+        pauseOverlayView?.isHidden = !isGamePaused
+        pauseGameButton?.setTitle(isGamePaused ? "RESUME" : "PAUSE", for: .normal)
+    }
+
     private func finalizeAndSaveSession(completionStatus: String) {
+        scene.isPaused = false
+        pauseOverlayView?.isHidden = true
+        isGamePaused = false
         isGameRunning = false
         sceneView.isPlaying = false
 

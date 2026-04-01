@@ -1,12 +1,14 @@
 import UIKit
 
 struct Badge {
+    let id: String
     let title: String
     let description: String
     let iconName: String
     let progress: Float
     let progressText: String
     let isLocked: Bool
+    let completionToken: String?
 }
 
 class ProfileViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
@@ -36,8 +38,6 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     private var completedBadges: [Badge] = []
     private var activeBadges: [Badge] { return isShowingCompleted ? completedBadges : inProgressBadges }
     private var realUserId: String = ""
-    /// Tracks which badges were already shown as completed (by title) to detect new ones
-    private static var knownCompletedBadges: Set<String> = []
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -47,6 +47,11 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         setupActions()
         updateTabSelection()
         fetchRealProfileData()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        AudioManager.shared.playAppMusic()
     }
     
     func fetchRealProfileData() {
@@ -89,14 +94,18 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
                     let target       = badge.target_value
                     let progress     = target > 0 ? Float(current / target) : 0
                     let progressText = self.formatProgress(current, target: target, type: badge.badge_type)
+                    let completionToken = self.completionToken(for: badge.id, userBadge: userBadge)
 
+                    let badgeImageName = Self.badgeImageName(for: badge.name)
                     let localBadge = Badge(
+                        id:           badge.id,
                         title:        badge.name,
                         description:  badge.description,
-                        iconName:     isCompleted ? "badge2" : "badge1",
+                        iconName:     badgeImageName,
                         progress:     min(progress, 1.0),
                         progressText: isCompleted ? "Done" : progressText,
-                        isLocked:     false
+                        isLocked:     !isCompleted,
+                        completionToken: completionToken
                     )
 
                     if isCompleted { completed.append(localBadge) }
@@ -104,19 +113,22 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
                 }
 
                 DispatchQueue.main.async {
-                    // Detect newly completed badges
-                    let completedTitles = Set(completed.map { $0.title })
-                    let newlyCompleted = completedTitles.subtracting(Self.knownCompletedBadges)
-                    Self.knownCompletedBadges = completedTitles
-
                     self.inProgressBadges = inProgress
                     self.completedBadges  = completed
                     self.tableView.reloadData()
 
-                    // Show celebration for first newly completed badge
-                    if let firstNew = newlyCompleted.first {
-                        CelebrationView.showBadge(on: self, badgeName: firstNew)
+                    let shownCompletionTokens = self.shownBadgeCompletionTokens(for: userId)
+                    let newlyCompletedBadges = completed.filter { badge in
+                        guard let token = badge.completionToken else { return false }
+                        return !shownCompletionTokens.contains(token)
                     }
+
+                    if let firstNewBadge = newlyCompletedBadges.first {
+                        CelebrationView.showBadge(on: self, badgeName: firstNewBadge.title, badgeImageName: firstNewBadge.iconName)
+                    }
+
+                    let currentCompletionTokens = Set(completed.compactMap(\.completionToken))
+                    self.storeShownBadgeCompletionTokens(currentCompletionTokens, for: userId)
 
                     print("✅ Badges: \(inProgress.count) in progress, \(completed.count) completed (catalogue: \(allBadges.count))")
                 }
@@ -143,6 +155,42 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         default:
             return String(format: "%.0f/%.0f", min(current, target), target)
         }
+    }
+
+    private static func badgeImageName(for name: String) -> String {
+        switch name {
+        case "First Run":        return "badge_first_run"
+        case "Reactor Core":     return "badge_reactor_core"
+        case "Nebula Walker":    return "badge_nebula_walker"
+        case "Titanium Lungs":   return "badge_titanium_lungs"
+        case "Calorie Crusher":  return "badge_calorie_crusher"
+        case "Marathon Runner":  return "badge_marathon_runner"
+        case "Streak Master":    return "badge_streak_master"
+        default:                 return "badge_first_run"
+        }
+    }
+
+    private func shownBadgeCompletionTokens(for userId: String) -> Set<String> {
+        let key = shownBadgeCompletionTokensKey(for: userId)
+        let stored = UserDefaults.standard.stringArray(forKey: key) ?? []
+        return Set(stored)
+    }
+
+    private func storeShownBadgeCompletionTokens(_ tokens: Set<String>, for userId: String) {
+        let key = shownBadgeCompletionTokensKey(for: userId)
+        UserDefaults.standard.set(Array(tokens).sorted(), forKey: key)
+    }
+
+    private func shownBadgeCompletionTokensKey(for userId: String) -> String {
+        "shown_badge_completion_tokens_\(userId)"
+    }
+
+    private func completionToken(for badgeId: String, userBadge: AppUserBadge?) -> String? {
+        guard userBadge?.is_completed == true else { return nil }
+        if let completedAt = userBadge?.completed_at, !completedAt.isEmpty {
+            return "\(badgeId)|\(completedAt)"
+        }
+        return badgeId
     }
     
     override func viewDidLayoutSubviews() {
@@ -397,11 +445,13 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
     
     @objc func backTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         dismiss(animated: true, completion: nil)
     }
     
     // 🔥 ADDED THIS: Action to open Settings
     @objc func settingsTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         print("⚙️ Opening Settings...")
         let settingsVC = SettingsViewController()
         settingsVC.modalPresentationStyle = .fullScreen
@@ -410,6 +460,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
     
     @objc func editProfileTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let currentName     = nameLabel.text ?? ""
         let rawUsername     = emailLabel.text ?? ""
         let currentUsername = rawUsername.hasPrefix("@") ? String(rawUsername.dropFirst()) : rawUsername
@@ -465,6 +516,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
 
     @objc func copyIDTapped() {
+        AudioManager.shared.playEffect(.buttonTapped)
         let idToCopy = realUserId.isEmpty ? (UserDefaults.standard.string(forKey: "supabaseUserID") ?? "123456") : realUserId
         UIPasteboard.general.string = idToCopy
         let generator = UINotificationFeedbackGenerator()
@@ -472,6 +524,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
     
     @objc func tabChanged(_ sender: UIButton) {
+        AudioManager.shared.playEffect(.buttonTapped)
         let isCompletedTab = (sender == completedButton)
         if isCompletedTab == isShowingCompleted { return }
         
@@ -611,8 +664,8 @@ class BadgeCell: UITableViewCell {
 
             iconImageView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
             iconImageView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
-            iconImageView.widthAnchor.constraint(equalTo: iconContainer.widthAnchor, multiplier: 0.7),
-            iconImageView.heightAnchor.constraint(equalTo: iconContainer.heightAnchor, multiplier: 0.7),
+            iconImageView.widthAnchor.constraint(equalTo: iconContainer.widthAnchor, multiplier: 0.85),
+            iconImageView.heightAnchor.constraint(equalTo: iconContainer.heightAnchor, multiplier: 0.85),
 
             lockImageView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
             lockImageView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
@@ -634,7 +687,7 @@ class BadgeCell: UITableViewCell {
             
             progressLabel.centerYAnchor.constraint(equalTo: progressBar.centerYAnchor),
             progressLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -15),
-            progressLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 45)
+            progressLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 70)
         ])
     }
     
@@ -644,17 +697,19 @@ class BadgeCell: UITableViewCell {
         progressBar.progress = badge.progress
         progressLabel.text = badge.progressText
         iconImageView.image = UIImage(named: badge.iconName)
-        
+
         if badge.isLocked {
-            iconContainer.layer.borderColor = UIColor.gray.withAlphaComponent(0.3).cgColor
-            iconImageView.alpha = 0.3
-            iconImageView.tintColor = .gray
+            // In progress — show badge image at reduced opacity with lock
+            iconContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+            iconImageView.alpha = 0.35
+            lockImageView.image = UIImage(systemName: "lock.fill")
+            lockImageView.tintColor = UIColor.white.withAlphaComponent(0.8)
             lockImageView.isHidden = false
-            titleLabel.textColor = .lightGray
+            titleLabel.textColor = .white
         } else {
+            // Completed — full opacity, no lock
             iconContainer.layer.borderColor = UIColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 0.5).cgColor
             iconImageView.alpha = 1.0
-            iconImageView.tintColor = .white
             lockImageView.isHidden = true
             titleLabel.textColor = .white
         }
