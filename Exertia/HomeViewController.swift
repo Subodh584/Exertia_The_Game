@@ -48,7 +48,7 @@ class HomeViewController: UIViewController {
         setupGlassTabBarDesign()
         setupCustomTabs()
         setupProfileDesign()
-        updateUI()
+        updateCharacterUI()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleNavigateToHome),
