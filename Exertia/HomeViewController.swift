@@ -263,6 +263,7 @@ class HomeViewController: UIViewController {
         super.viewWillAppear(animated)
         AudioManager.shared.playAppMusic()
         updateCharacterUI()
+        setupRocketAnimation()
         if !applyCachedHomeSnapshot() {
             showLoadingState()
         }

@@ -64,6 +64,7 @@ class TrackSelectionViewController: UIViewController {
         let storyboardSubviews = Set(view.subviews)
 
         styleNavArea()
+        adjustStartButtonAlignment()
         setupTrackDesign()
         setupPortalAnimation()
         buildGoalControls()
@@ -75,6 +76,25 @@ class TrackSelectionViewController: UIViewController {
         // To re-enable: delete these two lines. No storyboard changes needed.
         prevTrackTapped.isHidden = true
         nextTrackTapped.isHidden = true
+    }
+
+    private func adjustStartButtonAlignment() {
+        guard let parent = startButton.superview else { return }
+        
+        // Remove old storyboard constraints for startButton
+        let oldConstraints = parent.constraints.filter {
+            $0.firstItem === startButton || $0.secondItem === startButton
+        }
+        NSLayoutConstraint.deactivate(oldConstraints)
+        
+        // Apply fresh, native iOS constraints (floating above safe area)
+        startButton.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            startButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -35),
+            startButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            startButton.widthAnchor.constraint(equalToConstant: 240),
+            startButton.heightAnchor.constraint(equalToConstant: 58)
+        ])
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -165,7 +185,8 @@ class TrackSelectionViewController: UIViewController {
         videoContainerView.layer.shadowOffset  = .zero
         videoContainerView.layer.shadowRadius  = 30
 
-        portalBaseView.transform              = CGAffineTransform(scaleX: 6, y: 4)
+        // Shift the portal upwards to avoid overlapping the new, higher button positions
+        portalBaseView.transform              = CGAffineTransform(translationX: 0, y: -45).scaledBy(x: 5.4, y: 3.5)
         portalBaseView.contentMode            = .scaleAspectFit
         portalBaseView.isUserInteractionEnabled = false
 
@@ -220,7 +241,7 @@ class TrackSelectionViewController: UIViewController {
         NSLayoutConstraint.activate([
             row.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             row.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            row.bottomAnchor.constraint(equalTo: startButton.topAnchor, constant: -18),
+            row.bottomAnchor.constraint(equalTo: startButton.topAnchor, constant: -24), // iOS native padding
             row.heightAnchor.constraint(equalToConstant: 54)   // pill-only height, no label row
         ])
 
