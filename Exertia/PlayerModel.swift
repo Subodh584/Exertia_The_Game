@@ -13,10 +13,21 @@ struct GameSession {
     let totalCrouches: Int
     let totalLeftLeans: Int
     let totalRightLeans: Int
-    let distanceCovered: Double     // meters
+    let totalSteps: Int
+    let distanceCovered: Double     // km (Supabase) or meters (local session)
     let averageSpeed: Double?       // m/min, nil if zero duration
     let characterImageName: String
     let completionStatus: String    // "completed" or "abandoned"
+}
+
+// MARK: - Distance formatting helper
+/// Pass distance in km. Returns "450 m" below 1 km, "2.3 km" at or above.
+func formatDistanceKm(_ km: Double) -> String {
+    if km < 1.0 {
+        return "\(Int((km * 1000).rounded())) m"
+    } else {
+        return String(format: "%.1f km", km)
+    }
 }
 
 struct PlayerStats {
@@ -117,6 +128,7 @@ class GameData {
             totalCrouches: crouches,
             totalLeftLeans: leftLeans,
             totalRightLeans: rightLeans,
+            totalSteps: steps,
             distanceCovered: distanceCovered,
             averageSpeed: averageSpeed,
             characterImageName: charImg,

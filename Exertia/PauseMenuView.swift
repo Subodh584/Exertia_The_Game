@@ -456,6 +456,140 @@ struct SummaryStatRow: View {
     }
 }
 
+// MARK: - All Targets Met Popup
+
+struct AllTargetsMetPopupView: View {
+    var onContinue: () -> Void
+    var onExit: () -> Void
+
+    var body: some View {
+        ZStack {
+            // Dimmed backdrop
+            Color.black.opacity(0.78).ignoresSafeArea()
+
+            VStack(spacing: 20) {
+
+                // Trophy icon with glow
+                ZStack {
+                    Circle()
+                        .fill(Color.yellow.opacity(0.12))
+                        .frame(width: 90, height: 90)
+                        .blur(radius: 18)
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 52, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(colors: [.yellow, Color(red: 1, green: 0.55, blue: 0)],
+                                           startPoint: .top, endPoint: .bottom)
+                        )
+                        .shadow(color: .yellow.opacity(0.6), radius: 16)
+                }
+
+                // Title
+                VStack(spacing: 6) {
+                    Text("SESSION TARGETS")
+                        .font(.system(size: 20, weight: .black, design: .monospaced))
+                        .tracking(4)
+                        .foregroundStyle(
+                            LinearGradient(colors: [PC.neonCyan, .white],
+                                           startPoint: .leading, endPoint: .trailing)
+                        )
+                        .shadow(color: PC.neonCyan.opacity(0.4), radius: 6)
+
+                    Text("COMPLETED!")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .tracking(3)
+                        .foregroundColor(PC.neonGreen)
+                        .shadow(color: PC.neonGreen.opacity(0.5), radius: 6)
+                }
+
+                // Subtitle
+                Text("You've hit all your goals.\nKeep going or finish here!")
+                    .font(.system(size: 13, weight: .medium))
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.white.opacity(0.55))
+                    .lineSpacing(4)
+
+                // Clap hint
+                HStack(spacing: 8) {
+                    Image(systemName: "hands.clap.fill")
+                        .font(.system(size: 12))
+                    Text("CLAP TO CONTINUE")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(2)
+                }
+                .foregroundColor(PC.neonCyan.opacity(0.55))
+                .padding(.vertical, 6)
+                .padding(.horizontal, 16)
+                .background(
+                    Capsule()
+                        .stroke(PC.neonCyan.opacity(0.2), lineWidth: 1)
+                )
+
+                // Buttons
+                HStack(spacing: 12) {
+                    Button(action: onExit) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                            Text("EXIT")
+                                .font(.system(size: 14, weight: .black, design: .monospaced))
+                                .tracking(2)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(PC.neonRed.opacity(0.15))
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(PC.neonRed.opacity(0.55), lineWidth: 1.5)
+                            }
+                        )
+                    }
+
+                    Button(action: onContinue) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 14))
+                            Text("CONTINUE")
+                                .font(.system(size: 14, weight: .black, design: .monospaced))
+                                .tracking(2)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(PC.neonGreen.opacity(0.15))
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(PC.neonGreen.opacity(0.55), lineWidth: 1.5)
+                            }
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 36)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 26)
+                        .fill(LinearGradient(colors: [PC.bgDark, PC.bgMid],
+                                             startPoint: .top, endPoint: .bottom))
+                    RoundedRectangle(cornerRadius: 26)
+                        .fill(LinearGradient(colors: [Color.white.opacity(0.07), .clear],
+                                             startPoint: .top, endPoint: .center))
+                    RoundedRectangle(cornerRadius: 26)
+                        .stroke(PC.neonGreen.opacity(0.30), lineWidth: 1.5)
+                }
+            )
+            .shadow(color: PC.neonGreen.opacity(0.18), radius: 32, y: 8)
+            .padding(.horizontal, 28)
+        }
+    }
+}
+
 // MARK: - Notification Name
 
 extension Notification.Name {

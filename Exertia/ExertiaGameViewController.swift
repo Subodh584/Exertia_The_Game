@@ -73,6 +73,18 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var totalRightLeans: Int = 0
     private var totalSpotRunningReps: Int = 0
     private var totalDistanceCovered: Float = 0.0
+
+    // MARK: - Session Target Tracking
+    private var sessionTargetCalories: Int = 0
+    private var sessionTargetDistanceKm: Double = 0.0
+    private var caloriesTargetMet: Bool = false
+    private var distanceTargetMet: Bool = false
+    private var allTargetsPopupShown: Bool = false
+    private(set) var isShowingTargetsPopup: Bool = false
+    private var targetCheckAccumulator: Float = 0.0
+    private var caloriesBadgeView: UIView?
+    private var distanceBadgeView: UIView?
+    private var targetsPopupHostingController: UIViewController?
     private let sceneKitUnitsToMeters: Float = 0.1
     private var endGameButton: UIButton?
     private var pauseGameButton: UIButton?
@@ -1918,19 +1930,6 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     // MARK: - End Game Button & Session Finalization
 
     private func setupEndGameButton() {
-        let pauseButton = UIButton(type: .system)
-        pauseButton.setTitle("PAUSE", for: .normal)
-        pauseButton.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .bold)
-        pauseButton.setTitleColor(UIColor(red: 0.95, green: 0.95, blue: 1.0, alpha: 1.0), for: .normal)
-        pauseButton.backgroundColor = UIColor(red: 0.06, green: 0.08, blue: 0.16, alpha: 0.9)
-        pauseButton.layer.cornerRadius = 10
-        pauseButton.layer.borderWidth = 1.0
-        pauseButton.layer.borderColor = UIColor.white.withAlphaComponent(0.25).cgColor
-        pauseButton.translatesAutoresizingMaskIntoConstraints = false
-        pauseButton.addTarget(self, action: #selector(togglePauseTapped), for: .touchUpInside)
-        view.addSubview(pauseButton)
-        pauseGameButton = pauseButton
-
         let button = UIButton(type: .system)
 
         // Pause icon + label
@@ -1956,10 +1955,6 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         endGameButton = button
 
         NSLayoutConstraint.activate([
-            pauseButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
-            pauseButton.trailingAnchor.constraint(equalTo: button.leadingAnchor, constant: -12),
-            pauseButton.heightAnchor.constraint(equalToConstant: 32),
-
             button.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             button.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             button.heightAnchor.constraint(equalToConstant: 36)
@@ -2029,12 +2024,12 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     }
 
     @objc private func endGameButtonTapped() {
-        guard isGameRunning, !isPaused else { return }
+        guard isGameRunning, !isPaused, !isShowingTargetsPopup else { return }
         pauseGame()
     }
 
     @objc private func togglePauseTapped() {
-        guard loadingOverlay == nil else { return }
+        guard loadingOverlay == nil, !isShowingTargetsPopup else { return }
         isGamePaused.toggle()
         AudioManager.shared.playEffect(.pauseResume)
 
@@ -2112,7 +2107,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         let currentCal   = Int(elapsed * (80.0 / 600.0))
         let currentDistKm = Double(totalDistanceCovered) / 1000.0
         let targetDistKm = DifficultySettings.shared.selectedDistanceKm
-        let targetCal    = Int((targetDistKm * 70).rounded())
+        let targetCal    = Int((targetDistKm * 100).rounded())
 
         let menuView = PauseMenuView(
             currentCalories:   currentCal,
@@ -2149,13 +2144,14 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         let trackName  = DifficultySettings.shared.selectedTrackDisplayName
         let trackId    = DifficultySettings.shared.selectedTrackId
 
-        let totalSteps = totalSpotRunningReps * 2
+        let totalSteps       = totalSpotRunningReps * 2
+        let completionStatus = (caloriesTargetMet && distanceTargetMet) ? "completed" : "abandoned"
 
         let summaryData = SessionSummaryData(
             trackName:        trackName,
             durationSeconds:  durationSeconds,
             caloriesBurned:   caloriesBurned,
-            completionStatus: "abandoned",
+            completionStatus: completionStatus,
             characterName:    character.name,
             avgSpeedMpMin:    avgSpeed,
             totalJumps:       totalJumps,
@@ -2167,18 +2163,19 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         )
 
         // Capture values for the closure (avoid capturing self strongly in summary)
-        let capturedDuration  = durationMinutes
-        let capturedCal       = caloriesBurned
-        let capturedDist      = distanceMeters
-        let capturedSpeed     = avgSpeed
-        let capturedJumps     = totalJumps
-        let capturedCrouches  = totalCrouches
-        let capturedLeftLeans = totalLeftLeans
-        let capturedRightLeans = totalRightLeans
-        let capturedSteps     = totalSteps
-        let capturedCharacter = character
-        let capturedTrack     = trackName
-        let capturedTrackId   = trackId
+        let capturedDuration          = durationMinutes
+        let capturedCal               = caloriesBurned
+        let capturedDist              = distanceMeters
+        let capturedSpeed             = avgSpeed
+        let capturedJumps             = totalJumps
+        let capturedCrouches          = totalCrouches
+        let capturedLeftLeans         = totalLeftLeans
+        let capturedRightLeans        = totalRightLeans
+        let capturedSteps             = totalSteps
+        let capturedCompletionStatus  = completionStatus
+        let capturedCharacter         = character
+        let capturedTrack             = trackName
+        let capturedTrackId           = trackId
 
         // Dismiss pause menu (no animation) then show summary
         pauseMenuHostingController?.dismiss(animated: false)
@@ -2187,19 +2184,19 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         let summaryView = SessionSummaryView(summary: summaryData) {
             // Save to Supabase when user taps "Go Home"
             GameData.shared.addSession(
-                duration:        capturedDuration,
-                calories:        capturedCal,
-                track:           capturedTrack,
-                trackId:         capturedTrackId,
-                characterId:     capturedCharacter.id,
-                jumps:           capturedJumps,
-                crouches:        capturedCrouches,
-                leftLeans:       capturedLeftLeans,
-                rightLeans:      capturedRightLeans,
-                steps:           capturedSteps,
-                distanceCovered: capturedDist,
-                averageSpeed:    capturedSpeed,
-                completionStatus: "abandoned"
+                duration:         capturedDuration,
+                calories:         capturedCal,
+                track:            capturedTrack,
+                trackId:          capturedTrackId,
+                characterId:      capturedCharacter.id,
+                jumps:            capturedJumps,
+                crouches:         capturedCrouches,
+                leftLeans:        capturedLeftLeans,
+                rightLeans:       capturedRightLeans,
+                steps:            capturedSteps,
+                distanceCovered:  capturedDist,
+                averageSpeed:     capturedSpeed,
+                completionStatus: capturedCompletionStatus
             )
             // Navigate all the way home via notification (HomeVC dismisses its stack)
             NotificationCenter.default.post(name: .navigateToHome, object: nil)
@@ -2211,6 +2208,122 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         hosting.view.backgroundColor   = UIColor(red: 0.02, green: 0.02, blue: 0.06, alpha: 1.0)
         present(hosting, animated: true)
         summaryHostingController = hosting
+    }
+
+    // MARK: - Session Target Indicators
+
+    private func checkSessionTargets() {
+        let elapsedSeconds = Date().timeIntervalSince(sessionStartTime)
+        let currentCalories = Int(elapsedSeconds * (80.0 / 600.0))
+        let currentDistKm   = Double(totalDistanceCovered) / 1000.0
+
+        if !caloriesTargetMet && sessionTargetCalories > 0 && currentCalories >= sessionTargetCalories {
+            caloriesTargetMet = true
+            DispatchQueue.main.async { [weak self] in self?.showTargetBadge(isCalories: true) }
+        }
+
+        if !distanceTargetMet && sessionTargetDistanceKm > 0 && currentDistKm >= sessionTargetDistanceKm {
+            distanceTargetMet = true
+            DispatchQueue.main.async { [weak self] in self?.showTargetBadge(isCalories: false) }
+        }
+
+        if caloriesTargetMet && distanceTargetMet && !allTargetsPopupShown {
+            allTargetsPopupShown = true
+            DispatchQueue.main.async { [weak self] in self?.showAllTargetsMetPopup() }
+        }
+    }
+
+    private func showTargetBadge(isCalories: Bool) {
+        let systemIcon  = isCalories ? "flame.fill"  : "figure.run"
+        let label       = isCalories ? "CALORIES GOAL ✓" : "DISTANCE GOAL ✓"
+        let accentColor = isCalories
+            ? UIColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)   // amber
+            : UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0)   // cyan
+
+        let badge = makeBadgeView(systemIcon: systemIcon, label: label, accentColor: accentColor)
+
+        // Slot 1 = calories (top), Slot 2 = distance (below)
+        let safeTop = view.safeAreaInsets.top
+        let slotY: CGFloat = isCalories ? safeTop + 16 : safeTop + 64
+        let badgeW: CGFloat = badge.frame.width
+
+        badge.frame = CGRect(x: -badgeW - 10, y: slotY, width: badgeW, height: badge.frame.height)
+        view.addSubview(badge)
+
+        if isCalories { caloriesBadgeView = badge } else { distanceBadgeView = badge }
+
+        UIView.animate(withDuration: 0.45, delay: 0,
+                       usingSpringWithDamping: 0.72, initialSpringVelocity: 0.4,
+                       options: .curveEaseOut) {
+            badge.frame.origin.x = 14
+        }
+    }
+
+    private func makeBadgeView(systemIcon: String, label: String, accentColor: UIColor) -> UIView {
+        let height: CGFloat = 36
+        let width:  CGFloat = 182
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        container.backgroundColor = UIColor(red: 0.04, green: 0.04, blue: 0.12, alpha: 0.92)
+        container.layer.cornerRadius = height / 2
+        container.layer.borderWidth  = 1.2
+        container.layer.borderColor  = accentColor.withAlphaComponent(0.7).cgColor
+        container.layer.shadowColor  = accentColor.cgColor
+        container.layer.shadowOpacity = 0.45
+        container.layer.shadowRadius  = 8
+        container.layer.shadowOffset  = .zero
+
+        let cfg      = UIImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+        let iconImg  = UIImage(systemName: systemIcon, withConfiguration: cfg)
+        let iconView = UIImageView(frame: CGRect(x: 12, y: (height - 16) / 2, width: 16, height: 16))
+        iconView.image       = iconImg
+        iconView.tintColor   = accentColor
+        iconView.contentMode = .scaleAspectFit
+
+        let textLbl = UILabel(frame: CGRect(x: 36, y: 0, width: width - 46, height: height))
+        textLbl.text      = label
+        textLbl.font      = .monospacedSystemFont(ofSize: 10, weight: .bold)
+        textLbl.textColor = UIColor.white.withAlphaComponent(0.9)
+
+        container.addSubview(iconView)
+        container.addSubview(textLbl)
+        return container
+    }
+
+    private func showAllTargetsMetPopup() {
+        sceneView.isPlaying  = false
+        isGameRunning        = false
+        isShowingTargetsPopup = true
+
+        let popup = AllTargetsMetPopupView(
+            onContinue: { [weak self] in self?.dismissTargetsPopup() },
+            onExit:     { [weak self] in self?.dismissTargetsPopupAndExit() }
+        )
+
+        let hosting = UIHostingController(rootView: popup)
+        hosting.modalPresentationStyle = .overFullScreen
+        hosting.modalTransitionStyle   = .crossDissolve
+        hosting.view.backgroundColor   = .clear
+        present(hosting, animated: true)
+        targetsPopupHostingController = hosting
+    }
+
+    func dismissTargetsPopup() {
+        isShowingTargetsPopup = false
+        targetsPopupHostingController?.dismiss(animated: true) { [weak self] in
+            guard let self else { return }
+            self.isGameRunning   = true
+            self.sceneView.isPlaying = true
+        }
+        targetsPopupHostingController = nil
+    }
+
+    private func dismissTargetsPopupAndExit() {
+        isShowingTargetsPopup = false
+        targetsPopupHostingController?.dismiss(animated: false) { [weak self] in
+            self?.exitAndShowSummary()
+        }
+        targetsPopupHostingController = nil
     }
 
     func startGame() {
@@ -2226,6 +2339,20 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         totalRightLeans = 0
         totalSpotRunningReps = 0
         totalDistanceCovered = 0.0
+
+        // Session target setup
+        let targetDistKm = DifficultySettings.shared.selectedDistanceKm
+        sessionTargetDistanceKm = targetDistKm
+        sessionTargetCalories   = Int((targetDistKm * 100).rounded())
+        caloriesTargetMet       = false
+        distanceTargetMet       = false
+        allTargetsPopupShown    = false
+        isShowingTargetsPopup   = false
+        targetCheckAccumulator  = 0.0
+        caloriesBadgeView?.removeFromSuperview()
+        caloriesBadgeView = nil
+        distanceBadgeView?.removeFromSuperview()
+        distanceBadgeView = nil
     }
     
     private var gameTime: TimeInterval = 0
@@ -2254,6 +2381,13 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         // Accumulate session distance (movement is negative when moving forward)
         if movement < 0 {
             totalDistanceCovered += abs(movement) * sceneKitUnitsToMeters
+        }
+
+        // Check session targets every second
+        targetCheckAccumulator += dt
+        if targetCheckAccumulator >= 1.0 {
+            targetCheckAccumulator = 0.0
+            checkSessionTargets()
         }
 
         // Handle Y position - either jumping or following ground
