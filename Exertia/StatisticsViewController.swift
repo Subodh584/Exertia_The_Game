@@ -343,6 +343,11 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 }
                 self.allCompletedSessions = calendarSessions   // stored for calendar day-stats
 
+                // If no sessions exist at all, clear streak calendar cache immediately
+                if sessions.isEmpty {
+                    self.activeDateStrings = []
+                }
+
                 // Compute TODAY (IST) totals for the ring / big stat label
                 let todaySessions = sessions.filter { s in
                     guard s.countsTowardDailyProgress,
