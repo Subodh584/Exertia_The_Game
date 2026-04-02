@@ -93,10 +93,12 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var quitGameButton: UIButton?
     private var isGamePaused = false
 
+
     // MARK: - Pause State
     var isPaused: Bool = false
     private var pauseMenuHostingController: UIViewController?
     private var summaryHostingController: UIViewController?
+    private var highScoreHostingController: UIViewController?
 
     // Smooth movement interpolation
     private var currentSpeed: Float = 0.0  // Actual interpolated speed
@@ -2081,6 +2083,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         }
     }
 
+
     // MARK: - Pause / Resume
 
     func pauseGame() {
@@ -2177,37 +2180,83 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         let capturedTrack             = trackName
         let capturedTrackId           = trackId
 
-        // Dismiss pause menu (no animation) then show summary
-        pauseMenuHostingController?.dismiss(animated: false)
-        pauseMenuHostingController = nil
-
-        let summaryView = SessionSummaryView(summary: summaryData) {
-            // Save to Supabase when user taps "Go Home"
-            GameData.shared.addSession(
-                duration:         capturedDuration,
-                calories:         capturedCal,
-                track:            capturedTrack,
-                trackId:          capturedTrackId,
-                characterId:      capturedCharacter.id,
-                jumps:            capturedJumps,
-                crouches:         capturedCrouches,
-                leftLeans:        capturedLeftLeans,
-                rightLeans:       capturedRightLeans,
-                steps:            capturedSteps,
-                distanceCovered:  capturedDist,
-                averageSpeed:     capturedSpeed,
-                completionStatus: capturedCompletionStatus
-            )
-            // Navigate all the way home via notification (HomeVC dismisses its stack)
-            NotificationCenter.default.post(name: .navigateToHome, object: nil)
+        // Dismiss pause menu (no animation) then show summary or high score
+        let presentSummary = { [weak self] in
+            guard let self = self else { return }
+            let summaryView = SessionSummaryView(summary: summaryData) {
+                GameData.shared.addSession(
+                    duration:        capturedDuration,
+                    calories:        capturedCal,
+                    track:           capturedTrack,
+                    trackId:         capturedTrackId,
+                    characterId:     capturedCharacter.id,
+                    jumps:           capturedJumps,
+                    crouches:        capturedCrouches,
+                    leftLeans:       capturedLeftLeans,
+                    rightLeans:      capturedRightLeans,
+                    steps:           capturedSteps,
+                    distanceCovered: capturedDist,
+                    averageSpeed:    capturedSpeed,
+                    completionStatus: capturedCompletionStatus
+                )
+                NotificationCenter.default.post(name: .navigateToHome, object: nil)
+            }
+            let hosting = UIHostingController(rootView: summaryView)
+            hosting.modalPresentationStyle = .overFullScreen
+            hosting.modalTransitionStyle   = .crossDissolve
+            hosting.view.backgroundColor   = UIColor(red: 0.02, green: 0.02, blue: 0.06, alpha: 1.0)
+            self.present(hosting, animated: true)
+            self.summaryHostingController = hosting
         }
 
-        let hosting = UIHostingController(rootView: summaryView)
-        hosting.modalPresentationStyle = .overFullScreen
-        hosting.modalTransitionStyle   = .crossDissolve
-        hosting.view.backgroundColor   = UIColor(red: 0.02, green: 0.02, blue: 0.06, alpha: 1.0)
-        present(hosting, animated: true)
-        summaryHostingController = hosting
+        let showNextScreen = { [weak self] in
+            guard let self = self else { return }
+
+            let oldBestCal = GameData.shared.stats.personalBestCalories
+            let oldBestDist = GameData.shared.stats.personalBestDistance
+            let capturedDistKm = distanceMeters / 1000.0
+
+            let beatCal = oldBestCal > 0 && caloriesBurned > oldBestCal
+            let beatDist = oldBestDist > 0 && capturedDistKm > oldBestDist
+            let isNewBest = beatCal || beatDist
+
+            if isNewBest {
+                let metricName = beatDist ? "DISTANCE" : "CALORIES"
+                let newVal = beatDist ? String(format: "%.2f", capturedDistKm) : "\(caloriesBurned)"
+                let oldVal = beatDist ? String(format: "%.2f", oldBestDist) : "\(oldBestCal)"
+                let unit = beatDist ? "km" : "kcal"
+
+                let highScoreView = HighScorePopupView(
+                    metricName: metricName,
+                    newValue: newVal,
+                    oldValue: oldVal,
+                    unit: unit
+                ) { [weak self] in
+                    // Dismiss high score popup, then show session summary
+                    self?.highScoreHostingController?.dismiss(animated: true) {
+                        self?.highScoreHostingController = nil
+                        presentSummary()
+                    }
+                }
+                let hosting = UIHostingController(rootView: highScoreView)
+                hosting.modalPresentationStyle = .overFullScreen
+                hosting.modalTransitionStyle = .crossDissolve
+                hosting.view.backgroundColor = .clear
+                self.present(hosting, animated: true)
+                self.highScoreHostingController = hosting
+            } else {
+                presentSummary()
+            }
+        }
+
+        if pauseMenuHostingController != nil {
+            pauseMenuHostingController?.dismiss(animated: false) {
+                showNextScreen()
+            }
+            pauseMenuHostingController = nil
+        } else {
+            showNextScreen()
+        }
     }
 
     // MARK: - Session Target Indicators
@@ -2237,12 +2286,11 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         let systemIcon  = isCalories ? "flame.fill"  : "figure.run"
         let label       = isCalories ? "CALORIES GOAL ✓" : "DISTANCE GOAL ✓"
         let accentColor = isCalories
-            ? UIColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)   // amber
-            : UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0)   // cyan
+            ? UIColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)
+            : UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0)
 
         let badge = makeBadgeView(systemIcon: systemIcon, label: label, accentColor: accentColor)
 
-        // Slot 1 = calories (top), Slot 2 = distance (below)
         let safeTop = view.safeAreaInsets.top
         let slotY: CGFloat = isCalories ? safeTop + 16 : safeTop + 64
         let badgeW: CGFloat = badge.frame.width
