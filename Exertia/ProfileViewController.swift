@@ -655,7 +655,15 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
                     value: currentUsername,
                     label: "Username"
                 )
-            ]
+            ],
+            asyncValidation: GlassEditModalController.AsyncFieldValidation(
+                fieldIndex: 1,
+                currentValue: currentUsername,
+                minLength: 3,
+                check: { username in
+                    try await SupabaseManager.shared.checkUsernameExists(username)
+                }
+            )
         ) { [weak self] values in
             guard let self = self else { return }
             let newName     = values.count > 0 ? values[0].trimmingCharacters(in: .whitespaces) : ""
