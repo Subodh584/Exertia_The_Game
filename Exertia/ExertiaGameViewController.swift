@@ -79,6 +79,15 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var quitGameButton: UIButton?
     private var isGamePaused = false
 
+<<<<<<< Updated upstream
+=======
+    // MARK: - Pause State
+    var isPaused: Bool = false
+    private var pauseMenuHostingController: UIViewController?
+    private var summaryHostingController: UIViewController?
+    private var highScoreHostingController: UIViewController?
+
+>>>>>>> Stashed changes
     // Smooth movement interpolation
     private var currentSpeed: Float = 0.0  // Actual interpolated speed
     private var targetSpeed: Float = 0.0   // Target speed from speed bar
@@ -2032,6 +2041,289 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         }
     }
 
+<<<<<<< Updated upstream
+=======
+    // MARK: - Pause / Resume
+
+    func pauseGame() {
+        guard isGameRunning, !isPaused else { return }
+        isPaused = true
+        isGameRunning = false
+        sceneView.isPlaying = false
+        showPauseMenu()
+    }
+
+    func resumeGame() {
+        guard isPaused else { return }
+        pauseMenuHostingController?.dismiss(animated: true) { [weak self] in
+            guard let self = self else { return }
+            self.pauseMenuHostingController = nil
+            self.isPaused = false
+            self.isGameRunning = true
+            self.sceneView.isPlaying = true
+        }
+    }
+
+    private func showPauseMenu() {
+        let elapsed      = Date().timeIntervalSince(sessionStartTime)
+        let currentCal   = Int(elapsed * (80.0 / 600.0))
+        let currentDistKm = Double(totalDistanceCovered) / 1000.0
+        let targetDistKm = DifficultySettings.shared.selectedDistanceKm
+        let targetCal    = Int((targetDistKm * 100).rounded())
+
+        let menuView = PauseMenuView(
+            currentCalories:   currentCal,
+            targetCalories:    targetCal,
+            currentDistanceKm: currentDistKm,
+            targetDistanceKm:  targetDistKm,
+            onResume:         { [weak self] in self?.resumeGame() },
+            onExitConfirmed:  { [weak self] in self?.exitAndShowSummary() }
+        )
+
+        let hosting = UIHostingController(rootView: menuView)
+        hosting.modalPresentationStyle = .overFullScreen
+        hosting.modalTransitionStyle   = .crossDissolve
+        hosting.view.backgroundColor   = .clear
+        present(hosting, animated: true)
+        pauseMenuHostingController = hosting
+    }
+
+    // MARK: - Exit → Summary
+
+    func exitAndShowSummary() {
+        // Stop the game
+        isGameRunning = false
+        isPaused      = false
+        sceneView.isPlaying = false
+
+        // Compute session stats
+        let durationSeconds = Int(Date().timeIntervalSince(sessionStartTime))
+        let durationMinutes = max(1, durationSeconds / 60)
+        let caloriesBurned  = Int(Double(durationSeconds) * (80.0 / 600.0))
+        let distanceMeters  = Double(totalDistanceCovered)
+        let avgSpeed: Double? = durationMinutes > 0 ? distanceMeters / Double(durationMinutes) : nil
+        let character  = GameData.shared.getSelectedPlayer()
+        let trackName  = DifficultySettings.shared.selectedTrackDisplayName
+        let trackId    = DifficultySettings.shared.selectedTrackId
+
+        let totalSteps       = totalSpotRunningReps * 2
+        let completionStatus = (caloriesTargetMet && distanceTargetMet) ? "completed" : "abandoned"
+
+        let summaryData = SessionSummaryData(
+            trackName:        trackName,
+            durationSeconds:  durationSeconds,
+            caloriesBurned:   caloriesBurned,
+            completionStatus: completionStatus,
+            characterName:    character.name,
+            avgSpeedMpMin:    avgSpeed,
+            totalJumps:       totalJumps,
+            totalCrouches:    totalCrouches,
+            totalLeftLeans:   totalLeftLeans,
+            totalRightLeans:  totalRightLeans,
+            distanceMeters:   distanceMeters,
+            totalSteps:       totalSteps
+        )
+
+        // Capture values for the closure (avoid capturing self strongly in summary)
+        let capturedDuration          = durationMinutes
+        let capturedCal               = caloriesBurned
+        let capturedDist              = distanceMeters
+        let capturedSpeed             = avgSpeed
+        let capturedJumps             = totalJumps
+        let capturedCrouches          = totalCrouches
+        let capturedLeftLeans         = totalLeftLeans
+        let capturedRightLeans        = totalRightLeans
+        let capturedSteps             = totalSteps
+        let capturedCompletionStatus  = completionStatus
+        let capturedCharacter         = character
+        let capturedTrack             = trackName
+        let capturedTrackId           = trackId
+
+        // Dismiss pause menu (no animation) then show summary
+        pauseMenuHostingController?.dismiss(animated: false)
+        pauseMenuHostingController = nil
+
+        let presentSummary = { [weak self] in
+            guard let self = self else { return }
+            let summaryView = SessionSummaryView(summary: summaryData) {
+                // Save to Supabase when user taps "Go Home"
+                GameData.shared.addSession(
+                    duration:        capturedDuration,
+                    calories:        capturedCal,
+                    track:           capturedTrack,
+                    trackId:         capturedTrackId,
+                    characterId:     capturedCharacter.id,
+                    jumps:           capturedJumps,
+                    crouches:        capturedCrouches,
+                    leftLeans:       capturedLeftLeans,
+                    rightLeans:      capturedRightLeans,
+                    steps:           capturedSteps,
+                    distanceCovered: capturedDist,
+                    averageSpeed:    capturedSpeed,
+                    completionStatus: capturedCompletionStatus
+                )
+                // Navigate all the way home via notification (HomeVC dismisses its stack)
+                NotificationCenter.default.post(name: .navigateToHome, object: nil)
+            }
+            
+            let hosting = UIHostingController(rootView: summaryView)
+            hosting.modalPresentationStyle = .overFullScreen
+            hosting.modalTransitionStyle   = .crossDissolve
+            hosting.view.backgroundColor   = UIColor(red: 0.02, green: 0.02, blue: 0.06, alpha: 1.0)
+            self.present(hosting, animated: true)
+            self.summaryHostingController = hosting
+        }
+        
+        let oldBestCal = GameData.shared.stats.personalBestCalories
+        let oldBestDist = GameData.shared.stats.personalBestDistance
+        
+        let beatCal = oldBestCal > 0 && capturedCal > oldBestCal
+        let beatDist = oldBestDist > 0 && capturedDist > oldBestDist
+        
+        // Priority for distance if both are beaten (as distance is the target selection criteria generally)
+        let isNewBest = beatCal || beatDist
+        
+        if isNewBest {
+            let metricName = beatDist ? "DISTANCE" : "CALORIES"
+            let newVal = beatDist ? String(format: "%.2f", capturedDist) : "\(capturedCal)"
+            let oldVal = beatDist ? String(format: "%.2f", oldBestDist) : "\(oldBestCal)"
+            let unit = beatDist ? "km" : "kcal"
+            
+            let highScoreView = HighScorePopupView(metricName: metricName, newValue: newVal, oldValue: oldVal, unit: unit) { [weak self] in
+                guard let self = self else { return }
+                self.highScoreHostingController?.dismiss(animated: true) {
+                    self.highScoreHostingController = nil
+                    presentSummary()
+                }
+            }
+            let hosting = UIHostingController(rootView: highScoreView)
+            hosting.modalPresentationStyle = .overFullScreen
+            hosting.modalTransitionStyle = .crossDissolve
+            hosting.view.backgroundColor = .clear
+            self.present(hosting, animated: true)
+            self.highScoreHostingController = hosting
+        } else {
+            presentSummary()
+        }
+    }
+
+    // MARK: - Session Target Indicators
+
+    private func checkSessionTargets() {
+        let elapsedSeconds = Date().timeIntervalSince(sessionStartTime)
+        let currentCalories = Int(elapsedSeconds * (80.0 / 600.0))
+        let currentDistKm   = Double(totalDistanceCovered) / 1000.0
+
+        if !caloriesTargetMet && sessionTargetCalories > 0 && currentCalories >= sessionTargetCalories {
+            caloriesTargetMet = true
+            DispatchQueue.main.async { [weak self] in self?.showTargetBadge(isCalories: true) }
+        }
+
+        if !distanceTargetMet && sessionTargetDistanceKm > 0 && currentDistKm >= sessionTargetDistanceKm {
+            distanceTargetMet = true
+            DispatchQueue.main.async { [weak self] in self?.showTargetBadge(isCalories: false) }
+        }
+
+        if caloriesTargetMet && distanceTargetMet && !allTargetsPopupShown {
+            allTargetsPopupShown = true
+            DispatchQueue.main.async { [weak self] in self?.showAllTargetsMetPopup() }
+        }
+    }
+
+    private func showTargetBadge(isCalories: Bool) {
+        let systemIcon  = isCalories ? "flame.fill"  : "figure.run"
+        let label       = isCalories ? "CALORIES GOAL ✓" : "DISTANCE GOAL ✓"
+        let accentColor = isCalories
+            ? UIColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)   // amber
+            : UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0)   // cyan
+
+        let badge = makeBadgeView(systemIcon: systemIcon, label: label, accentColor: accentColor)
+
+        // Slot 1 = calories (top), Slot 2 = distance (below)
+        let safeTop = view.safeAreaInsets.top
+        let slotY: CGFloat = isCalories ? safeTop + 16 : safeTop + 64
+        let badgeW: CGFloat = badge.frame.width
+
+        badge.frame = CGRect(x: -badgeW - 10, y: slotY, width: badgeW, height: badge.frame.height)
+        view.addSubview(badge)
+
+        if isCalories { caloriesBadgeView = badge } else { distanceBadgeView = badge }
+
+        UIView.animate(withDuration: 0.45, delay: 0,
+                       usingSpringWithDamping: 0.72, initialSpringVelocity: 0.4,
+                       options: .curveEaseOut) {
+            badge.frame.origin.x = 14
+        }
+    }
+
+    private func makeBadgeView(systemIcon: String, label: String, accentColor: UIColor) -> UIView {
+        let height: CGFloat = 36
+        let width:  CGFloat = 182
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        container.backgroundColor = UIColor(red: 0.04, green: 0.04, blue: 0.12, alpha: 0.92)
+        container.layer.cornerRadius = height / 2
+        container.layer.borderWidth  = 1.2
+        container.layer.borderColor  = accentColor.withAlphaComponent(0.7).cgColor
+        container.layer.shadowColor  = accentColor.cgColor
+        container.layer.shadowOpacity = 0.45
+        container.layer.shadowRadius  = 8
+        container.layer.shadowOffset  = .zero
+
+        let cfg      = UIImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+        let iconImg  = UIImage(systemName: systemIcon, withConfiguration: cfg)
+        let iconView = UIImageView(frame: CGRect(x: 12, y: (height - 16) / 2, width: 16, height: 16))
+        iconView.image       = iconImg
+        iconView.tintColor   = accentColor
+        iconView.contentMode = .scaleAspectFit
+
+        let textLbl = UILabel(frame: CGRect(x: 36, y: 0, width: width - 46, height: height))
+        textLbl.text      = label
+        textLbl.font      = .monospacedSystemFont(ofSize: 10, weight: .bold)
+        textLbl.textColor = UIColor.white.withAlphaComponent(0.9)
+
+        container.addSubview(iconView)
+        container.addSubview(textLbl)
+        return container
+    }
+
+    private func showAllTargetsMetPopup() {
+        sceneView.isPlaying  = false
+        isGameRunning        = false
+        isShowingTargetsPopup = true
+
+        let popup = AllTargetsMetPopupView(
+            onContinue: { [weak self] in self?.dismissTargetsPopup() },
+            onExit:     { [weak self] in self?.dismissTargetsPopupAndExit() }
+        )
+
+        let hosting = UIHostingController(rootView: popup)
+        hosting.modalPresentationStyle = .overFullScreen
+        hosting.modalTransitionStyle   = .crossDissolve
+        hosting.view.backgroundColor   = .clear
+        present(hosting, animated: true)
+        targetsPopupHostingController = hosting
+    }
+
+    func dismissTargetsPopup() {
+        isShowingTargetsPopup = false
+        targetsPopupHostingController?.dismiss(animated: true) { [weak self] in
+            guard let self else { return }
+            self.isGameRunning   = true
+            self.sceneView.isPlaying = true
+        }
+        targetsPopupHostingController = nil
+    }
+
+    private func dismissTargetsPopupAndExit() {
+        isShowingTargetsPopup = false
+        targetsPopupHostingController?.dismiss(animated: false) { [weak self] in
+            self?.exitAndShowSummary()
+        }
+        targetsPopupHostingController = nil
+    }
+
+>>>>>>> Stashed changes
     func startGame() {
         isGameRunning = true
         sceneView.delegate = self

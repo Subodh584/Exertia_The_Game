@@ -369,6 +369,8 @@ class HomeViewController: UIViewController {
                 self.gameData.stats.calories       = stats.total_calories
                 self.gameData.stats.runTimeMinutes = stats.total_minutes
                 self.gameData.stats.currentStreak  = liveStreak
+                self.gameData.stats.personalBestCalories = stats.personal_best_calories > 0 ? stats.personal_best_calories : 0
+                self.gameData.stats.personalBestDistance = stats.personal_best_distance > 0 ? stats.personal_best_distance : 0.0
 
                 // Check if daily target is met (both calories AND distance)
                 let dailyCalTarget = user.daily_target_calories ?? 500

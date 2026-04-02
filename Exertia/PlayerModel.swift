@@ -23,6 +23,8 @@ struct PlayerStats {
     var calories: Int
     var runTimeMinutes: Int
     var currentStreak: Int
+    var personalBestCalories: Int = 0
+    var personalBestDistance: Double = 0.0
 }
 
 struct Player {
@@ -53,7 +55,7 @@ class GameData {
     static let shared = GameData()
     private init() {}
 
-    var stats = PlayerStats(calories: 0, runTimeMinutes: 0, currentStreak: 0)
+    var stats = PlayerStats(calories: 0, runTimeMinutes: 0, currentStreak: 0, personalBestCalories: 0, personalBestDistance: 0.0)
 
     var players: [Player] = [
         Player(id: "p1", name: "Glitch", description: "System error: Too cute.", fullBodyImageName: "character1", thumbnailImageName: "character1", backgroundImageName: "CharacterBg1", videoName: "c1_animated", videoScale: 1.05, videoOffsetX: -170, videoOffsetY: -30, isSelected: true, isLocked: false),
