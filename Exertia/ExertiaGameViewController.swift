@@ -93,8 +93,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var quitGameButton: UIButton?
     private var isGamePaused = false
 
-<<<<<<< Updated upstream
-=======
+
     // MARK: - Pause State
     var isPaused: Bool = false
     private var pauseMenuHostingController: UIViewController?
@@ -2084,8 +2083,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         }
     }
 
-<<<<<<< Updated upstream
-=======
+
     // MARK: - Pause / Resume
 
     func pauseGame() {
@@ -2257,6 +2255,121 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                 self?.dismiss(animated: true)
             }
         }
+    }
+
+    // MARK: - Session Target Indicators
+
+    private func checkSessionTargets() {
+        let elapsedSeconds = Date().timeIntervalSince(sessionStartTime)
+        let currentCalories = Int(elapsedSeconds * (80.0 / 600.0))
+        let currentDistKm   = Double(totalDistanceCovered) / 1000.0
+
+        if !caloriesTargetMet && sessionTargetCalories > 0 && currentCalories >= sessionTargetCalories {
+            caloriesTargetMet = true
+            DispatchQueue.main.async { [weak self] in self?.showTargetBadge(isCalories: true) }
+        }
+
+        if !distanceTargetMet && sessionTargetDistanceKm > 0 && currentDistKm >= sessionTargetDistanceKm {
+            distanceTargetMet = true
+            DispatchQueue.main.async { [weak self] in self?.showTargetBadge(isCalories: false) }
+        }
+
+        if caloriesTargetMet && distanceTargetMet && !allTargetsPopupShown {
+            allTargetsPopupShown = true
+            DispatchQueue.main.async { [weak self] in self?.showAllTargetsMetPopup() }
+        }
+    }
+
+    private func showTargetBadge(isCalories: Bool) {
+        let systemIcon  = isCalories ? "flame.fill"  : "figure.run"
+        let label       = isCalories ? "CALORIES GOAL ✓" : "DISTANCE GOAL ✓"
+        let accentColor = isCalories
+            ? UIColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)
+            : UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0)
+
+        let badge = makeBadgeView(systemIcon: systemIcon, label: label, accentColor: accentColor)
+
+        let safeTop = view.safeAreaInsets.top
+        let slotY: CGFloat = isCalories ? safeTop + 16 : safeTop + 64
+        let badgeW: CGFloat = badge.frame.width
+
+        badge.frame = CGRect(x: -badgeW - 10, y: slotY, width: badgeW, height: badge.frame.height)
+        view.addSubview(badge)
+
+        if isCalories { caloriesBadgeView = badge } else { distanceBadgeView = badge }
+
+        UIView.animate(withDuration: 0.45, delay: 0,
+                       usingSpringWithDamping: 0.72, initialSpringVelocity: 0.4,
+                       options: .curveEaseOut) {
+            badge.frame.origin.x = 14
+        }
+    }
+
+    private func makeBadgeView(systemIcon: String, label: String, accentColor: UIColor) -> UIView {
+        let height: CGFloat = 36
+        let width:  CGFloat = 182
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        container.backgroundColor = UIColor(red: 0.04, green: 0.04, blue: 0.12, alpha: 0.92)
+        container.layer.cornerRadius = height / 2
+        container.layer.borderWidth  = 1.2
+        container.layer.borderColor  = accentColor.withAlphaComponent(0.7).cgColor
+        container.layer.shadowColor  = accentColor.cgColor
+        container.layer.shadowOpacity = 0.45
+        container.layer.shadowRadius  = 8
+        container.layer.shadowOffset  = .zero
+
+        let cfg      = UIImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+        let iconImg  = UIImage(systemName: systemIcon, withConfiguration: cfg)
+        let iconView = UIImageView(frame: CGRect(x: 12, y: (height - 16) / 2, width: 16, height: 16))
+        iconView.image       = iconImg
+        iconView.tintColor   = accentColor
+        iconView.contentMode = .scaleAspectFit
+
+        let textLbl = UILabel(frame: CGRect(x: 36, y: 0, width: width - 46, height: height))
+        textLbl.text      = label
+        textLbl.font      = .monospacedSystemFont(ofSize: 10, weight: .bold)
+        textLbl.textColor = UIColor.white.withAlphaComponent(0.9)
+
+        container.addSubview(iconView)
+        container.addSubview(textLbl)
+        return container
+    }
+
+    private func showAllTargetsMetPopup() {
+        sceneView.isPlaying  = false
+        isGameRunning        = false
+        isShowingTargetsPopup = true
+
+        let popup = AllTargetsMetPopupView(
+            onContinue: { [weak self] in self?.dismissTargetsPopup() },
+            onExit:     { [weak self] in self?.dismissTargetsPopupAndExit() }
+        )
+
+        let hosting = UIHostingController(rootView: popup)
+        hosting.modalPresentationStyle = .overFullScreen
+        hosting.modalTransitionStyle   = .crossDissolve
+        hosting.view.backgroundColor   = .clear
+        present(hosting, animated: true)
+        targetsPopupHostingController = hosting
+    }
+
+    func dismissTargetsPopup() {
+        isShowingTargetsPopup = false
+        targetsPopupHostingController?.dismiss(animated: true) { [weak self] in
+            guard let self else { return }
+            self.isGameRunning   = true
+            self.sceneView.isPlaying = true
+        }
+        targetsPopupHostingController = nil
+    }
+
+    private func dismissTargetsPopupAndExit() {
+        isShowingTargetsPopup = false
+        targetsPopupHostingController?.dismiss(animated: false) { [weak self] in
+            self?.exitAndShowSummary()
+        }
+        targetsPopupHostingController = nil
     }
 
     func startGame() {

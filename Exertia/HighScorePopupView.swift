@@ -72,6 +72,8 @@ struct DancingCharacterView: UIViewRepresentable {
         scnView.allowsCameraControl = false
         scnView.autoenablesDefaultLighting = false
         scnView.antialiasingMode = .multisampling4X
+        scnView.clipsToBounds = true
+        scnView.layer.masksToBounds = true
 
         // Load mesh from Idle.dae (contains full skeleton + skin)
         guard let importedScene = SCNScene(named: "Character.scnassets/Idle.dae") else {
@@ -127,11 +129,15 @@ struct DancingCharacterView: UIViewRepresentable {
             }
         }
 
-        // Position character
+        // Scale & position character to fit celebration frame
+        let characterScale: Float = 0.04
+        characterShell.scale = SCNVector3(characterScale, characterScale, characterScale)
+
         let (minB, maxB) = characterShell.boundingBox
-        let midX = (minB.x + maxB.x) / 2
-        let midY = (minB.y + maxB.y) / 2
-        characterShell.position = SCNVector3(-midX, -midY - 12.0, 0)
+        let scaledHeight = (maxB.y - minB.y) * characterScale
+        let midX = (minB.x + maxB.x) / 2 * characterScale
+        let midY = (minB.y + maxB.y) / 2 * characterScale
+        characterShell.position = SCNVector3(-midX, -midY - scaledHeight * 0.35, 0)
 
         // Lighting
         masterScene.lightingEnvironment.contents = UIColor(white: 0.2, alpha: 1.0)
@@ -153,13 +159,13 @@ struct DancingCharacterView: UIViewRepresentable {
         dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
         masterScene.rootNode.addChildNode(dirNode)
 
-        // Camera
+        // Camera — tight framing on the small character
         let cameraNode = SCNNode()
         cameraNode.camera = SCNCamera()
-        cameraNode.camera?.fieldOfView = 50
-        cameraNode.position = SCNVector3(0, 0, 40)
-        cameraNode.camera?.zNear = 1
-        cameraNode.camera?.zFar = 200
+        cameraNode.camera?.fieldOfView = 35
+        cameraNode.position = SCNVector3(0, scaledHeight * 0.4, scaledHeight * 2.5)
+        cameraNode.camera?.zNear = 0.01
+        cameraNode.camera?.zFar = 100
         masterScene.rootNode.addChildNode(cameraNode)
 
         scnView.scene = masterScene
@@ -278,7 +284,8 @@ struct HighScorePopupView: View {
 
                 // 3D Dancing Character
                 DancingCharacterView()
-                    .frame(height: 260)
+                    .frame(height: 220)
+                    .clipped()
                     .scaleEffect(animateEntrance ? 1.0 : 0.6)
                     .opacity(animateEntrance ? 1.0 : 0.0)
                     .animation(.spring(response: 0.7, dampingFraction: 0.6, blendDuration: 0).delay(0.3), value: animateEntrance)
