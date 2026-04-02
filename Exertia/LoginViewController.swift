@@ -131,6 +131,13 @@ class LoginViewController: UIViewController {
         signInButton.alpha = loading ? 0.7 : 1.0
     }
     
+    @objc func forgotPasswordTapped() {
+        let forgotVC = ForgotPasswordViewController()
+        forgotVC.modalPresentationStyle = .fullScreen
+        forgotVC.modalTransitionStyle   = .crossDissolve
+        present(forgotVC, animated: true)
+    }
+
     @objc func registerTapped() {
         print("📲 Navigating to Register Screen...")
         DispatchQueue.main.async {
@@ -302,6 +309,7 @@ class LoginViewController: UIViewController {
         forgotButton.setTitleColor(.white, for: .normal)
         forgotButton.titleLabel?.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         forgotButton.contentHorizontalAlignment = .right
+        forgotButton.addTarget(self, action: #selector(forgotPasswordTapped), for: .touchUpInside)
         forgotButton.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(forgotButton)
         

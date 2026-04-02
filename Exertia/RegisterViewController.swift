@@ -64,51 +64,59 @@ class RegisterViewController: UIViewController {
             return
         }
 
-        let fullName  = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
-        // Derive username from the part before @ — e.g. "john" from "john@example.com"
-        let username  = email.components(separatedBy: "@").first?.lowercased() ?? "player\(Int.random(in: 1000...9999))"
+        let fullName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+        let username = email.components(separatedBy: "@").first?.lowercased() ?? "player\(Int.random(in: 1000...9999))"
 
-        signUpButton.isEnabled = false
-        signUpButton.setTitle("Creating account…", for: .normal)
-        signUpButton.alpha = 0.7
-
-        print("🚀 Creating new user in Supabase: username=\(username), email=\(email)…")
+        setLoading(true, title: "Checking…")
 
         Task {
-            defer {
-                DispatchQueue.main.async {
-                    self.signUpButton.isEnabled = true
-                    self.signUpButton.setTitle("Sign Up", for: .normal)
-                    self.signUpButton.alpha = 1.0
-                }
-            }
+            defer { DispatchQueue.main.async { self.setLoading(false) } }
 
             do {
-                let userId = try await SupabaseManager.shared.signUp(
-                    email: email,
-                    password: password,
-                    username: username,
-                    displayName: fullName
-                )
+                // 1. Make sure this email isn't already registered
+                let exists = try await SupabaseManager.shared.checkEmailExists(email)
+                if exists {
+                    DispatchQueue.main.async {
+                        self.showAlert(title: "Email Taken",
+                                       message: "An account with this email already exists. Try logging in instead.")
+                    }
+                    return
+                }
 
-                UserDefaults.standard.set(userId, forKey: "supabaseUserID")
-                print("✅ SUPABASE SIGNUP SUCCESS! User ID: \(userId), username: \(username)")
+                // 2. Ask the mail server to send an OTP (URL fetched fresh inside sendOTP)
+                DispatchQueue.main.async { self.setLoading(true, title: "Sending code…") }
+                try await MailServerManager.sendOTP(to: email, purpose: "register")
 
+                print("✅ OTP sent to \(email). Navigating to verification…")
+
+                // 3. Hand off to OTPViewController — actual Supabase signup happens AFTER verification
                 DispatchQueue.main.async {
                     let otpVC = OTPViewController()
+                    otpVC.mode        = .register
+                    otpVC.email       = email
+                    otpVC.password    = password
+                    otpVC.displayName = fullName
+                    otpVC.username    = username
                     otpVC.modalPresentationStyle = .fullScreen
-                    otpVC.modalTransitionStyle = .crossDissolve
+                    otpVC.modalTransitionStyle   = .crossDissolve
                     self.present(otpVC, animated: true)
                 }
 
             } catch {
-                print("❌ SUPABASE SIGNUP FAILED: \(error)")
+                print("❌ Registration pre-check failed: \(error)")
                 DispatchQueue.main.async {
-                    self.showAlert(title: "Registration Failed",
-                                   message: "Could not create your account. The email may already be taken, or the server is unreachable. Please try again.")
+                    self.showAlert(title: "Something Went Wrong",
+                                   message: error.localizedDescription)
                 }
             }
         }
+    }
+
+    // MARK: - Loading state helper
+    private func setLoading(_ loading: Bool, title: String = "Sign Up") {
+        signUpButton.isEnabled = !loading
+        signUpButton.setTitle(loading ? title : "Sign Up", for: .normal)
+        signUpButton.alpha = loading ? 0.7 : 1.0
     }
 
     // MARK: - Alert Helper
