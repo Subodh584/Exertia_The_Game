@@ -34,14 +34,15 @@ class SplashViewController: UIViewController {
         logoImageView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(logoImageView)
 
-        loadingLabel.text = "Burn calories while defeating villains"
+        loadingLabel.text = "Outrun the universe."
         loadingLabel.font = .systemFont(ofSize: 16, weight: .medium)
         loadingLabel.textColor = UIColor(white: 0.9, alpha: 1.0)
         loadingLabel.alpha = 0
         loadingLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(loadingLabel)
 
-        animationView = LottieAnimationView(name: "space_loader")
+        let config = LottieConfiguration(renderingEngine: .coreAnimation)
+        animationView = .init(dotLottieName: "rocket_animation", configuration: config)
 
         if let animationView = animationView {
             animationView.contentMode = .scaleAspectFit
