@@ -34,8 +34,10 @@ class SplashViewController: UIViewController {
         logoImageView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(logoImageView)
 
+
         loadingLabel.text = "Outrun the universe."
-        loadingLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        loadingLabel.font = .systemFont(ofSize: Responsive.font(16), weight: .medium)
+
         loadingLabel.textColor = UIColor(white: 0.9, alpha: 1.0)
         loadingLabel.alpha = 0
         loadingLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -54,8 +56,8 @@ class SplashViewController: UIViewController {
             NSLayoutConstraint.activate([
                 animationView.bottomAnchor.constraint(equalTo: loadingLabel.topAnchor, constant: -10),
                 animationView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-                animationView.widthAnchor.constraint(equalToConstant: 120),
-                animationView.heightAnchor.constraint(equalToConstant: 120)
+                animationView.widthAnchor.constraint(equalToConstant: Responsive.size(120)),
+                animationView.heightAnchor.constraint(equalToConstant: Responsive.size(120))
             ])
         }
         NSLayoutConstraint.activate([
@@ -65,9 +67,9 @@ class SplashViewController: UIViewController {
             backgroundImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             logoImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             logoImageView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            logoImageView.widthAnchor.constraint(equalToConstant: 350),
-            logoImageView.heightAnchor.constraint(equalToConstant: 140),
-            loadingLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60),
+            logoImageView.widthAnchor.constraint(equalToConstant: Responsive.size(350)),
+            logoImageView.heightAnchor.constraint(equalToConstant: Responsive.size(140)),
+            loadingLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -Responsive.padding(60)),
             loadingLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor)
         ])
     }
@@ -78,7 +80,7 @@ class SplashViewController: UIViewController {
             self.logoImageView.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
         }) { _ in
             UIView.animate(withDuration: 0.8, delay: 0.1, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.5, options: .curveEaseOut, animations: {
-                self.logoImageView.transform = CGAffineTransform(translationX: 0, y: -180)
+                self.logoImageView.transform = CGAffineTransform(translationX: 0, y: -Responsive.verticalSize(180))
                 self.backgroundImageView.alpha = 1.0
                 self.loadingLabel.alpha = 1.0
                 self.animationView?.alpha = 1.0

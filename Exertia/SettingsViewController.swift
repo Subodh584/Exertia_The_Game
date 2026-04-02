@@ -1,5 +1,6 @@
 import UIKit
 import ObjectiveC
+import SafariServices
 
 /// Key for objc_setAssociatedObject linking eye buttons to their UITextField.
 private var eyeBtnKey: UInt8 = 0
@@ -33,6 +34,18 @@ class SettingsViewController: UIViewController {
     private lazy var currentPwField  = makePwField("Current Password")
     private lazy var newPwField      = makePwField("New Password")
     private lazy var confirmPwField  = makePwField("Confirm New Password")
+
+    private var navTopInset: CGFloat {
+        Responsive.isIPad ? 14 : 0
+    }
+
+    private var navHeight: CGFloat {
+        Responsive.isIPad ? 72 : Responsive.navBarHeight
+    }
+
+    private var navSideInset: CGFloat {
+        Responsive.isIPad ? 28 : Responsive.contentInset
+    }
 
     // MARK: - Lifecycle
 
@@ -77,6 +90,7 @@ class SettingsViewController: UIViewController {
 
     private func buildNav() {
         navBar.translatesAutoresizingMaskIntoConstraints = false
+        navBar.backgroundColor = Responsive.isIPad ? UIColor.black.withAlphaComponent(0.10) : .clear
         view.addSubview(navBar)
 
         backBtn.backgroundColor = UIColor.white.withAlphaComponent(0.1)
@@ -89,7 +103,7 @@ class SettingsViewController: UIViewController {
         backBtn.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
 
         titleLbl.text = "Settings"
-        titleLbl.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLbl.font = .systemFont(ofSize: Responsive.font(20), weight: .bold)
         titleLbl.textColor = .white
         titleLbl.textAlignment = .center
         titleLbl.translatesAutoresizingMaskIntoConstraints = false
@@ -98,15 +112,15 @@ class SettingsViewController: UIViewController {
         navBar.addSubview(titleLbl)
 
         NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: navTopInset),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBar.heightAnchor.constraint(equalToConstant: 50),
+            navBar.heightAnchor.constraint(equalToConstant: navHeight),
 
-            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 20),
+            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: navSideInset),
             backBtn.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
-            backBtn.widthAnchor.constraint(equalToConstant: 40),
-            backBtn.heightAnchor.constraint(equalToConstant: 40),
+            backBtn.widthAnchor.constraint(equalToConstant: Responsive.size(40)),
+            backBtn.heightAnchor.constraint(equalToConstant: Responsive.size(40)),
 
             titleLbl.centerXAnchor.constraint(equalTo: navBar.centerXAnchor),
             titleLbl.centerYAnchor.constraint(equalTo: navBar.centerYAnchor)
@@ -120,27 +134,28 @@ class SettingsViewController: UIViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
+            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: Responsive.padding(10)),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
         stackContainer.axis      = .vertical
-        stackContainer.spacing   = 20
+        stackContainer.spacing   = Responsive.padding(20)
         stackContainer.alignment = .fill
         stackContainer.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(stackContainer)
         NSLayoutConstraint.activate([
-            stackContainer.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: 20),
-            stackContainer.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 20),
-            stackContainer.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -20),
-            stackContainer.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -50),
-            stackContainer.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -40)
+            stackContainer.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: Responsive.contentInset),
+            stackContainer.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: Responsive.contentInset),
+            stackContainer.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -Responsive.contentInset),
+            stackContainer.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -Responsive.padding(50)),
+            stackContainer.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -Responsive.contentInset * 2)
         ])
 
         stackContainer.addArrangedSubview(buildAudioCard())
         stackContainer.addArrangedSubview(buildAccountCard())
+        stackContainer.addArrangedSubview(buildInfoCard())
         stackContainer.addArrangedSubview(buildDangerSection())
     }
 
@@ -202,7 +217,7 @@ class SettingsViewController: UIViewController {
         // Top: label on left, mute icon-button on right
         let nameLbl = UILabel()
         nameLbl.text = label
-        nameLbl.font = .systemFont(ofSize: 14, weight: .semibold)
+        nameLbl.font = .systemFont(ofSize: Responsive.font(14), weight: .semibold)
         nameLbl.textColor = .white
         nameLbl.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
@@ -224,7 +239,7 @@ class SettingsViewController: UIViewController {
         slider.tintColor    = UIColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 1)
         slider.translatesAutoresizingMaskIntoConstraints = false
 
-        pctLabel.font          = .systemFont(ofSize: 11, weight: .semibold)
+        pctLabel.font          = .systemFont(ofSize: Responsive.font(11), weight: .semibold)
         pctLabel.textColor     = UIColor.white.withAlphaComponent(0.45)
         pctLabel.textAlignment = .right
         pctLabel.setContentHuggingPriority(.required, for: .horizontal)
@@ -332,6 +347,118 @@ class SettingsViewController: UIViewController {
             tapBtn.trailingAnchor.constraint(equalTo: inner.trailingAnchor)
         ])
         return card
+    }
+
+    // MARK: - Info Card (Privacy Policy & Contact Us)
+
+    private func buildInfoCard() -> UIView {
+        let card = glassCard()
+        let header = sectionHeader("Info")
+
+        let privacyRow = makeInfoRow(
+            icon: "lock.shield.fill",
+            title: "Privacy Policy",
+            action: #selector(openPrivacyPolicy)
+        )
+        let sep1 = makeSeparator()
+        let termsRow = makeInfoRow(
+            icon: "doc.text.fill",
+            title: "Terms & Conditions",
+            action: #selector(openTerms)
+        )
+        let sep2 = makeSeparator()
+        let contactRow = makeInfoRow(
+            icon: "envelope.fill",
+            title: "Contact Us",
+            action: #selector(openContactUs)
+        )
+
+        let inner = UIStackView(arrangedSubviews: [header, privacyRow, sep1, termsRow, sep2, contactRow])
+        inner.axis    = .vertical
+        inner.spacing = 4
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        inner.setCustomSpacing(14, after: header)
+        card.addSubview(inner)
+        NSLayoutConstraint.activate([
+            inner.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            inner.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20),
+            inner.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            inner.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20)
+        ])
+        return card
+    }
+
+    private func makeInfoRow(icon: String, title: String, action: Selector) -> UIView {
+        let symCfg   = UIImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+        let iconView = UIImageView(image: UIImage(systemName: icon, withConfiguration: symCfg))
+        iconView.tintColor = UIColor(red: 0.0, green: 0.95, blue: 0.63, alpha: 1)
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.widthAnchor.constraint(equalToConstant: 22).isActive = true
+
+        let label      = UILabel()
+        label.text     = title
+        label.font     = .systemFont(ofSize: 15, weight: .semibold)
+        label.textColor = .white
+        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let chevron = UIImageView(image: UIImage(systemName: "chevron.right",
+                                                  withConfiguration: symCfg))
+        chevron.tintColor   = UIColor(white: 0.5, alpha: 1)
+        chevron.contentMode = .scaleAspectFit
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+        chevron.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        chevron.setContentHuggingPriority(.required, for: .horizontal)
+        chevron.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let row = UIStackView(arrangedSubviews: [iconView, label, chevron])
+        row.axis      = .horizontal
+        row.spacing   = 12
+        row.alignment = .center
+
+        let tapBtn = UIButton(type: .system)
+        tapBtn.addTarget(self, action: action, for: .touchUpInside)
+        tapBtn.translatesAutoresizingMaskIntoConstraints = false
+        row.addSubview(tapBtn)
+        NSLayoutConstraint.activate([
+            tapBtn.topAnchor.constraint(equalTo: row.topAnchor),
+            tapBtn.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+            tapBtn.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            tapBtn.trailingAnchor.constraint(equalTo: row.trailingAnchor)
+        ])
+
+        row.isLayoutMarginsRelativeArrangement = true
+        row.layoutMargins = UIEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
+        return row
+    }
+
+    // Permanent Cloudflare Pages URL — no trailing slash, no hash.
+    // Update this once after deploying exertia-web.
+    private let webBaseURL = "https://exertia-privacy-policy.vercel.app"
+
+    // Opens the Exertia web page and auto-scrolls to the given section.
+    // hash should be e.g. "#privacy" or "#contact"
+    private func openWebPage(hash: String) {
+        let urlString = webBaseURL + hash
+        guard let url = URL(string: urlString) else { return }
+        let safariVC = SFSafariViewController(url: url)
+        safariVC.preferredBarTintColor     = UIColor(red: 0.07, green: 0.07, blue: 0.26, alpha: 1)
+        safariVC.preferredControlTintColor = UIColor(red: 0.0, green: 0.96, blue: 0.63, alpha: 1)
+        present(safariVC, animated: true)
+    }
+
+    @objc private func openPrivacyPolicy() {
+        openWebPage(hash: "#privacy")
+    }
+
+    @objc private func openContactUs() {
+        openWebPage(hash: "#contact")
+    }
+
+    @objc private func openTerms() {
+        let termsVC = TermsViewController()
+        termsVC.modalPresentationStyle = .fullScreen
+        termsVC.modalTransitionStyle   = .coverVertical
+        present(termsVC, animated: true)
     }
 
     // MARK: - Danger Section

@@ -15,11 +15,6 @@ class HomeViewController: UIViewController {
     @IBOutlet weak var distanceLabel: UILabel!
     @IBOutlet weak var caloriesLabel: UILabel!
 
-    /// Shift the EXERTIA logo left (–) or right (+) in points
-    private let logoOffsetX: CGFloat = 0.9
-    /// Shift the EXERTIA logo up (–) or down (+) in points
-    private let logoOffsetY: CGFloat = 0.0
-
     private let tabBarContainer = UIView()
     private let tabBarStackView = UIStackView()
     private let indicatorView = UIView()
@@ -29,6 +24,11 @@ class HomeViewController: UIViewController {
     private let currentTabIndex = 0
     private static let homeCacheKeyPrefix = "home.cache."
     private static let celebrationKeyPrefix = "home.celebration."
+    private var todayStatsWidthConstraint: NSLayoutConstraint?
+    private weak var todayStatsTitleLabel: UILabel?
+    private weak var todayStatsRowView: UIStackView?
+    private weak var startButtonImageView: UIImageView?
+    private weak var startButtonTitleLabel: UILabel?
 
     let gameData = GameData.shared
 
@@ -38,6 +38,9 @@ class HomeViewController: UIViewController {
         setupCustomTabs()
         setupProfileDesign()
         updateCharacterUI()
+        scaleTopNavBar()
+        configureTodayStatsCapsule()
+        configureTodayStatsSpacing()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleNavigateToHome),
@@ -46,9 +49,225 @@ class HomeViewController: UIViewController {
         )
     }
 
+    /// Adjusts all storyboard constraints for the current screen size
+    private func scaleTopNavBar() {
+        guard let navStack = profileButton.superview as? UIStackView else { return }
+
+        // --- Nav bar sizing ---
+        let navHeight: CGFloat = Responsive.isIPad ? 48 : (Responsive.isSmallPhone ? 30 : Responsive.size(36))
+        for constraint in navStack.constraints where constraint.firstAttribute == .height {
+            constraint.constant = navHeight
+        }
+
+        let profileSize: CGFloat = Responsive.isIPad ? 48 : (Responsive.isSmallPhone ? 30 : Responsive.size(36))
+        for constraint in profileButton.constraints {
+            if constraint.firstAttribute == .width || constraint.firstAttribute == .height {
+                constraint.constant = profileSize
+            }
+        }
+
+        // --- Adjust all view-level storyboard constraints ---
+        for constraint in view.constraints {
+            // Nav stack top position: push up on small phones, slightly up on larger
+            if let first = constraint.firstItem as? UIView, first === navStack,
+               constraint.firstAttribute == .top {
+                constraint.constant = Responsive.isSmallPhone ? 50 : Responsive.verticalSize(60)
+            }
+
+            // Stage centerY: less offset on small phones, more on iPad
+            if let first = constraint.firstItem as? UIView, first === stageHighlightView,
+               constraint.firstAttribute == .centerY {
+                if Responsive.isSmallPhone {
+                    constraint.constant = 30     // much higher on SE
+                } else if Responsive.isIPad {
+                    constraint.constant = 140    // push down on iPad
+                } else {
+                    constraint.constant = Responsive.verticalSize(80)
+                }
+            }
+
+            // Highlight bottom to safeArea: reduce on small phones
+            if constraint.firstAttribute == .bottom,
+               let second = constraint.secondItem as? UIView,
+               second.constraints.contains(where: { $0.firstAttribute == .width && $0.secondAttribute == .height && $0.multiplier == 1.0 }),
+               constraint.constant == 130 {
+                if Responsive.isSmallPhone {
+                    constraint.constant = 60
+                }
+            }
+
+            // Character bottom offset from Highlight
+            if let first = constraint.firstItem as? UIView, first === characterImageView,
+               constraint.firstAttribute == .bottom, constraint.constant == -150 {
+                if Responsive.isSmallPhone {
+                    constraint.constant = -80
+                } else if Responsive.isIPad {
+                    constraint.constant = -180
+                }
+            }
+
+            // "Today's stats" label top from stage (storyboard: 140)
+            // Push daily stats + start button lower on iPad
+            if constraint.firstAttribute == .top,
+               constraint.constant == 140,
+               let second = constraint.secondItem as? UIView, second === stageHighlightView {
+                if Responsive.isIPad {
+                    constraint.constant = 190
+                } else if Responsive.isSmallPhone {
+                    constraint.constant = 110
+                }
+            }
+        }
+
+        // Scale Start button on iPad
+        if Responsive.isIPad {
+            for sub in view.subviews {
+                if let imgView = sub as? UIImageView {
+                    for c in imgView.constraints where c.firstAttribute == .height && c.constant == 75 {
+                        c.constant = 100
+                    }
+                }
+            }
+        }
+        // Shrink Start button on SE
+        if Responsive.isSmallPhone {
+            for sub in view.subviews {
+                if let imgView = sub as? UIImageView {
+                    for c in imgView.constraints where c.firstAttribute == .height && c.constant == 75 {
+                        c.constant = 55
+                    }
+                }
+            }
+        }
+    }
+
     @objc private func handleNavigateToHome() {
         // Dismiss everything presented over HomeVC (TrackSelection → nav → CameraVC → GameVC → Summary)
         presentedViewController?.dismiss(animated: true)
+    }
+
+    private func configureTodayStatsCapsule() {
+        guard let statsRow = distanceLabel.superview?.superview?.superview else { return }
+
+        if let existingConstraint = todayStatsWidthConstraint {
+            existingConstraint.isActive = false
+        }
+
+        if let proportionalWidthConstraint = view.constraints.first(where: {
+            ($0.firstItem as? UIStackView) === statsRow && $0.firstAttribute == .width
+        }) {
+            proportionalWidthConstraint.isActive = false
+        }
+
+        let targetWidth: CGFloat
+        if Responsive.isIPad {
+            targetWidth = 260
+        } else if Responsive.isSmallPhone {
+            targetWidth = 215
+        } else {
+            targetWidth = min(view.bounds.width * 0.5, 230)
+        }
+
+        let widthConstraint = statsRow.widthAnchor.constraint(equalToConstant: targetWidth)
+        widthConstraint.isActive = true
+        todayStatsWidthConstraint = widthConstraint
+    }
+
+    private func configureTodayStatsSpacing() {
+        let todayLabel = todayStatsTitleLabel ?? findTodayStatsLabel()
+        todayStatsTitleLabel = todayLabel
+
+        let statsRow = todayStatsRowView ?? (distanceLabel.superview?.superview?.superview as? UIStackView)
+        todayStatsRowView = statsRow
+
+        let startButton = startButtonImageView ?? findStartButtonImageView()
+        startButtonImageView = startButton
+
+        guard let todayLabel,
+              let statsRow,
+              let startButton else { return }
+
+        if let labelTopConstraint = view.constraints.first(where: {
+            ($0.firstItem as? UILabel) === todayLabel &&
+            ($0.secondItem as? UIView) === stageHighlightView &&
+            $0.firstAttribute == .top &&
+            $0.secondAttribute == .top
+        }) {
+            if Responsive.isIPad {
+                labelTopConstraint.constant = 210
+            } else if Responsive.isSmallPhone {
+                labelTopConstraint.constant = 175
+            } else {
+                labelTopConstraint.constant = 160
+            }
+        }
+
+        if let rowTopConstraint = view.constraints.first(where: {
+            ($0.firstItem as? UIStackView) === statsRow &&
+            ($0.secondItem as? UILabel) === todayLabel &&
+            $0.firstAttribute == .top &&
+            $0.secondAttribute == .bottom
+        }) {
+            rowTopConstraint.constant = Responsive.isSmallPhone ? 16 : 14
+        }
+
+        if let startTopConstraint = view.constraints.first(where: {
+            ($0.firstItem as? UIImageView) === startButton &&
+            ($0.secondItem as? UIStackView) === statsRow &&
+            $0.firstAttribute == .top &&
+            $0.secondAttribute == .top
+        }) {
+            if Responsive.isIPad {
+                startTopConstraint.constant = 58
+            } else if Responsive.isSmallPhone {
+                startTopConstraint.constant = 72
+            } else {
+                startTopConstraint.constant = 62
+            }
+        }
+    }
+
+    private func findTodayStatsLabel() -> UILabel? {
+        view.subviews.compactMap { $0 as? UILabel }.first(where: { $0.text == "Today's stats" })
+    }
+
+    private func findStartButtonImageView() -> UIImageView? {
+        view.subviews.compactMap { $0 as? UIImageView }.first(where: { imageView in
+            imageView !== stageHighlightView &&
+            imageView !== characterImageView &&
+            imageView.constraints.contains(where: { $0.firstAttribute == .height && abs($0.constant - 75) < 0.5 })
+        })
+    }
+
+    private func findStartButtonTitleLabel() -> UILabel? {
+        view.subviews.compactMap { $0 as? UILabel }.first(where: { $0.text == "START" })
+    }
+
+    private func positionLowerHomeStackForCurrentDevice() {
+        guard let todayLabel = todayStatsTitleLabel ?? findTodayStatsLabel(),
+              let statsRow = todayStatsRowView ?? (distanceLabel.superview?.superview?.superview as? UIStackView),
+              let startImage = startButtonImageView ?? findStartButtonImageView() else { return }
+
+        todayStatsTitleLabel = todayLabel
+        todayStatsRowView = statsRow
+        startButtonImageView = startImage
+        startButtonTitleLabel = startButtonTitleLabel ?? findStartButtonTitleLabel()
+
+        todayLabel.transform = .identity
+        statsRow.transform = .identity
+        startImage.transform = .identity
+        startButtonTitleLabel?.transform = .identity
+
+        guard Responsive.isSmallPhone else { return }
+
+        let labelOffset: CGFloat = 34
+        let rowOffset: CGFloat = 42
+        let startOffset: CGFloat = 52
+
+        todayLabel.transform = CGAffineTransform(translationX: 0, y: labelOffset)
+        statsRow.transform = CGAffineTransform(translationX: 0, y: rowOffset)
+        startImage.transform = CGAffineTransform(translationX: 0, y: startOffset)
+        startButtonTitleLabel?.transform = CGAffineTransform(translationX: 0, y: startOffset)
     }
 
     override func viewDidLayoutSubviews() {
@@ -58,17 +277,42 @@ class HomeViewController: UIViewController {
             moveIndicator(to: tabWrappers[currentTabIndex], animated: false)
         }
         
-        // Dynamically scale the image to be much bigger and ground it cleanly onto the podium
-        let screenHeight = view.bounds.height
-        let scale: CGFloat = screenHeight > 800 ? 1.35 : 1.2 // Larger screens get a bigger pop
-        
-        // Push both the character and the underlying stage cleanly downwards to safely clear the "EXERTIA" logo overhead!
-        // Taller screens get a structurally larger drop to prevent visually crowding the massive header space natively
-        let layoutDropOffset: CGFloat = screenHeight > 800 ? 50 : 30
-        
-        // Apply perfectly identical downwards Cartesian drops to rigidly preserve their geometric spatial relationship, while uniquely scaling the character!
-        stageHighlightView.transform = CGAffineTransform(translationX: 0, y: layoutDropOffset)
-        characterImageView.transform = CGAffineTransform(translationX: 0, y: layoutDropOffset).scaledBy(x: scale, y: scale)
+        // Dynamically scale the character proportionally to screen size
+        let charScale: CGFloat
+        if Responsive.isSmallPhone {
+            charScale = 0.96
+        } else if Responsive.isIPad {
+            charScale = 0.86
+        } else {
+            charScale = 1.0 + (view.bounds.height - 667) / 1200
+        }
+
+        // Nudge stage position per device
+        let stageNudge: CGFloat
+        if Responsive.isSmallPhone {
+            stageNudge = 15      // push stage down closer to daily stats
+        } else if Responsive.isIPad {
+            stageNudge = 20
+        } else {
+            stageNudge = 10
+        }
+        stageHighlightView.transform = CGAffineTransform(translationX: 0, y: stageNudge)
+
+        // Keep the character centered on the stage across all device classes.
+        let stageCenterX = stageHighlightView.center.x
+        let stageCenterY = stageHighlightView.center.y + stageNudge
+        let charNaturalCenter = characterImageView.center
+        let scaledFeetOffsetFromCenter = characterImageView.bounds.height * 0.35 * charScale
+        let charXOffset = stageCenterX - charNaturalCenter.x
+        let charYOffset = stageCenterY - (charNaturalCenter.y + scaledFeetOffsetFromCenter)
+        characterImageView.transform = CGAffineTransform(translationX: charXOffset, y: charYOffset)
+            .scaledBy(x: charScale, y: charScale)
+
+        positionLowerHomeStackForCurrentDevice()
+
+        // Re-round profile button after layout
+        profileButton.layoutIfNeeded()
+        profileButton.layer.cornerRadius = profileButton.frame.height / 2
         
         setupRocketAnimation()
         setupStarField()
@@ -443,16 +687,16 @@ class HomeViewController: UIViewController {
         
         NSLayoutConstraint.activate([
             tabBarContainer.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -5),
-            tabBarContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            tabBarContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            tabBarContainer.heightAnchor.constraint(equalToConstant: 70)
+            tabBarContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Responsive.contentInset),
+            tabBarContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Responsive.contentInset),
+            tabBarContainer.heightAnchor.constraint(equalToConstant: Responsive.tabBarHeight)
         ])
         
         tabBarContainer.backgroundColor = .clear
         let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialDark) // Liquid glass
         let blurView = UIVisualEffectView(effect: blurEffect)
         blurView.translatesAutoresizingMaskIntoConstraints = false
-        blurView.layer.cornerRadius = 35
+        blurView.layer.cornerRadius = Responsive.tabBarCornerRadius
         blurView.clipsToBounds = true
         blurView.isUserInteractionEnabled = false
         tabBarContainer.insertSubview(blurView, at: 0)
@@ -464,7 +708,7 @@ class HomeViewController: UIViewController {
             blurView.trailingAnchor.constraint(equalTo: tabBarContainer.trailingAnchor)
         ])
         
-        tabBarContainer.layer.cornerRadius = 35
+        tabBarContainer.layer.cornerRadius = Responsive.tabBarCornerRadius
         tabBarContainer.layer.borderWidth = 1.5
         tabBarContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         
@@ -475,7 +719,7 @@ class HomeViewController: UIViewController {
         tabBarContainer.layer.shadowOffset = .zero
         
         indicatorView.backgroundColor = UIColor.white.withAlphaComponent(0.25)
-        indicatorView.layer.cornerRadius = 30
+        indicatorView.layer.cornerRadius = Responsive.cornerRadius(30)
         indicatorView.layer.cornerCurve = .continuous
         indicatorView.layer.shadowColor = UIColor.white.cgColor
         indicatorView.layer.shadowRadius = 8
@@ -538,12 +782,12 @@ class HomeViewController: UIViewController {
             let iconImageView = UIImageView(image: UIImage(named: iconName))
             iconImageView.contentMode = .scaleAspectFit
             iconImageView.translatesAutoresizingMaskIntoConstraints = false
-            iconImageView.widthAnchor.constraint(equalToConstant: 44).isActive = true
-            iconImageView.heightAnchor.constraint(equalToConstant: 34).isActive = true
+            iconImageView.widthAnchor.constraint(equalToConstant: Responsive.size(44)).isActive = true
+            iconImageView.heightAnchor.constraint(equalToConstant: Responsive.size(34)).isActive = true
             
             let label = UILabel()
             label.text = title
-            label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
+            label.font = UIFont.systemFont(ofSize: Responsive.font(10), weight: .semibold)
             label.textColor = .lightGray
             label.textAlignment = .center
             
@@ -666,13 +910,28 @@ class HomeViewController: UIViewController {
             }
         }
         
-        // Dynamically replace the old 'ExertiaHomePageTitle' logo with 'LOGO4'
+        // Dynamically replace the old 'ExertiaHomePageTitle' logo with 'LOGO4' and center it
         if let newLogo = UIImage(named: "LOGO4"), let oldLogoSize = UIImage(named: "ExertiaHomePageTitle")?.size {
             for subview in view.subviews {
-                if let imgView = subview as? UIImageView, imgView.image?.size == oldLogoSize {
-                    imgView.image = newLogo
-                    imgView.contentMode = .scaleAspectFit
-                    imgView.transform = CGAffineTransform(translationX: logoOffsetX, y: logoOffsetY)
+                if let imgView = subview as? UIImageView,
+                   imgView.image?.size == oldLogoSize || imgView.image == newLogo {
+                    if imgView.image != newLogo {
+                        imgView.image = newLogo
+                        imgView.contentMode = .scaleAspectFit
+                        imgView.transform = .identity
+                        // Remove fixedFrame autoresizing and add proper center constraints
+                        imgView.translatesAutoresizingMaskIntoConstraints = false
+                        let logoTop: CGFloat = Responsive.isSmallPhone ? 55 : Responsive.verticalSize(75)
+                        let logoWidth: CGFloat = Responsive.isSmallPhone ? 260 : Responsive.size(333)
+                        let logoHeight: CGFloat = Responsive.isSmallPhone ? 130 : Responsive.size(180)
+                        NSLayoutConstraint.activate([
+                            imgView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                            imgView.topAnchor.constraint(equalTo: view.topAnchor, constant: logoTop),
+                            imgView.widthAnchor.constraint(equalToConstant: logoWidth),
+                            imgView.heightAnchor.constraint(equalToConstant: logoHeight)
+                        ])
+                    }
+                    break
                 }
             }
         }

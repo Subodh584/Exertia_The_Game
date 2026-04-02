@@ -74,12 +74,12 @@ class FullCalendarViewController: UIViewController,
             gradientView.topAnchor.constraint(equalTo: view.topAnchor),
             gradientView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             gradientView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            gradientView.heightAnchor.constraint(equalToConstant: 350)
+            gradientView.heightAnchor.constraint(equalToConstant: Responsive.gradientHeight)
         ])
         let gl = CAGradientLayer()
         gl.colors = [UIColor.neonPink.withAlphaComponent(0.28).cgColor, UIColor.clear.cgColor]
         gl.locations = [0.0, 1.0]
-        gl.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 350)
+        gl.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: Responsive.gradientHeight)
         gradientView.layer.addSublayer(gl)
     }
 
@@ -99,7 +99,7 @@ class FullCalendarViewController: UIViewController,
 
         let titleLbl = UILabel()
         titleLbl.text = "Streak Calendar"
-        titleLbl.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLbl.font = .systemFont(ofSize: Responsive.font(20), weight: .bold)
         titleLbl.textColor = .white
         titleLbl.textAlignment = .center
         titleLbl.translatesAutoresizingMaskIntoConstraints = false
@@ -111,9 +111,9 @@ class FullCalendarViewController: UIViewController,
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBar.heightAnchor.constraint(equalToConstant: 50),
+            navBar.heightAnchor.constraint(equalToConstant: Responsive.navBarHeight),
 
-            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 20),
+            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: Responsive.contentInset),
             backBtn.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
             backBtn.widthAnchor.constraint(equalToConstant: 40),
             backBtn.heightAnchor.constraint(equalToConstant: 40),

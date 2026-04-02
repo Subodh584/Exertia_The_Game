@@ -568,6 +568,37 @@ class SupabaseManager {
         print("✅ Account deleted and logged out!")
     }
 
+    // MARK: - Mail Server Support
+
+    /// Fetches the current Cloudflare tunnel URL stored in the `mail_url` table.
+    func fetchMailServerURL() async throws -> String {
+        struct MailURLRecord: Decodable { let url: String }
+        let records: [MailURLRecord] = try await client
+            .from("mail_url")
+            .select("url")
+            .limit(1)
+            .execute()
+            .value
+        guard let record = records.first else {
+            throw NSError(domain: "SupabaseManager", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "Mail server URL not configured in database."])
+        }
+        return record.url
+    }
+
+    /// Returns true if the given email already has an account in `public.users`.
+    func checkEmailExists(_ email: String) async throws -> Bool {
+        struct EmailRow: Decodable { let email: String }
+        let rows: [EmailRow] = try await client
+            .from("users")
+            .select("email")
+            .eq("email", value: email.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))
+            .limit(1)
+            .execute()
+            .value
+        return !rows.isEmpty
+    }
+
     // MARK: - Session Expired Handler
     func handleSessionExpired() {
         UserDefaults.standard.removeObject(forKey: "supabaseUserID")
