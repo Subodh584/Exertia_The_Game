@@ -347,14 +347,20 @@ class SettingsViewController: UIViewController {
             title: "Privacy Policy",
             action: #selector(openPrivacyPolicy)
         )
-        let sep = makeSeparator()
+        let sep1 = makeSeparator()
+        let termsRow = makeInfoRow(
+            icon: "doc.text.fill",
+            title: "Terms & Conditions",
+            action: #selector(openTerms)
+        )
+        let sep2 = makeSeparator()
         let contactRow = makeInfoRow(
             icon: "envelope.fill",
             title: "Contact Us",
             action: #selector(openContactUs)
         )
 
-        let inner = UIStackView(arrangedSubviews: [header, privacyRow, sep, contactRow])
+        let inner = UIStackView(arrangedSubviews: [header, privacyRow, sep1, termsRow, sep2, contactRow])
         inner.axis    = .vertical
         inner.spacing = 4
         inner.translatesAutoresizingMaskIntoConstraints = false
@@ -414,7 +420,7 @@ class SettingsViewController: UIViewController {
 
     // Permanent Cloudflare Pages URL — no trailing slash, no hash.
     // Update this once after deploying exertia-web.
-    private let webBaseURL = "https://exertia-web.pages.dev"
+    private let webBaseURL = "https://exertia-privacy-policy.vercel.app"
 
     // Opens the Exertia web page and auto-scrolls to the given section.
     // hash should be e.g. "#privacy" or "#contact"
@@ -433,6 +439,13 @@ class SettingsViewController: UIViewController {
 
     @objc private func openContactUs() {
         openWebPage(hash: "#contact")
+    }
+
+    @objc private func openTerms() {
+        let termsVC = TermsViewController()
+        termsVC.modalPresentationStyle = .fullScreen
+        termsVC.modalTransitionStyle   = .coverVertical
+        present(termsVC, animated: true)
     }
 
     // MARK: - Danger Section
