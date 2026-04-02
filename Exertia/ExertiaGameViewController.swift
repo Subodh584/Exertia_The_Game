@@ -2180,14 +2180,10 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         let capturedTrack             = trackName
         let capturedTrackId           = trackId
 
-        // Dismiss pause menu (no animation) then show summary
-        pauseMenuHostingController?.dismiss(animated: false)
-        pauseMenuHostingController = nil
-
+        // Dismiss pause menu (no animation) then show summary or high score
         let presentSummary = { [weak self] in
             guard let self = self else { return }
             let summaryView = SessionSummaryView(summary: summaryData) {
-                // Save to Supabase when user taps "Go Home"
                 GameData.shared.addSession(
                     duration:        capturedDuration,
                     calories:        capturedCal,
@@ -2203,10 +2199,8 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                     averageSpeed:    capturedSpeed,
                     completionStatus: capturedCompletionStatus
                 )
-                // Navigate all the way home via notification (HomeVC dismisses its stack)
                 NotificationCenter.default.post(name: .navigateToHome, object: nil)
             }
-            
             let hosting = UIHostingController(rootView: summaryView)
             hosting.modalPresentationStyle = .overFullScreen
             hosting.modalTransitionStyle   = .crossDissolve
@@ -2214,33 +2208,34 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
             self.present(hosting, animated: true)
             self.summaryHostingController = hosting
         }
-        
-        let oldBestCal = GameData.shared.stats.personalBestCalories
-        let oldBestDist = GameData.shared.stats.personalBestDistance
-        let capturedDistKm = distanceMeters / 1000.0
 
-        let beatCal = caloriesBurned > oldBestCal && caloriesBurned > 0
-        let beatDist = capturedDistKm > oldBestDist && capturedDistKm > 0
-        let isNewBest = beatCal || beatDist
+        let showNextScreen = { [weak self] in
+            guard let self = self else { return }
 
-        if isNewBest {
-            let metricName = beatDist ? "DISTANCE" : "CALORIES"
-            let newVal = beatDist ? String(format: "%.2f", capturedDistKm) : "\(caloriesBurned)"
-            let oldVal = beatDist ? String(format: "%.2f", oldBestDist) : "\(oldBestCal)"
-            let unit = beatDist ? "km" : "kcal"
+            let oldBestCal = GameData.shared.stats.personalBestCalories
+            let oldBestDist = GameData.shared.stats.personalBestDistance
+            let capturedDistKm = distanceMeters / 1000.0
 
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
+            let beatCal = oldBestCal > 0 && caloriesBurned > oldBestCal
+            let beatDist = oldBestDist > 0 && capturedDistKm > oldBestDist
+            let isNewBest = beatCal || beatDist
+
+            if isNewBest {
+                let metricName = beatDist ? "DISTANCE" : "CALORIES"
+                let newVal = beatDist ? String(format: "%.2f", capturedDistKm) : "\(caloriesBurned)"
+                let oldVal = beatDist ? String(format: "%.2f", oldBestDist) : "\(oldBestCal)"
+                let unit = beatDist ? "km" : "kcal"
+
                 let highScoreView = HighScorePopupView(
                     metricName: metricName,
                     newValue: newVal,
                     oldValue: oldVal,
                     unit: unit
                 ) { [weak self] in
-                    // Dismiss high score popup, then dismiss game VC
+                    // Dismiss high score popup, then show session summary
                     self?.highScoreHostingController?.dismiss(animated: true) {
                         self?.highScoreHostingController = nil
-                        self?.dismiss(animated: true)
+                        presentSummary()
                     }
                 }
                 let hosting = UIHostingController(rootView: highScoreView)
@@ -2249,11 +2244,18 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                 hosting.view.backgroundColor = .clear
                 self.present(hosting, animated: true)
                 self.highScoreHostingController = hosting
+            } else {
+                presentSummary()
             }
+        }
+
+        if pauseMenuHostingController != nil {
+            pauseMenuHostingController?.dismiss(animated: false) {
+                showNextScreen()
+            }
+            pauseMenuHostingController = nil
         } else {
-            DispatchQueue.main.async { [weak self] in
-                self?.dismiss(animated: true)
-            }
+            showNextScreen()
         }
     }
 

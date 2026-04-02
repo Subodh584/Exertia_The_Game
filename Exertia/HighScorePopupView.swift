@@ -66,18 +66,32 @@ struct ConfettiView: UIViewRepresentable {
 // MARK: - 3D Dancing Character (SceneKit wrapped for SwiftUI)
 struct DancingCharacterView: UIViewRepresentable {
 
-    func makeUIView(context: Context) -> SCNView {
+    func makeUIView(context: Context) -> UIView {
+        // Container that SwiftUI will size — SCNView goes inside it
+        let container = UIView()
+        container.backgroundColor = .clear
+        container.clipsToBounds = true
+
         let scnView = SCNView()
         scnView.backgroundColor = .clear
         scnView.allowsCameraControl = false
         scnView.autoenablesDefaultLighting = false
         scnView.antialiasingMode = .multisampling4X
         scnView.clipsToBounds = true
-        scnView.layer.masksToBounds = true
+        scnView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(scnView)
+
+        // Pin SCNView to fill the container exactly
+        NSLayoutConstraint.activate([
+            scnView.topAnchor.constraint(equalTo: container.topAnchor),
+            scnView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            scnView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            scnView.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+        ])
 
         // Load mesh from Idle.dae (contains full skeleton + skin)
         guard let importedScene = SCNScene(named: "Character.scnassets/Idle.dae") else {
-            return scnView
+            return container
         }
 
         let masterScene = SCNScene()
@@ -129,15 +143,14 @@ struct DancingCharacterView: UIViewRepresentable {
             }
         }
 
-        // Scale & position character to fit celebration frame
-        let characterScale: Float = 0.04
-        characterShell.scale = SCNVector3(characterScale, characterScale, characterScale)
+        // Use CharacterSelectionVC's approach: native scale, camera pushed back
+        characterShell.scale = SCNVector3(1, 1, 1)
 
         let (minB, maxB) = characterShell.boundingBox
-        let scaledHeight = (maxB.y - minB.y) * characterScale
-        let midX = (minB.x + maxB.x) / 2 * characterScale
-        let midY = (minB.y + maxB.y) / 2 * characterScale
-        characterShell.position = SCNVector3(-midX, -midY - scaledHeight * 0.35, 0)
+        let modelHeight = maxB.y - minB.y
+        let midX = (minB.x + maxB.x) / 2
+        let midY = (minB.y + maxB.y) / 2
+        characterShell.position = SCNVector3(-midX, -midY, 0)
 
         // Lighting
         masterScene.lightingEnvironment.contents = UIColor(white: 0.2, alpha: 1.0)
@@ -159,13 +172,16 @@ struct DancingCharacterView: UIViewRepresentable {
         dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
         masterScene.rootNode.addChildNode(dirNode)
 
-        // Camera — tight framing on the small character
+        // Camera — same inverse-proportional approach as CharacterSelectionVC
+        let autoScale: Float = modelHeight > 0 ? (1.8 / modelHeight) : 0.01
+        let cameraZ = 3.5 / autoScale
+
         let cameraNode = SCNNode()
         cameraNode.camera = SCNCamera()
-        cameraNode.camera?.fieldOfView = 35
-        cameraNode.position = SCNVector3(0, scaledHeight * 0.4, scaledHeight * 2.5)
-        cameraNode.camera?.zNear = 0.01
-        cameraNode.camera?.zFar = 100
+        cameraNode.camera?.fieldOfView = 50
+        cameraNode.camera?.zNear = Double(cameraZ) * 0.05
+        cameraNode.camera?.zFar = Double(cameraZ) * 5.0
+        cameraNode.position = SCNVector3(0, 0, cameraZ)
         masterScene.rootNode.addChildNode(cameraNode)
 
         scnView.scene = masterScene
@@ -175,10 +191,11 @@ struct DancingCharacterView: UIViewRepresentable {
         // Graft Wave Hip Hop Dance animation onto the skeleton
         injectDanceAnimation(into: characterShell)
 
-        return scnView
+        return container
     }
 
-    func updateUIView(_ uiView: SCNView, context: Context) {}
+    func updateUIView(_ uiView: UIView, context: Context) {}
+
 
     private func injectDanceAnimation(into targetArmature: SCNNode) {
         guard let animScene = SCNScene(named: "Character.scnassets/Wave Hip Hop Dance.dae") else {
