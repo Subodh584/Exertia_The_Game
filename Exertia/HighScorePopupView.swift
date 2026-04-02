@@ -66,6 +66,10 @@ struct ConfettiView: UIViewRepresentable {
 // MARK: - 3D Dancing Character (SceneKit wrapped for SwiftUI)
 struct DancingCharacterView: UIViewRepresentable {
 
+    /// Positive = pan camera up (shows more of the upper body / head).
+    /// Negative = pan camera down. Units are in scene-space (same as cameraZ scale).
+    var cameraOffsetY: Float = 0
+
     func makeUIView(context: Context) -> UIView {
         // Container that SwiftUI will size — SCNView goes inside it
         let container = UIView()
@@ -181,7 +185,7 @@ struct DancingCharacterView: UIViewRepresentable {
         cameraNode.camera?.fieldOfView = 50
         cameraNode.camera?.zNear = Double(cameraZ) * 0.05
         cameraNode.camera?.zFar = Double(cameraZ) * 5.0
-        cameraNode.position = SCNVector3(0, 0, cameraZ)
+        cameraNode.position = SCNVector3(0, cameraOffsetY, cameraZ)
         masterScene.rootNode.addChildNode(cameraNode)
 
         scnView.scene = masterScene
@@ -237,6 +241,10 @@ struct HighScorePopupView: View {
     let neonCyan = Color(red: 0.0, green: 0.95, blue: 1.0)
     let neonAmber = Color(red: 1.0, green: 0.75, blue: 0.0)
     let bgDark = Color(red: 0.02, green: 0.02, blue: 0.06)
+
+    let characterHeight: CGFloat = 120      // ← tweak to resize character frame
+    let characterOffsetY: CGFloat = 0       // ← tweak to shift the SwiftUI frame up(-) or down(+)
+    let characterCameraOffsetY: Float = 0.3 // ← tweak to pan the 3D camera: positive = more head/torso, negative = more legs
 
     var body: some View {
         ZStack {
@@ -300,8 +308,9 @@ struct HighScorePopupView: View {
                 .animation(.easeOut(duration: 0.5).delay(0.2), value: animateEntrance)
 
                 // 3D Dancing Character
-                DancingCharacterView()
-                    .frame(height: 220)
+                DancingCharacterView(cameraOffsetY: characterCameraOffsetY)
+                    .frame(height: characterHeight)
+                    .offset(y: characterOffsetY)
                     .clipped()
                     .scaleEffect(animateEntrance ? 1.0 : 0.6)
                     .opacity(animateEntrance ? 1.0 : 0.0)
