@@ -16,6 +16,8 @@ class TrackSelectionViewController: UIViewController {
     // MARK: — AV
     var player: AVPlayer?
     var playerLayer: AVPlayerLayer?
+    /// Passed from HomeViewController if preloading succeeded
+    var preloadedPlayer: AVPlayer?
 
     // MARK: — Track model (duration/calories strings removed — computed from goal)
     struct Track {
@@ -581,38 +583,50 @@ class TrackSelectionViewController: UIViewController {
     }
 
     func playVideo(named videoName: String) {
+        player?.pause()
+        playerLayer?.removeFromSuperlayer()
+
+        // Use preloaded player from HomeVC if available (instant start)
+        if let ready = preloadedPlayer {
+            preloadedPlayer = nil
+            attachPlayer(ready)
+            return
+        }
+
+        // Fallback: cold load (only if preload wasn't ready in time)
         guard let path = Bundle.main.path(forResource: videoName, ofType: "mp4") else {
             print("❌ Video not found: \(videoName).mp4")
             return
         }
-        player?.pause()
-        playerLayer?.removeFromSuperlayer()
-
-        // Preload asset for faster playback start
         let asset = AVURLAsset(url: URL(fileURLWithPath: path))
         asset.loadValuesAsynchronously(forKeys: ["playable"]) { [weak self] in
             DispatchQueue.main.async {
-                guard let self = self else { return }
+                guard let self else { return }
                 let item = AVPlayerItem(asset: asset)
-                // Buffer ahead for smooth start
                 item.preferredForwardBufferDuration = 2.0
-                self.player = AVPlayer(playerItem: item)
-                self.player?.automaticallyWaitsToMinimizeStalling = false
-                AudioManager.shared.applyMutedState(to: self.player)
-                self.playerLayer = AVPlayerLayer(player: self.player)
-                self.videoContainerView.layoutIfNeeded()
-                self.playerLayer?.frame         = self.videoContainerView.bounds
-                self.playerLayer?.videoGravity  = .resizeAspectFill
-                self.playerLayer?.cornerRadius  = 20
-                self.playerLayer?.masksToBounds = true
-                self.videoContainerView.layer.addSublayer(self.playerLayer!)
-                self.player?.play()
-                NotificationCenter.default.addObserver(
-                    forName: .AVPlayerItemDidPlayToEndTime,
-                    object: self.player?.currentItem, queue: .main
-                ) { [weak self] _ in self?.player?.seek(to: .zero); self?.player?.play() }
+                let player = AVPlayer(playerItem: item)
+                player.automaticallyWaitsToMinimizeStalling = false
+                AudioManager.shared.applyMutedState(to: player)
+                self.attachPlayer(player)
             }
         }
+    }
+
+    private func attachPlayer(_ player: AVPlayer) {
+        self.player = player
+        let layer = AVPlayerLayer(player: player)
+        videoContainerView.layoutIfNeeded()
+        layer.frame         = videoContainerView.bounds
+        layer.videoGravity  = .resizeAspectFill
+        layer.cornerRadius  = 20
+        layer.masksToBounds = true
+        videoContainerView.layer.addSublayer(layer)
+        self.playerLayer = layer
+        player.play()
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem, queue: .main
+        ) { [weak self] _ in self?.player?.seek(to: .zero); self?.player?.play() }
     }
 
     // MARK: — IBActions

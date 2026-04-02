@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 
 class HomeViewController: UIViewController {
     private struct CachedHomeSnapshot: Codable {
@@ -22,6 +23,11 @@ class HomeViewController: UIViewController {
     private var tabLabels: [UILabel] = []
     private var tabWrappers: [UIView] = []
     private let currentTabIndex = 0
+
+    // Preloaded video player — ready before user taps Start
+    private var preloadedPlayer: AVPlayer?
+    private var preloadedPlayerLayer: AVPlayerLayer?
+    private var isPlayerReady = false
     private static let homeCacheKeyPrefix = "home.cache."
     private static let celebrationKeyPrefix = "home.celebration."
     private var todayStatsWidthConstraint: NSLayoutConstraint?
@@ -521,6 +527,7 @@ class HomeViewController: UIViewController {
         AudioManager.shared.playAppMusic()
         updateCharacterUI()
         setupRocketAnimation()
+        preloadTrackVideo()
         if !applyCachedHomeSnapshot() {
             showLoadingState()
         }
@@ -964,14 +971,39 @@ class HomeViewController: UIViewController {
         }
     }
     
+    private func preloadTrackVideo() {
+        guard !isPlayerReady,
+              let path = Bundle.main.path(forResource: "Nova-Station", ofType: "mp4") else { return }
+        let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+        asset.loadValuesAsynchronously(forKeys: ["playable"]) { [weak self] in
+            guard let self else { return }
+            var error: NSError?
+            guard asset.statusOfValue(forKey: "playable", error: &error) == .loaded else { return }
+            let item = AVPlayerItem(asset: asset)
+            item.preferredForwardBufferDuration = 3.0
+            let player = AVPlayer(playerItem: item)
+            player.automaticallyWaitsToMinimizeStalling = false
+            AudioManager.shared.applyMutedState(to: player)
+            DispatchQueue.main.async {
+                self.preloadedPlayer = player
+                self.isPlayerReady = true
+            }
+        }
+    }
+
     @IBAction func playButtonTapped(_ sender: UIButton) {
         AudioManager.shared.playEffect(.buttonTapped)
-        // Bounce animation on tap
         bounceButton(sender) {
             let storyboard = UIStoryboard(name: "Main", bundle: nil)
             if let trackVC = storyboard.instantiateViewController(withIdentifier: "TrackSelectionViewController") as? TrackSelectionViewController {
                 trackVC.modalPresentationStyle = .fullScreen
                 trackVC.modalTransitionStyle = .crossDissolve
+                // Pass preloaded player if ready — avoids cold-start delay
+                if self.isPlayerReady {
+                    trackVC.preloadedPlayer = self.preloadedPlayer
+                    self.preloadedPlayer = nil
+                    self.isPlayerReady = false
+                }
                 self.present(trackVC, animated: true, completion: nil)
             }
         }
