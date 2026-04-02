@@ -34,6 +34,18 @@ class SettingsViewController: UIViewController {
     private lazy var newPwField      = makePwField("New Password")
     private lazy var confirmPwField  = makePwField("Confirm New Password")
 
+    private var navTopInset: CGFloat {
+        Responsive.isIPad ? 14 : 0
+    }
+
+    private var navHeight: CGFloat {
+        Responsive.isIPad ? 72 : Responsive.navBarHeight
+    }
+
+    private var navSideInset: CGFloat {
+        Responsive.isIPad ? 28 : Responsive.contentInset
+    }
+
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
@@ -77,6 +89,7 @@ class SettingsViewController: UIViewController {
 
     private func buildNav() {
         navBar.translatesAutoresizingMaskIntoConstraints = false
+        navBar.backgroundColor = Responsive.isIPad ? UIColor.black.withAlphaComponent(0.10) : .clear
         view.addSubview(navBar)
 
         backBtn.backgroundColor = UIColor.white.withAlphaComponent(0.1)
@@ -89,7 +102,7 @@ class SettingsViewController: UIViewController {
         backBtn.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
 
         titleLbl.text = "Settings"
-        titleLbl.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLbl.font = .systemFont(ofSize: Responsive.font(20), weight: .bold)
         titleLbl.textColor = .white
         titleLbl.textAlignment = .center
         titleLbl.translatesAutoresizingMaskIntoConstraints = false
@@ -98,15 +111,15 @@ class SettingsViewController: UIViewController {
         navBar.addSubview(titleLbl)
 
         NSLayoutConstraint.activate([
-            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: navTopInset),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBar.heightAnchor.constraint(equalToConstant: 50),
+            navBar.heightAnchor.constraint(equalToConstant: navHeight),
 
-            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 20),
+            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: navSideInset),
             backBtn.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
-            backBtn.widthAnchor.constraint(equalToConstant: 40),
-            backBtn.heightAnchor.constraint(equalToConstant: 40),
+            backBtn.widthAnchor.constraint(equalToConstant: Responsive.size(40)),
+            backBtn.heightAnchor.constraint(equalToConstant: Responsive.size(40)),
 
             titleLbl.centerXAnchor.constraint(equalTo: navBar.centerXAnchor),
             titleLbl.centerYAnchor.constraint(equalTo: navBar.centerYAnchor)
@@ -120,23 +133,23 @@ class SettingsViewController: UIViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
+            scrollView.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: Responsive.padding(10)),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
         stackContainer.axis      = .vertical
-        stackContainer.spacing   = 20
+        stackContainer.spacing   = Responsive.padding(20)
         stackContainer.alignment = .fill
         stackContainer.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(stackContainer)
         NSLayoutConstraint.activate([
-            stackContainer.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: 20),
-            stackContainer.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 20),
-            stackContainer.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -20),
-            stackContainer.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -50),
-            stackContainer.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -40)
+            stackContainer.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: Responsive.contentInset),
+            stackContainer.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: Responsive.contentInset),
+            stackContainer.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -Responsive.contentInset),
+            stackContainer.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -Responsive.padding(50)),
+            stackContainer.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -Responsive.contentInset * 2)
         ])
 
         stackContainer.addArrangedSubview(buildAudioCard())
@@ -202,7 +215,7 @@ class SettingsViewController: UIViewController {
         // Top: label on left, mute icon-button on right
         let nameLbl = UILabel()
         nameLbl.text = label
-        nameLbl.font = .systemFont(ofSize: 14, weight: .semibold)
+        nameLbl.font = .systemFont(ofSize: Responsive.font(14), weight: .semibold)
         nameLbl.textColor = .white
         nameLbl.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
@@ -224,7 +237,7 @@ class SettingsViewController: UIViewController {
         slider.tintColor    = UIColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 1)
         slider.translatesAutoresizingMaskIntoConstraints = false
 
-        pctLabel.font          = .systemFont(ofSize: 11, weight: .semibold)
+        pctLabel.font          = .systemFont(ofSize: Responsive.font(11), weight: .semibold)
         pctLabel.textColor     = UIColor.white.withAlphaComponent(0.45)
         pctLabel.textAlignment = .right
         pctLabel.setContentHuggingPriority(.required, for: .horizontal)

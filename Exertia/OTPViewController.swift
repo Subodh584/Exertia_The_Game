@@ -73,21 +73,21 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
     
     func setupGlassCard() {
         glassCard.backgroundColor = UIColor.white.withAlphaComponent(0.15)
-        glassCard.layer.cornerRadius = 24
+        glassCard.layer.cornerRadius = Responsive.cornerRadius(24)
         glassCard.layer.borderWidth = 1
         glassCard.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         glassCard.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(glassCard)
         
         titleLabel.text = "Verification"
-        titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: Responsive.font(28), weight: .bold)
         titleLabel.textColor = .white
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(titleLabel)
         
         subtitleLabel.text = "Enter the 4-digit code sent to your email."
-        subtitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        subtitleLabel.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         subtitleLabel.textColor = UIColor(white: 0.9, alpha: 1.0)
         subtitleLabel.textAlignment = .center
         subtitleLabel.numberOfLines = 0
@@ -95,16 +95,16 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
         glassCard.addSubview(subtitleLabel)
         
         otpStackView.axis = .horizontal
-        otpStackView.spacing = 15
+        otpStackView.spacing = Responsive.padding(15)
         otpStackView.distribution = .fillEqually
         otpStackView.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(otpStackView)
         
         for field in otpFields {
             field.backgroundColor = .white
-            field.layer.cornerRadius = 14
+            field.layer.cornerRadius = Responsive.cornerRadius(14)
             field.textColor = .black
-            field.font = .systemFont(ofSize: 28, weight: .bold)
+            field.font = .systemFont(ofSize: Responsive.font(28), weight: .bold)
             field.textAlignment = .center
             field.keyboardType = .numberPad
             field.delegate = self
@@ -121,8 +121,8 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
         verifyButton.setTitle("Verify & Continue", for: .normal)
         verifyButton.backgroundColor = UIColor(red: 0.0, green: 0.2, blue: 0.4, alpha: 1.0)
         verifyButton.setTitleColor(.white, for: .normal)
-        verifyButton.layer.cornerRadius = 27.5
-        verifyButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        verifyButton.layer.cornerRadius = Responsive.cornerRadius(27.5)
+        verifyButton.titleLabel?.font = .systemFont(ofSize: Responsive.font(18), weight: .bold)
         verifyButton.addTarget(self, action: #selector(verifyTapped), for: .touchUpInside)
         verifyButton.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(verifyButton)
@@ -134,7 +134,7 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
             glassCard.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 40),
             glassCard.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -40),
             
-            titleLabel.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: 40),
+            titleLabel.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: Responsive.padding(40)),
             titleLabel.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 20),
             titleLabel.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -20),
             
@@ -144,12 +144,12 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
             
             otpStackView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 40),
             otpStackView.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            otpStackView.widthAnchor.constraint(equalToConstant: 260),
+            otpStackView.widthAnchor.constraint(equalToConstant: Responsive.size(260)),
             
-            verifyButton.topAnchor.constraint(equalTo: otpStackView.bottomAnchor, constant: 45),
+            verifyButton.topAnchor.constraint(equalTo: otpStackView.bottomAnchor, constant: Responsive.padding(45)),
             verifyButton.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 25),
             verifyButton.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -25),
-            verifyButton.heightAnchor.constraint(equalToConstant: 55),
+            verifyButton.heightAnchor.constraint(equalToConstant: Responsive.size(55)),
             verifyButton.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -40)
         ])
     }

@@ -138,28 +138,28 @@ class MultiplayerViewController: UIViewController, UITableViewDataSource, UITabl
         
         NSLayoutConstraint.activate([
             tabBarContainer.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -5),
-            tabBarContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            tabBarContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            tabBarContainer.heightAnchor.constraint(equalToConstant: 70)
+            tabBarContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Responsive.contentInset),
+            tabBarContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Responsive.contentInset),
+            tabBarContainer.heightAnchor.constraint(equalToConstant: Responsive.tabBarHeight)
         ])
         
         tabBarContainer.backgroundColor = .clear
         let blurEffect = UIBlurEffect(style: .systemThinMaterialDark)
         let blurView = UIVisualEffectView(effect: blurEffect)
         blurView.translatesAutoresizingMaskIntoConstraints = false
-        blurView.layer.cornerRadius = 35
+        blurView.layer.cornerRadius = Responsive.tabBarCornerRadius
         blurView.clipsToBounds = true
         blurView.isUserInteractionEnabled = false
         tabBarContainer.insertSubview(blurView, at: 0)
-        
+
         NSLayoutConstraint.activate([
             blurView.topAnchor.constraint(equalTo: tabBarContainer.topAnchor),
             blurView.bottomAnchor.constraint(equalTo: tabBarContainer.bottomAnchor),
             blurView.leadingAnchor.constraint(equalTo: tabBarContainer.leadingAnchor),
             blurView.trailingAnchor.constraint(equalTo: tabBarContainer.trailingAnchor)
         ])
-        
-        tabBarContainer.layer.cornerRadius = 35
+
+        tabBarContainer.layer.cornerRadius = Responsive.tabBarCornerRadius
         tabBarContainer.layer.borderWidth = 1.0
         tabBarContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
         
@@ -197,12 +197,12 @@ class MultiplayerViewController: UIViewController, UITableViewDataSource, UITabl
             let iconImageView = UIImageView(image: UIImage(named: iconName))
             iconImageView.contentMode = .scaleAspectFit
             iconImageView.translatesAutoresizingMaskIntoConstraints = false
-            iconImageView.widthAnchor.constraint(equalToConstant: 44).isActive = true
-            iconImageView.heightAnchor.constraint(equalToConstant: 34).isActive = true
-            
+            iconImageView.widthAnchor.constraint(equalToConstant: Responsive.size(44)).isActive = true
+            iconImageView.heightAnchor.constraint(equalToConstant: Responsive.size(34)).isActive = true
+
             let label = UILabel()
             label.text = title
-            label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
+            label.font = UIFont.systemFont(ofSize: Responsive.font(10), weight: .semibold)
             label.textColor = .lightGray
             label.textAlignment = .center
             
@@ -320,7 +320,7 @@ class MultiplayerViewController: UIViewController, UITableViewDataSource, UITabl
     
     // MARK: - Styles
     func stylePopup() {
-        addFriendPopupView.layer.cornerRadius = 23
+        addFriendPopupView.layer.cornerRadius = Responsive.cornerRadius(23)
         addFriendPopupView.layer.masksToBounds = true
         addFriendPopupView.layer.borderWidth = 2
         addFriendPopupView.layer.borderColor = UIColor(red: 1.0, green: 0.937, blue: 0.745, alpha: 1.0).cgColor
@@ -372,5 +372,5 @@ class MultiplayerViewController: UIViewController, UITableViewDataSource, UITabl
         return cell
     }
     
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { return 96 }
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { return Responsive.size(96) }
 }

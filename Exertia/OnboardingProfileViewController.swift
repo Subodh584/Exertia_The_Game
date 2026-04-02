@@ -138,7 +138,7 @@ class OnboardingProfileViewController: UIViewController {
 
     func setupGlassCard() {
         glassCard.backgroundColor = UIColor.white.withAlphaComponent(0.15)
-        glassCard.layer.cornerRadius = 24
+        glassCard.layer.cornerRadius = Responsive.cornerRadius(24)
         glassCard.layer.borderWidth = 1
         glassCard.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         glassCard.translatesAutoresizingMaskIntoConstraints = false
@@ -146,7 +146,7 @@ class OnboardingProfileViewController: UIViewController {
 
         // Title
         titleLabel.text = "Set Up Your Profile"
-        titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: Responsive.font(28), weight: .bold)
         titleLabel.textColor = .white
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -154,7 +154,7 @@ class OnboardingProfileViewController: UIViewController {
 
         // Subtitle
         subtitleLabel.text = "Choose a username and set your daily fitness goals"
-        subtitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        subtitleLabel.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         subtitleLabel.textColor = UIColor(white: 0.9, alpha: 1.0)
         subtitleLabel.textAlignment = .center
         subtitleLabel.numberOfLines = 0
@@ -175,8 +175,8 @@ class OnboardingProfileViewController: UIViewController {
         // Save Button
         saveButton.setTitle("Save & Continue", for: .normal)
         saveButton.backgroundColor = UIColor(red: 0.0, green: 0.2, blue: 0.4, alpha: 1.0)
-        saveButton.layer.cornerRadius = 12
-        saveButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        saveButton.layer.cornerRadius = Responsive.cornerRadius(12)
+        saveButton.titleLabel?.font = .systemFont(ofSize: Responsive.font(18), weight: .bold)
         saveButton.setTitleColor(.white, for: .normal)
         saveButton.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
         saveButton.translatesAutoresizingMaskIntoConstraints = false
@@ -203,22 +203,22 @@ class OnboardingProfileViewController: UIViewController {
             usernameField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 35),
             usernameField.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 25),
             usernameField.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -25),
-            usernameField.heightAnchor.constraint(equalToConstant: 50),
+            usernameField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
 
             targetCaloriesField.topAnchor.constraint(equalTo: usernameField.bottomAnchor, constant: 15),
             targetCaloriesField.leadingAnchor.constraint(equalTo: usernameField.leadingAnchor),
             targetCaloriesField.trailingAnchor.constraint(equalTo: usernameField.trailingAnchor),
-            targetCaloriesField.heightAnchor.constraint(equalToConstant: 50),
+            targetCaloriesField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
 
             targetMinutesField.topAnchor.constraint(equalTo: targetCaloriesField.bottomAnchor, constant: 15),
             targetMinutesField.leadingAnchor.constraint(equalTo: usernameField.leadingAnchor),
             targetMinutesField.trailingAnchor.constraint(equalTo: usernameField.trailingAnchor),
-            targetMinutesField.heightAnchor.constraint(equalToConstant: 50),
+            targetMinutesField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
 
             saveButton.topAnchor.constraint(equalTo: targetMinutesField.bottomAnchor, constant: 35),
             saveButton.leadingAnchor.constraint(equalTo: usernameField.leadingAnchor),
             saveButton.trailingAnchor.constraint(equalTo: usernameField.trailingAnchor),
-            saveButton.heightAnchor.constraint(equalToConstant: 50),
+            saveButton.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
             saveButton.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -40),
 
             activityIndicator.centerXAnchor.constraint(equalTo: saveButton.centerXAnchor),
@@ -229,7 +229,7 @@ class OnboardingProfileViewController: UIViewController {
     // MARK: - Helpers
     func styleTextField(_ textField: UITextField, placeholder: String, icon: String) {
         textField.backgroundColor = .white
-        textField.layer.cornerRadius = 10
+        textField.layer.cornerRadius = Responsive.cornerRadius(10)
         textField.placeholder = placeholder
         textField.textColor = .black
         textField.autocapitalizationType = .none
@@ -239,8 +239,8 @@ class OnboardingProfileViewController: UIViewController {
         iconView.tintColor = .darkGray
         iconView.contentMode = .scaleAspectFit
 
-        let leftContainer = UIView(frame: CGRect(x: 0, y: 0, width: 40, height: 50))
-        iconView.frame = CGRect(x: 12, y: 15, width: 20, height: 20)
+        let leftContainer = UIView(frame: CGRect(x: 0, y: 0, width: Responsive.size(40), height: Responsive.size(50)))
+        iconView.frame = CGRect(x: Responsive.padding(12), y: Responsive.padding(15), width: Responsive.size(20), height: Responsive.size(20))
         leftContainer.addSubview(iconView)
 
         textField.leftView = leftContainer
