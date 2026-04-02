@@ -2224,24 +2224,21 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                 let oldVal = beatDist ? String(format: "%.2f", prevBestDist) : "\(prevBestCal)"
                 let unit = beatDist ? "km" : "kcal"
 
-                let highScoreView = HighScorePopupView(
-                    metricName: metricName,
-                    newValue: newVal,
-                    oldValue: oldVal,
-                    unit: unit
-                ) { [weak self] in
-                    // Dismiss high score popup, then show session summary
+                let highScoreVC = HighScoreViewController()
+                highScoreVC.metricName = metricName
+                highScoreVC.newValue   = newVal
+                highScoreVC.oldValue   = oldVal
+                highScoreVC.unit       = unit
+                highScoreVC.onContinue = { [weak self] in
                     self?.highScoreHostingController?.dismiss(animated: true) {
                         self?.highScoreHostingController = nil
                         presentSummary()
                     }
                 }
-                let hosting = UIHostingController(rootView: highScoreView)
-                hosting.modalPresentationStyle = .overFullScreen
-                hosting.modalTransitionStyle = .crossDissolve
-                hosting.view.backgroundColor = .clear
-                self.present(hosting, animated: true)
-                self.highScoreHostingController = hosting
+                highScoreVC.modalPresentationStyle = .overFullScreen
+                highScoreVC.modalTransitionStyle   = .crossDissolve
+                self.present(highScoreVC, animated: true)
+                self.highScoreHostingController = highScoreVC
             } else {
                 presentSummary()
             }

@@ -176,25 +176,41 @@ class GameData {
                 completion_status: completionStatus
             )
 
-            var lastError: Error?
+            // Step 1: Create the session row — retry up to 3 times.
+            // IMPORTANT: createSession and completeSession are retried independently
+            // so a failed completeSession never causes a duplicate row to be inserted.
+            var createdSession: AppSession?
             for attempt in 1...3 {
                 do {
-                    let created = try await SupabaseManager.shared.createSession(session: insert)
-                    if let sessionId = created.id {
-                        try await SupabaseManager.shared.completeSession(sessionId: sessionId, caloriesBurned: calories)
-                        print("✅ Game Session successfully saved to Supabase!")
-                    }
-                    return
+                    createdSession = try await SupabaseManager.shared.createSession(session: insert)
+                    break
                 } catch {
-                    lastError = error
-                    print("⚠️ Supabase sync attempt \(attempt)/3 failed: \(error.localizedDescription)")
+                    print("⚠️ createSession attempt \(attempt)/3 failed: \(error.localizedDescription)")
                     if attempt < 3 {
-                        // Exponential backoff: 2s then 4s
                         try? await Task.sleep(nanoseconds: UInt64(attempt) * 2_000_000_000)
+                    } else {
+                        print("❌ Could not create session in Supabase after 3 attempts.")
+                        return
                     }
                 }
             }
-            print("❌ Failed to sync session to Supabase after 3 attempts: \(lastError?.localizedDescription ?? "unknown")")
+
+            // Step 2: Mark it complete — retry independently, no new row created.
+            guard let sessionId = createdSession?.id else { return }
+            for attempt in 1...3 {
+                do {
+                    try await SupabaseManager.shared.completeSession(sessionId: sessionId, caloriesBurned: calories)
+                    print("✅ Game Session successfully saved to Supabase!")
+                    return
+                } catch {
+                    print("⚠️ completeSession attempt \(attempt)/3 failed: \(error.localizedDescription)")
+                    if attempt < 3 {
+                        try? await Task.sleep(nanoseconds: UInt64(attempt) * 2_000_000_000)
+                    } else {
+                        print("❌ Session created but completeSession failed after 3 attempts (id: \(sessionId))")
+                    }
+                }
+            }
         }
     }
 }
