@@ -25,6 +25,8 @@ class MultiplayerViewController: UIViewController, UITableViewDataSource, UITabl
     private var tabWrappers: [UIView] = []
     private let currentTabIndex = 1 // Multiplayer is Index 1
     
+    private let loadingIndicator = UIActivityIndicatorView(style: .large)
+
     // MARK: - Data
     var onlineFriends: [Friend] = []
     var offlineFriends: [Friend] = []
@@ -48,6 +50,15 @@ class MultiplayerViewController: UIViewController, UITableViewDataSource, UITabl
         // Setup Tab Bar
         setupGlassTabBarDesign()
         setupCustomTabs()
+
+        loadingIndicator.color = .white
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
     }
     
     override func viewDidLayoutSubviews() {
@@ -72,6 +83,7 @@ class MultiplayerViewController: UIViewController, UITableViewDataSource, UITabl
             return
         }
 
+        loadingIndicator.startAnimating()
         Task {
             do {
                 // 1. Fetch accepted friendships for this user
@@ -106,12 +118,14 @@ class MultiplayerViewController: UIViewController, UITableViewDataSource, UITabl
                 }
 
                 DispatchQueue.main.async {
+                    self.loadingIndicator.stopAnimating()
                     self.onlineFriends = loadedFriends.filter { $0.isOnline }
                     self.offlineFriends = loadedFriends.filter { !$0.isOnline }
                     self.friendsTableView.reloadData()
                     print("✅ Friends list hydrated from Supabase! Online: \(self.onlineFriends.count), Offline: \(self.offlineFriends.count)")
                 }
             } catch {
+                DispatchQueue.main.async { self.loadingIndicator.stopAnimating() }
                 print("❌ Failed to fetch friends: \(error)")
             }
         }

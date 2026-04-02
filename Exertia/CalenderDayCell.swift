@@ -11,6 +11,7 @@ class CalendarDayCell: UICollectionViewCell {
     let dayLabel = UILabel()      // "SAT"
     let dateLabel = UILabel()     // "21"
     let medalImageView = UIImageView()
+    private let borderView = UIView()
 
     // IST formatter — shared across all cells for efficiency
     private static let istTimeZone = TimeZone(identifier: "Asia/Kolkata")!
@@ -37,6 +38,13 @@ class CalendarDayCell: UICollectionViewCell {
     }
 
     private func setupLayout() {
+        borderView.layer.cornerRadius = 12
+        borderView.layer.borderWidth = 0
+        borderView.layer.borderColor = UIColor.clear.cgColor
+        borderView.backgroundColor = .clear
+        borderView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(borderView)
+
         dayLabel.font = .systemFont(ofSize: 9, weight: .semibold)
         dayLabel.textColor = .lightGray
         dayLabel.textAlignment = .center
@@ -54,6 +62,11 @@ class CalendarDayCell: UICollectionViewCell {
         contentView.addSubview(medalImageView)
 
         NSLayoutConstraint.activate([
+            borderView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2),
+            borderView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -2),
+            borderView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 4),
+            borderView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -4),
+
             dayLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
             dayLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
@@ -69,7 +82,7 @@ class CalendarDayCell: UICollectionViewCell {
 
     /// If target is met, the date number is replaced by a medal icon.
     /// Today gets pink-colored text. No box backgrounds on any cell.
-    func configure(date: Date, isToday: Bool, targetMet: Bool) {
+    func configure(date: Date, isToday: Bool, targetMet: Bool, hasAbandonedSession: Bool = false) {
         dayLabel.text = Self.dayFmt.string(from: date).uppercased()
         dateLabel.text = Self.dateFmt.string(from: date)
 
@@ -77,6 +90,8 @@ class CalendarDayCell: UICollectionViewCell {
         contentView.layer.borderWidth = 0
         contentView.layer.cornerRadius = 0
         contentView.backgroundColor = .clear
+        borderView.layer.borderWidth = 0
+        borderView.layer.borderColor = UIColor.clear.cgColor
         medalImageView.image = nil
         medalImageView.isHidden = true
         dateLabel.isHidden = false
@@ -100,6 +115,11 @@ class CalendarDayCell: UICollectionViewCell {
         } else {
             dayLabel.textColor = UIColor.white.withAlphaComponent(0.25)
             dateLabel.textColor = UIColor.white.withAlphaComponent(0.25)
+        }
+
+        if hasAbandonedSession && !targetMet {
+            borderView.layer.borderWidth = 1
+            borderView.layer.borderColor = UIColor(red: 1.0, green: 0.62, blue: 0.18, alpha: 0.8).cgColor
         }
     }
 }

@@ -8,6 +8,7 @@
 
 import UIKit
 import SceneKit
+import SwiftUI
 
 class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
@@ -70,7 +71,20 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var totalCrouches: Int = 0
     private var totalLeftLeans: Int = 0
     private var totalRightLeans: Int = 0
+    private var totalSpotRunningReps: Int = 0
     private var totalDistanceCovered: Float = 0.0
+
+    // MARK: - Session Target Tracking
+    private var sessionTargetCalories: Int = 0
+    private var sessionTargetDistanceKm: Double = 0.0
+    private var caloriesTargetMet: Bool = false
+    private var distanceTargetMet: Bool = false
+    private var allTargetsPopupShown: Bool = false
+    private(set) var isShowingTargetsPopup: Bool = false
+    private var targetCheckAccumulator: Float = 0.0
+    private var caloriesBadgeView: UIView?
+    private var distanceBadgeView: UIView?
+    private var targetsPopupHostingController: UIViewController?
     private let sceneKitUnitsToMeters: Float = 0.1
     private var endGameButton: UIButton?
     private var pauseGameButton: UIButton?
@@ -78,6 +92,11 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var resumeGameButton: UIButton?
     private var quitGameButton: UIButton?
     private var isGamePaused = false
+
+    // MARK: - Pause State
+    var isPaused: Bool = false
+    private var pauseMenuHostingController: UIViewController?
+    private var summaryHostingController: UIViewController?
 
 <<<<<<< Updated upstream
 =======
@@ -831,11 +850,49 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                 
                 // DAE exports from Blender lose their PBR/Metallic nodes. Let's restore them!
                 if let materials = node.geometry?.materials {
+
+                    // Detect face/visor region by node name or material name
+                    let nodeName = (node.name ?? "").lowercased()
+                    let isFaceNode = nodeName.contains("visor")     ||
+                                     nodeName.contains("face")      ||
+                                     nodeName.contains("glass")     ||
+                                     nodeName.contains("lens")      ||
+                                     nodeName.contains("mask")      ||
+                                     nodeName.contains("faceplate") ||
+                                     nodeName.contains("shield")    ||
+                                     nodeName.contains("head")
+
                     for material in materials {
                         material.lightingModel = .physicallyBased
                         material.metalness.contents = 0.8 // High metal finish
                         material.roughness.contents = 0.2 // Smooth reflection
                         material.isDoubleSided = true
+
+                        // Check material name for face/dark keywords
+                        let matName = (material.name ?? "").lowercased()
+                        let isFaceMaterial = matName.contains("visor")  ||
+                                             matName.contains("face")   ||
+                                             matName.contains("glass")  ||
+                                             matName.contains("lens")   ||
+                                             matName.contains("dark")   ||
+                                             matName.contains("black")
+
+                        // Check if diffuse is a plain dark/black UIColor
+                        var isDarkColor = false
+                        if let col = material.diffuse.contents as? UIColor {
+                            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                            col.getRed(&r, green: &g, blue: &b, alpha: &a)
+                            isDarkColor = (0.299 * r + 0.587 * g + 0.114 * b) < 0.15
+                        }
+
+                        // Force the entire face region + any black material to white
+                        // This eliminates z-fighting between the helmet and visor surfaces
+                        if isFaceNode || isFaceMaterial || isDarkColor {
+                            material.diffuse.contents   = UIColor.white
+                            material.specular.contents  = UIColor.white
+                            material.metalness.contents = 0.9
+                            material.roughness.contents = 0.1
+                        }
                     }
                 }
             }
@@ -1387,6 +1444,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
     func playerJump() {
         guard isGameRunning, !isJumping else { return }
+        totalJumps += 1
         isJumping = true
         isJumpingUp = true
         isLanding = false
@@ -1529,6 +1587,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     
     /// Called when a running rep is completed - adds 20% to current tier
     func onRunningRepCompleted() {
+        totalSpotRunningReps += 1
         let repBoost: Float = 0.2
         speedBarFill = min(3.0, speedBarFill + repBoost)
         
@@ -1880,44 +1939,34 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     // MARK: - End Game Button & Session Finalization
 
     private func setupEndGameButton() {
-        let pauseButton = UIButton(type: .system)
-        pauseButton.setTitle("PAUSE", for: .normal)
-        pauseButton.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .bold)
-        pauseButton.setTitleColor(UIColor(red: 0.95, green: 0.95, blue: 1.0, alpha: 1.0), for: .normal)
-        pauseButton.backgroundColor = UIColor(red: 0.06, green: 0.08, blue: 0.16, alpha: 0.9)
-        pauseButton.layer.cornerRadius = 10
-        pauseButton.layer.borderWidth = 1.0
-        pauseButton.layer.borderColor = UIColor.white.withAlphaComponent(0.25).cgColor
-        pauseButton.translatesAutoresizingMaskIntoConstraints = false
-        pauseButton.addTarget(self, action: #selector(togglePauseTapped), for: .touchUpInside)
-        view.addSubview(pauseButton)
-        pauseGameButton = pauseButton
-
         let button = UIButton(type: .system)
-        button.setTitle("  END  ", for: .normal)
+
+        // Pause icon + label
+        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+        let icon = UIImage(systemName: "pause.fill", withConfiguration: config)
+        button.setImage(icon, for: .normal)
+        button.setTitle("  PAUSE", for: .normal)
         button.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .bold)
-        button.setTitleColor(UIColor(red: 1.0, green: 0.15, blue: 0.25, alpha: 1.0), for: .normal)
-        button.backgroundColor = UIColor(red: 0.12, green: 0.02, blue: 0.04, alpha: 0.9)
+        button.tintColor = UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0)
+        button.setTitleColor(UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0), for: .normal)
+        button.backgroundColor = UIColor(red: 0.0, green: 0.12, blue: 0.15, alpha: 0.9)
         button.layer.cornerRadius = 10
         button.layer.borderWidth = 1.0
-        button.layer.borderColor = UIColor(red: 1.0, green: 0.15, blue: 0.25, alpha: 0.5).cgColor
-        button.layer.shadowColor = UIColor(red: 1.0, green: 0.15, blue: 0.25, alpha: 1.0).cgColor
+        button.layer.borderColor = UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 0.4).cgColor
+        button.layer.shadowColor = UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0).cgColor
         button.layer.shadowRadius = 6
-        button.layer.shadowOpacity = 0.4
+        button.layer.shadowOpacity = 0.35
         button.layer.shadowOffset = .zero
+        button.contentEdgeInsets = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 12)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(endGameButtonTapped), for: .touchUpInside)
         view.addSubview(button)
         endGameButton = button
 
         NSLayoutConstraint.activate([
-            pauseButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
-            pauseButton.trailingAnchor.constraint(equalTo: button.leadingAnchor, constant: -12),
-            pauseButton.heightAnchor.constraint(equalToConstant: 32),
-
             button.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             button.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            button.heightAnchor.constraint(equalToConstant: 32)
+            button.heightAnchor.constraint(equalToConstant: 36)
         ])
 
         let overlay = UIView(frame: view.bounds)
@@ -1984,13 +2033,12 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     }
 
     @objc private func endGameButtonTapped() {
-        AudioManager.shared.playEffect(.buttonTapped)
-        guard isGameRunning || isGamePaused else { return }
-        finalizeAndSaveSession(completionStatus: "completed")
+        guard isGameRunning, !isPaused, !isShowingTargetsPopup else { return }
+        pauseGame()
     }
 
     @objc private func togglePauseTapped() {
-        guard loadingOverlay == nil else { return }
+        guard loadingOverlay == nil, !isShowingTargetsPopup else { return }
         isGamePaused.toggle()
         AudioManager.shared.playEffect(.pauseResume)
 
@@ -2029,6 +2077,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
             crouches: totalCrouches,
             leftLeans: totalLeftLeans,
             rightLeans: totalRightLeans,
+            steps: totalSpotRunningReps * 2,
             distanceCovered: distanceMeters,
             averageSpeed: avgSpeed,
             completionStatus: completionStatus
@@ -2039,6 +2088,251 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.dismiss(animated: true)
         }
+    }
+
+    // MARK: - Pause / Resume
+
+    func pauseGame() {
+        guard isGameRunning, !isPaused else { return }
+        isPaused = true
+        isGameRunning = false
+        sceneView.isPlaying = false
+        showPauseMenu()
+    }
+
+    func resumeGame() {
+        guard isPaused else { return }
+        pauseMenuHostingController?.dismiss(animated: true) { [weak self] in
+            guard let self = self else { return }
+            self.pauseMenuHostingController = nil
+            self.isPaused = false
+            self.isGameRunning = true
+            self.sceneView.isPlaying = true
+        }
+    }
+
+    private func showPauseMenu() {
+        let elapsed      = Date().timeIntervalSince(sessionStartTime)
+        let currentCal   = Int(elapsed * (80.0 / 600.0))
+        let currentDistKm = Double(totalDistanceCovered) / 1000.0
+        let targetDistKm = DifficultySettings.shared.selectedDistanceKm
+        let targetCal    = Int((targetDistKm * 100).rounded())
+
+        let menuView = PauseMenuView(
+            currentCalories:   currentCal,
+            targetCalories:    targetCal,
+            currentDistanceKm: currentDistKm,
+            targetDistanceKm:  targetDistKm,
+            onResume:         { [weak self] in self?.resumeGame() },
+            onExitConfirmed:  { [weak self] in self?.exitAndShowSummary() }
+        )
+
+        let hosting = UIHostingController(rootView: menuView)
+        hosting.modalPresentationStyle = .overFullScreen
+        hosting.modalTransitionStyle   = .crossDissolve
+        hosting.view.backgroundColor   = .clear
+        present(hosting, animated: true)
+        pauseMenuHostingController = hosting
+    }
+
+    // MARK: - Exit → Summary
+
+    func exitAndShowSummary() {
+        // Stop the game
+        isGameRunning = false
+        isPaused      = false
+        sceneView.isPlaying = false
+
+        // Compute session stats
+        let durationSeconds = Int(Date().timeIntervalSince(sessionStartTime))
+        let durationMinutes = max(1, durationSeconds / 60)
+        let caloriesBurned  = Int(Double(durationSeconds) * (80.0 / 600.0))
+        let distanceMeters  = Double(totalDistanceCovered)
+        let avgSpeed: Double? = durationMinutes > 0 ? distanceMeters / Double(durationMinutes) : nil
+        let character  = GameData.shared.getSelectedPlayer()
+        let trackName  = DifficultySettings.shared.selectedTrackDisplayName
+        let trackId    = DifficultySettings.shared.selectedTrackId
+
+        let totalSteps       = totalSpotRunningReps * 2
+        let completionStatus = (caloriesTargetMet && distanceTargetMet) ? "completed" : "abandoned"
+
+        let summaryData = SessionSummaryData(
+            trackName:        trackName,
+            durationSeconds:  durationSeconds,
+            caloriesBurned:   caloriesBurned,
+            completionStatus: completionStatus,
+            characterName:    character.name,
+            avgSpeedMpMin:    avgSpeed,
+            totalJumps:       totalJumps,
+            totalCrouches:    totalCrouches,
+            totalLeftLeans:   totalLeftLeans,
+            totalRightLeans:  totalRightLeans,
+            distanceMeters:   distanceMeters,
+            totalSteps:       totalSteps
+        )
+
+        // Capture values for the closure (avoid capturing self strongly in summary)
+        let capturedDuration          = durationMinutes
+        let capturedCal               = caloriesBurned
+        let capturedDist              = distanceMeters
+        let capturedSpeed             = avgSpeed
+        let capturedJumps             = totalJumps
+        let capturedCrouches          = totalCrouches
+        let capturedLeftLeans         = totalLeftLeans
+        let capturedRightLeans        = totalRightLeans
+        let capturedSteps             = totalSteps
+        let capturedCompletionStatus  = completionStatus
+        let capturedCharacter         = character
+        let capturedTrack             = trackName
+        let capturedTrackId           = trackId
+
+        // Dismiss pause menu (no animation) then show summary
+        pauseMenuHostingController?.dismiss(animated: false)
+        pauseMenuHostingController = nil
+
+        let summaryView = SessionSummaryView(summary: summaryData) {
+            // Save to Supabase when user taps "Go Home"
+            GameData.shared.addSession(
+                duration:         capturedDuration,
+                calories:         capturedCal,
+                track:            capturedTrack,
+                trackId:          capturedTrackId,
+                characterId:      capturedCharacter.id,
+                jumps:            capturedJumps,
+                crouches:         capturedCrouches,
+                leftLeans:        capturedLeftLeans,
+                rightLeans:       capturedRightLeans,
+                steps:            capturedSteps,
+                distanceCovered:  capturedDist,
+                averageSpeed:     capturedSpeed,
+                completionStatus: capturedCompletionStatus
+            )
+            // Navigate all the way home via notification (HomeVC dismisses its stack)
+            NotificationCenter.default.post(name: .navigateToHome, object: nil)
+        }
+
+        let hosting = UIHostingController(rootView: summaryView)
+        hosting.modalPresentationStyle = .overFullScreen
+        hosting.modalTransitionStyle   = .crossDissolve
+        hosting.view.backgroundColor   = UIColor(red: 0.02, green: 0.02, blue: 0.06, alpha: 1.0)
+        present(hosting, animated: true)
+        summaryHostingController = hosting
+    }
+
+    // MARK: - Session Target Indicators
+
+    private func checkSessionTargets() {
+        let elapsedSeconds = Date().timeIntervalSince(sessionStartTime)
+        let currentCalories = Int(elapsedSeconds * (80.0 / 600.0))
+        let currentDistKm   = Double(totalDistanceCovered) / 1000.0
+
+        if !caloriesTargetMet && sessionTargetCalories > 0 && currentCalories >= sessionTargetCalories {
+            caloriesTargetMet = true
+            DispatchQueue.main.async { [weak self] in self?.showTargetBadge(isCalories: true) }
+        }
+
+        if !distanceTargetMet && sessionTargetDistanceKm > 0 && currentDistKm >= sessionTargetDistanceKm {
+            distanceTargetMet = true
+            DispatchQueue.main.async { [weak self] in self?.showTargetBadge(isCalories: false) }
+        }
+
+        if caloriesTargetMet && distanceTargetMet && !allTargetsPopupShown {
+            allTargetsPopupShown = true
+            DispatchQueue.main.async { [weak self] in self?.showAllTargetsMetPopup() }
+        }
+    }
+
+    private func showTargetBadge(isCalories: Bool) {
+        let systemIcon  = isCalories ? "flame.fill"  : "figure.run"
+        let label       = isCalories ? "CALORIES GOAL ✓" : "DISTANCE GOAL ✓"
+        let accentColor = isCalories
+            ? UIColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 1.0)   // amber
+            : UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0)   // cyan
+
+        let badge = makeBadgeView(systemIcon: systemIcon, label: label, accentColor: accentColor)
+
+        // Slot 1 = calories (top), Slot 2 = distance (below)
+        let safeTop = view.safeAreaInsets.top
+        let slotY: CGFloat = isCalories ? safeTop + 16 : safeTop + 64
+        let badgeW: CGFloat = badge.frame.width
+
+        badge.frame = CGRect(x: -badgeW - 10, y: slotY, width: badgeW, height: badge.frame.height)
+        view.addSubview(badge)
+
+        if isCalories { caloriesBadgeView = badge } else { distanceBadgeView = badge }
+
+        UIView.animate(withDuration: 0.45, delay: 0,
+                       usingSpringWithDamping: 0.72, initialSpringVelocity: 0.4,
+                       options: .curveEaseOut) {
+            badge.frame.origin.x = 14
+        }
+    }
+
+    private func makeBadgeView(systemIcon: String, label: String, accentColor: UIColor) -> UIView {
+        let height: CGFloat = 36
+        let width:  CGFloat = 182
+
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        container.backgroundColor = UIColor(red: 0.04, green: 0.04, blue: 0.12, alpha: 0.92)
+        container.layer.cornerRadius = height / 2
+        container.layer.borderWidth  = 1.2
+        container.layer.borderColor  = accentColor.withAlphaComponent(0.7).cgColor
+        container.layer.shadowColor  = accentColor.cgColor
+        container.layer.shadowOpacity = 0.45
+        container.layer.shadowRadius  = 8
+        container.layer.shadowOffset  = .zero
+
+        let cfg      = UIImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+        let iconImg  = UIImage(systemName: systemIcon, withConfiguration: cfg)
+        let iconView = UIImageView(frame: CGRect(x: 12, y: (height - 16) / 2, width: 16, height: 16))
+        iconView.image       = iconImg
+        iconView.tintColor   = accentColor
+        iconView.contentMode = .scaleAspectFit
+
+        let textLbl = UILabel(frame: CGRect(x: 36, y: 0, width: width - 46, height: height))
+        textLbl.text      = label
+        textLbl.font      = .monospacedSystemFont(ofSize: 10, weight: .bold)
+        textLbl.textColor = UIColor.white.withAlphaComponent(0.9)
+
+        container.addSubview(iconView)
+        container.addSubview(textLbl)
+        return container
+    }
+
+    private func showAllTargetsMetPopup() {
+        sceneView.isPlaying  = false
+        isGameRunning        = false
+        isShowingTargetsPopup = true
+
+        let popup = AllTargetsMetPopupView(
+            onContinue: { [weak self] in self?.dismissTargetsPopup() },
+            onExit:     { [weak self] in self?.dismissTargetsPopupAndExit() }
+        )
+
+        let hosting = UIHostingController(rootView: popup)
+        hosting.modalPresentationStyle = .overFullScreen
+        hosting.modalTransitionStyle   = .crossDissolve
+        hosting.view.backgroundColor   = .clear
+        present(hosting, animated: true)
+        targetsPopupHostingController = hosting
+    }
+
+    func dismissTargetsPopup() {
+        isShowingTargetsPopup = false
+        targetsPopupHostingController?.dismiss(animated: true) { [weak self] in
+            guard let self else { return }
+            self.isGameRunning   = true
+            self.sceneView.isPlaying = true
+        }
+        targetsPopupHostingController = nil
+    }
+
+    private func dismissTargetsPopupAndExit() {
+        isShowingTargetsPopup = false
+        targetsPopupHostingController?.dismiss(animated: false) { [weak self] in
+            self?.exitAndShowSummary()
+        }
+        targetsPopupHostingController = nil
     }
 
 <<<<<<< Updated upstream
@@ -2335,7 +2629,22 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         totalCrouches = 0
         totalLeftLeans = 0
         totalRightLeans = 0
+        totalSpotRunningReps = 0
         totalDistanceCovered = 0.0
+
+        // Session target setup
+        let targetDistKm = DifficultySettings.shared.selectedDistanceKm
+        sessionTargetDistanceKm = targetDistKm
+        sessionTargetCalories   = Int((targetDistKm * 100).rounded())
+        caloriesTargetMet       = false
+        distanceTargetMet       = false
+        allTargetsPopupShown    = false
+        isShowingTargetsPopup   = false
+        targetCheckAccumulator  = 0.0
+        caloriesBadgeView?.removeFromSuperview()
+        caloriesBadgeView = nil
+        distanceBadgeView?.removeFromSuperview()
+        distanceBadgeView = nil
     }
     
     private var gameTime: TimeInterval = 0
@@ -2364,6 +2673,13 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         // Accumulate session distance (movement is negative when moving forward)
         if movement < 0 {
             totalDistanceCovered += abs(movement) * sceneKitUnitsToMeters
+        }
+
+        // Check session targets every second
+        targetCheckAccumulator += dt
+        if targetCheckAccumulator >= 1.0 {
+            targetCheckAccumulator = 0.0
+            checkSessionTargets()
         }
 
         // Handle Y position - either jumping or following ground

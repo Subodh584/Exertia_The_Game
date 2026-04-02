@@ -176,8 +176,32 @@ class CameraViewController: UIViewController {
     return button
   }()
   
+  private lazy var backButton: UIButton = {
+    precondition(isViewLoaded)
+    let button = UIButton(type: .system)
+    button.translatesAutoresizingMaskIntoConstraints = false
+    let cfg  = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
+    let icon = UIImage(systemName: "chevron.left", withConfiguration: cfg)
+    button.setImage(icon, for: .normal)
+    button.setTitle("  BACK", for: .normal)
+    button.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .bold)
+    button.tintColor        = UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0)
+    button.setTitleColor(UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0), for: .normal)
+    button.backgroundColor  = UIColor(red: 0.0, green: 0.12, blue: 0.15, alpha: 0.9)
+    button.layer.cornerRadius = 10
+    button.layer.borderWidth  = 1.0
+    button.layer.borderColor  = UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 0.4).cgColor
+    button.layer.shadowColor  = UIColor(red: 0.0, green: 0.95, blue: 1.0, alpha: 1.0).cgColor
+    button.layer.shadowRadius = 6
+    button.layer.shadowOpacity = 0.30
+    button.layer.shadowOffset  = .zero
+    button.contentEdgeInsets   = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 12)
+    button.addTarget(self, action: #selector(backButtonTapped), for: .touchUpInside)
+    return button
+  }()
+
   // MARK: - Detectors
-  
+
   private var poseDetector: PoseDetector? = nil
   private var jump2Detector: Jump2Detector? = nil
   private var crouchDetector: CrouchDetector? = nil
@@ -186,6 +210,9 @@ class CameraViewController: UIViewController {
   
   // SceneKit game view controller (new Exertia game)
   var exertiaGameVC: ExertiaGameViewController?
+
+  // Clap-to-pause detector
+  private var clapToPauseDetector: ClapToPause?
   
   private var lastDetector: Detector?
 
@@ -471,6 +498,23 @@ class CameraViewController: UIViewController {
     runningDetector?.onRepCompleted = { [weak self] repCount in
       self?.handleSpotRunningRep(repCount)
     }
+
+    // Clap-to-Pause Detector
+    clapToPauseDetector = ClapToPause()
+    clapToPauseDetector?.onClapDetected = { [weak self] in
+      DispatchQueue.main.async {
+        guard self?.currentStage == .gamePlaying else { return }
+        let gameVC = self?.exertiaGameVC
+        if gameVC?.isShowingTargetsPopup == true {
+          // Clap dismisses the "all targets met" popup and resumes the run
+          gameVC?.dismissTargetsPopup()
+        } else if gameVC?.isPaused == true {
+          gameVC?.resumeGame()
+        } else {
+          gameVC?.pauseGame()
+        }
+      }
+    }
   }
   
   private func handleJumpDetected() {
@@ -608,13 +652,19 @@ class CameraViewController: UIViewController {
     }
   }
 
+  // MARK: - Back Button Action
+
+  @objc private func backButtonTapped() {
+    navigationController?.popViewController(animated: true)
+  }
+
   // MARK: - Play Button Action
-  
+
   @objc func playButtonTapped(_ sender: Any) {
     AudioManager.shared.playEffect(.gameStart)
     // Set stage to game playing so detectors process poses
     currentStage = .gamePlaying
-    
+
     // Hide demo UI
     previewOverlayView.isHidden = true
     annotationOverlayView.isHidden = true
@@ -623,6 +673,7 @@ class CameraViewController: UIViewController {
     counterLabel.isHidden = true
     feedbackLabel.isHidden = true
     playButton.isHidden = true
+    backButton.isHidden = true
     
     cameraView.backgroundColor = .black
     
@@ -769,6 +820,11 @@ class CameraViewController: UIViewController {
           if strongSelf.currentStage == .spotRunningTest || strongSelf.currentStage == .gamePlaying {
             strongSelf.runningDetector?.processPose(pose)
           }
+
+          // Process clap-to-pause (only during game)
+          if strongSelf.currentStage == .gamePlaying {
+            strongSelf.clapToPauseDetector?.processPose(pose)
+          }
           
           // Always draw skeleton overlay
           let poseOverlayView = UIUtilities.createPoseOverlayView(
@@ -810,6 +866,14 @@ class CameraViewController: UIViewController {
   }
   
   private func setUpDemoUI() {
+    // Back button (top-left)
+    cameraView.addSubview(backButton)
+    NSLayoutConstraint.activate([
+      backButton.topAnchor.constraint(equalTo: cameraView.safeAreaLayoutGuide.topAnchor, constant: 16),
+      backButton.leadingAnchor.constraint(equalTo: cameraView.leadingAnchor, constant: 20),
+      backButton.heightAnchor.constraint(equalToConstant: 36),
+    ])
+
     // Stage title label (top)
     cameraView.addSubview(stageTitleLabel)
     NSLayoutConstraint.activate([

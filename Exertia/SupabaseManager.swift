@@ -58,8 +58,19 @@ struct AppSession: Codable {
     let total_crouches: Int?
     let total_left_leans: Int?
     let total_right_leans: Int?
+    let total_steps: Int?
     let completion_status: String?
     let created_at: String?
+}
+
+extension AppSession {
+    var countsTowardDailyProgress: Bool {
+        let status = completion_status?.lowercased() ?? ""
+        guard status == "completed" || status == "abandoned" else { return false }
+        let calories = calories_burned ?? 0
+        let distance = distance_covered ?? 0
+        return calories > 0 || distance > 0
+    }
 }
 
 struct AppUserStats: Codable {
@@ -131,6 +142,7 @@ struct SessionInsert: Encodable {
     let total_crouches: Int
     let total_left_leans: Int
     let total_right_leans: Int
+    let total_steps: Int
     let completion_status: String
 }
 
@@ -585,4 +597,3 @@ struct AnyEncodable: Encodable {
         try _encode(encoder)
     }
 }
-

@@ -13,10 +13,21 @@ struct GameSession {
     let totalCrouches: Int
     let totalLeftLeans: Int
     let totalRightLeans: Int
-    let distanceCovered: Double     // meters
+    let totalSteps: Int
+    let distanceCovered: Double     // km (Supabase) or meters (local session)
     let averageSpeed: Double?       // m/min, nil if zero duration
     let characterImageName: String
     let completionStatus: String    // "completed" or "abandoned"
+}
+
+// MARK: - Distance formatting helper
+/// Pass distance in km. Returns "450 m" below 1 km, "2.3 km" at or above.
+func formatDistanceKm(_ km: Double) -> String {
+    if km < 1.0 {
+        return "\(Int((km * 1000).rounded())) m"
+    } else {
+        return String(format: "%.1f km", km)
+    }
 }
 
 struct PlayerStats {
@@ -102,6 +113,7 @@ class GameData {
         crouches: Int,
         leftLeans: Int,
         rightLeans: Int,
+        steps: Int,
         distanceCovered: Double,
         averageSpeed: Double?,
         completionStatus: String = "completed"
@@ -118,6 +130,7 @@ class GameData {
             totalCrouches: crouches,
             totalLeftLeans: leftLeans,
             totalRightLeans: rightLeans,
+            totalSteps: steps,
             distanceCovered: distanceCovered,
             averageSpeed: averageSpeed,
             characterImageName: charImg,
@@ -131,7 +144,7 @@ class GameData {
         print("📊 Local stats updated! Syncing with Supabase...")
         print("   Track: \(track) (\(trackId)) | Character: \(characterId)")
         print("   Duration: \(duration)m | Calories: \(calories) | Distance: \(String(format: "%.1f", distanceCovered))m")
-        print("   Jumps: \(jumps) | Crouches: \(crouches) | Left: \(leftLeans) | Right: \(rightLeans)")
+        print("   Jumps: \(jumps) | Crouches: \(crouches) | Left: \(leftLeans) | Right: \(rightLeans) | Steps: \(steps)")
 
         let distanceKm = distanceCovered / 1000.0
 
@@ -154,6 +167,7 @@ class GameData {
                     total_crouches: crouches,
                     total_left_leans: leftLeans,
                     total_right_leans: rightLeans,
+                    total_steps: steps,
                     completion_status: completionStatus
                 )
 

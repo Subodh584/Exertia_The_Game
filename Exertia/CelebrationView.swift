@@ -15,9 +15,9 @@ final class CelebrationView: UIView {
     }
 
     /// Shows a badge earned celebration animation.
-    static func showBadge(on viewController: UIViewController, badgeName: String) {
+    static func showBadge(on viewController: UIViewController, badgeName: String, badgeImageName: String? = nil) {
         let celebration = CelebrationView(frame: viewController.view.bounds, streak: 0,
-                                          mode: .badge, badgeName: badgeName)
+                                          mode: .badge, badgeName: badgeName, badgeImageName: badgeImageName)
         celebration.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         viewController.view.addSubview(celebration)
         celebration.startAnimation()
@@ -39,7 +39,9 @@ final class CelebrationView: UIView {
     private let streakCount: Int
     private let mode: Mode
     private let badgeName: String
+    private let badgeImageName: String?
     private let containerView = UIView()
+    private let badgeImageView = UIImageView()
     private let emojiLabel = UILabel()
     private let streakIconView = UIImageView()
     private let titleLabel = UILabel()
@@ -47,13 +49,15 @@ final class CelebrationView: UIView {
     private let streakLabel = UILabel()
     private let streakRow = UIStackView()
 
-    private init(frame: CGRect, streak: Int, mode: Mode = .dailyTarget, badgeName: String = "") {
+    private init(frame: CGRect, streak: Int, mode: Mode = .dailyTarget, badgeName: String = "", badgeImageName: String? = nil) {
         self.streakCount = streak
         self.mode = mode
         self.badgeName = badgeName
+        self.badgeImageName = badgeImageName
         super.init(frame: frame)
         backgroundColor = UIColor.black.withAlphaComponent(0.6)
         alpha = 0
+        badgeImageView.isHidden = true
         setupContent()
     }
 
@@ -82,7 +86,15 @@ final class CelebrationView: UIView {
                 streakLabel.text = "Streak started!"
             }
         case .badge:
-            emojiLabel.text = "🏆"
+            if let imgName = badgeImageName, let img = UIImage(named: imgName) {
+                emojiLabel.isHidden = true
+                badgeImageView.isHidden = false
+                badgeImageView.image = img
+                badgeImageView.contentMode = .scaleAspectFit
+                badgeImageView.translatesAutoresizingMaskIntoConstraints = false
+            } else {
+                emojiLabel.text = "🏆"
+            }
             titleLabel.text = "Badge Unlocked!"
             subtitleLabel.text = badgeName
             streakLabel.text = "⭐ Keep going for more!"
@@ -135,6 +147,7 @@ final class CelebrationView: UIView {
         streakRow.addArrangedSubview(streakIconView)
         streakRow.addArrangedSubview(streakLabel)
 
+        containerView.addSubview(badgeImageView)
         containerView.addSubview(emojiLabel)
         containerView.addSubview(titleLabel)
         containerView.addSubview(subtitleLabel)
@@ -145,10 +158,15 @@ final class CelebrationView: UIView {
             containerView.centerYAnchor.constraint(equalTo: centerYAnchor),
             containerView.widthAnchor.constraint(equalToConstant: 300),
 
+            badgeImageView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
+            badgeImageView.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+            badgeImageView.widthAnchor.constraint(equalToConstant: 80),
+            badgeImageView.heightAnchor.constraint(equalToConstant: 80),
+
             emojiLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 28),
             emojiLabel.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
 
-            titleLabel.topAnchor.constraint(equalTo: emojiLabel.bottomAnchor, constant: 12),
+            titleLabel.topAnchor.constraint(equalTo: mode == .badge && badgeImageName != nil ? badgeImageView.bottomAnchor : emojiLabel.bottomAnchor, constant: 12),
             titleLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             titleLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
 
@@ -252,10 +270,16 @@ final class CelebrationView: UIView {
         // Add confetti
         addConfetti()
 
-        // Pulse the emoji
-        UIView.animate(withDuration: 0.4, delay: 0.6, options: [.autoreverse, .repeat], animations: {
-            self.emojiLabel.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
-        })
+        // Pulse the emoji or badge image
+        if !badgeImageView.isHidden && badgeImageView.image != nil {
+            UIView.animate(withDuration: 0.6, delay: 0.6, options: [.autoreverse, .repeat], animations: {
+                self.badgeImageView.transform = CGAffineTransform(scaleX: 1.15, y: 1.15)
+            })
+        } else {
+            UIView.animate(withDuration: 0.4, delay: 0.6, options: [.autoreverse, .repeat], animations: {
+                self.emojiLabel.transform = CGAffineTransform(scaleX: 1.2, y: 1.2)
+            })
+        }
 
         // No auto-dismiss — user must tap the X button
     }
