@@ -364,11 +364,18 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                     self.apiLastSessionCalories = lastSession.calories_burned
                     self.apiLastSessionDistance = lastSession.distance_covered
                     self.apiLastSessionStatus = lastSession.completion_status
+                } else {
+                    self.apiLastSessionDuration = nil
+                    self.apiLastSessionCalories = nil
+                    self.apiLastSessionDistance = nil
+                    self.apiLastSessionStatus = nil
                 }
 
                 // If stats endpoint doesn't have best duration, compute from sessions
                 if let bestSession = completed.max(by: { ($0.calories_burned ?? 0) < ($1.calories_burned ?? 0) }) {
                     self.apiBestSessionDuration = bestSession.duration_minutes
+                } else {
+                    self.apiBestSessionDuration = nil
                 }
 
                 DispatchQueue.main.async {
