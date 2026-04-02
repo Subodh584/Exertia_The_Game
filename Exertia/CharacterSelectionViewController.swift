@@ -38,10 +38,108 @@ class CharacterSelectionViewController: UIViewController {
 
     var gameData = GameData.shared
     var currentViewingIndex: Int = 0
+
+    private var headerHeight: CGFloat {
+        if Responsive.isIPad { return 72 }
+        if Responsive.isSmallPhone { return 56 }
+        return 60
+    }
+
+    private var headerTopInset: CGFloat {
+        if Responsive.isIPad { return 14 }
+        if Responsive.isSmallPhone { return 10 }
+        return 8
+    }
+
+    private var headerButtonSize: CGFloat {
+        if Responsive.isIPad { return 50 }
+        if Responsive.isSmallPhone { return 42 }
+        return 44
+    }
+
+    private var profileButtonSize: CGFloat {
+        if Responsive.isIPad { return 42 }
+        if Responsive.isSmallPhone { return 34 }
+        return 36
+    }
+
+    private var characterDisplayWidth: CGFloat {
+        let screenWidth = max(view.bounds.width, Responsive.screenWidth)
+        if Responsive.isIPad { return min(screenWidth * 0.44, 360) }
+        if Responsive.isSmallPhone { return min(screenWidth * 0.54, 238) }
+        if Responsive.isLargePhone { return min(screenWidth * 0.66, 324) }
+        return min(screenWidth * 0.60, 290)
+    }
+
+    private var characterTopSpacing: CGFloat {
+        if Responsive.isIPad { return 8 }
+        if Responsive.isSmallPhone { return 6 }
+        return 6
+    }
+
+    private var characterToNameSpacing: CGFloat {
+        if Responsive.isIPad { return 10 }
+        if Responsive.isSmallPhone { return 14 }
+        return 14
+    }
+
+    private var nameToDescriptionSpacing: CGFloat {
+        if Responsive.isIPad { return 8 }
+        if Responsive.isSmallPhone { return 8 }
+        return 10
+    }
+
+    private var descriptionToCollectionSpacing: CGFloat {
+        if Responsive.isIPad { return 8 }
+        if Responsive.isSmallPhone { return 8 }
+        return 10
+    }
+
+    private var collectionToTabBarSpacing: CGFloat {
+        if Responsive.isIPad { return 10 }
+        if Responsive.isSmallPhone { return 18 }
+        return 20
+    }
+
+    private var descriptionHorizontalInset: CGFloat {
+        if Responsive.isIPad { return 120 }
+        if Responsive.isSmallPhone { return 24 }
+        return 40
+    }
+
+    private var collectionHorizontalInset: CGFloat {
+        Responsive.isIPad ? 40 : 16
+    }
+
+    private var sectionVerticalInset: CGFloat {
+        Responsive.isIPad ? 10 : 8
+    }
+
+    private var collectionTopInset: CGFloat {
+        Responsive.isSmallPhone ? 16 : sectionVerticalInset
+    }
+
+    private var collectionBottomInset: CGFloat {
+        sectionVerticalInset
+    }
+
+    private var cellHeight: CGFloat {
+        if Responsive.isIPad { return 92 }
+        if Responsive.isSmallPhone { return 66 }
+        return 72
+    }
+
+    private var collectionHeight: CGFloat {
+        let rows = ceil(CGFloat(gameData.players.count) / cellsPerRow)
+        let spacing = max(rows - 1, 0) * spacingBetweenCells
+        let extraBottomPadding: CGFloat = Responsive.isIPad ? 6 : 24
+        return rows * cellHeight + spacing + collectionTopInset + collectionBottomInset + extraBottomPadding
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
         backgroundImageView.addBlurEffect(style: .dark, alpha: 0.3)
+        configureResponsiveLayout()
         setupGlassStyling()
         setupNextButton()
         setupFinalLayout()
@@ -67,6 +165,7 @@ class CharacterSelectionViewController: UIViewController {
             moveIndicator(to: tabWrappers[1], animated: false)
         }
         setupCharacterSceneView()
+        characterSceneView?.frame = mainCharacterImageView.frame
     }
     // MARK: - 3D Character Scene
 
@@ -303,7 +402,7 @@ class CharacterSelectionViewController: UIViewController {
             let blurEffect = UIBlurEffect(style: .regular)
             let blurView = UIVisualEffectView(effect: blurEffect)
             blurView.isUserInteractionEnabled = false
-            blurView.layer.cornerRadius = 22
+            blurView.layer.cornerRadius = Responsive.cornerRadius(22)
             blurView.clipsToBounds = true
             blurView.translatesAutoresizingMaskIntoConstraints = false
             nextButton.insertSubview(blurView, at: 0)
@@ -318,7 +417,7 @@ class CharacterSelectionViewController: UIViewController {
                 blurView.leadingAnchor.constraint(equalTo: nextButton.leadingAnchor),
                 blurView.trailingAnchor.constraint(equalTo: nextButton.trailingAnchor)
             ])
-            nextButton.layer.cornerRadius = 22
+            nextButton.layer.cornerRadius = Responsive.cornerRadius(22)
             nextButton.layer.borderWidth = 1.5
             nextButton.layer.borderColor = UIColor.white.withAlphaComponent(0.6).cgColor
             nextButton.addTarget(self, action: #selector(confirmAndGoHome), for: .touchUpInside)
@@ -331,6 +430,48 @@ class CharacterSelectionViewController: UIViewController {
         profileButton.layer.borderWidth = 1
         profileButton.layer.borderColor = UIColor.white.withAlphaComponent(0.8).cgColor
         profileButton.clipsToBounds = true
+    }
+
+    private func configureResponsiveLayout() {
+        if let topConstraint = view.constraints.first(where: {
+            (($0.firstItem as? UILayoutGuide) === view.safeAreaLayoutGuide && ($0.secondItem as? UIView) === headerView && $0.firstAttribute == .top && $0.secondAttribute == .top) ||
+            (($0.firstItem as? UIView) === headerView && ($0.secondItem as? UILayoutGuide) === view.safeAreaLayoutGuide && $0.firstAttribute == .top && $0.secondAttribute == .top)
+        }) {
+            topConstraint.constant = headerTopInset
+        }
+
+        if let headerHeightConstraint = headerView.constraints.first(where: {
+            ($0.firstItem as? UIView) == headerView && $0.firstAttribute == .height
+        }) {
+            headerHeightConstraint.constant = headerHeight
+        }
+
+        if let widthConstraint = mainCharacterImageView.constraints.first(where: {
+            ($0.firstItem as? UIImageView) == mainCharacterImageView && $0.firstAttribute == .width
+        }) {
+            widthConstraint.constant = characterDisplayWidth
+        }
+
+        if let backButtonWidthConstraint = backButton.constraints.first(where: { $0.firstAttribute == .width }) {
+            backButtonWidthConstraint.constant = headerButtonSize
+        }
+
+        if let profileButtonWidthConstraint = profileButton.constraints.first(where: { $0.firstAttribute == .width }) {
+            profileButtonWidthConstraint.constant = profileButtonSize
+        }
+
+        headerTitleLabel.font = UIFont.systemFont(
+            ofSize: Responsive.isIPad ? 25 : (Responsive.isSmallPhone ? 19 : 21),
+            weight: .bold
+        )
+        nameLabel.font = UIFont(
+            name: "Audiowide-Regular",
+            size: Responsive.isIPad ? 46 : (Responsive.isSmallPhone ? 30 : 38)
+        )
+        descriptionLabel.font = UIFont(
+            name: "Audiowide-Regular",
+            size: Responsive.isIPad ? 18 : (Responsive.isSmallPhone ? 15 : 18)
+        )
     }
     
     func applyGlassEffect(to button: UIButton, iconName: String?) {
@@ -404,13 +545,11 @@ class CharacterSelectionViewController: UIViewController {
         collectionView.setContentCompressionResistancePriority(.required, for: .vertical)
         mainCharacterImageView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         
-        let gridHeight: CGFloat = 190
-        
         NSLayoutConstraint.activate([
             tabBarContainer.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -5),
-            tabBarContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            tabBarContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            tabBarContainer.heightAnchor.constraint(equalToConstant: 70),
+            tabBarContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Responsive.contentInset),
+            tabBarContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Responsive.contentInset),
+            tabBarContainer.heightAnchor.constraint(equalToConstant: Responsive.tabBarHeight),
             
             tabBarStackView.topAnchor.constraint(equalTo: tabBarContainer.topAnchor),
             tabBarStackView.bottomAnchor.constraint(equalTo: tabBarContainer.bottomAnchor),
@@ -418,27 +557,27 @@ class CharacterSelectionViewController: UIViewController {
             tabBarStackView.trailingAnchor.constraint(equalTo: tabBarContainer.trailingAnchor, constant: -10),
             
 
-            collectionView.bottomAnchor.constraint(equalTo: tabBarContainer.topAnchor, constant: -10),
-            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            collectionView.heightAnchor.constraint(equalToConstant: gridHeight),
+            collectionView.bottomAnchor.constraint(equalTo: tabBarContainer.topAnchor, constant: -collectionToTabBarSpacing),
+            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: collectionHorizontalInset),
+            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -collectionHorizontalInset),
+            collectionView.heightAnchor.constraint(equalToConstant: collectionHeight),
             
-            descriptionLabel.bottomAnchor.constraint(equalTo: collectionView.topAnchor, constant: -20),
-            descriptionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
-            descriptionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
+            descriptionLabel.bottomAnchor.constraint(equalTo: collectionView.topAnchor, constant: -descriptionToCollectionSpacing),
+            descriptionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: descriptionHorizontalInset),
+            descriptionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -descriptionHorizontalInset),
             
-            nameLabel.bottomAnchor.constraint(equalTo: descriptionLabel.topAnchor, constant: -10),
+            nameLabel.bottomAnchor.constraint(equalTo: descriptionLabel.topAnchor, constant: -nameToDescriptionSpacing),
             nameLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             nextButton.centerYAnchor.constraint(equalTo: nameLabel.centerYAnchor),
             nextButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            nextButton.widthAnchor.constraint(equalToConstant: 44),
-            nextButton.heightAnchor.constraint(equalToConstant: 44),
+            nextButton.widthAnchor.constraint(equalToConstant: Responsive.size(44)),
+            nextButton.heightAnchor.constraint(equalToConstant: Responsive.size(44)),
             
-            mainCharacterImageView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 5),
-            mainCharacterImageView.bottomAnchor.constraint(equalTo: nameLabel.topAnchor, constant: -20),
+            mainCharacterImageView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: characterTopSpacing),
+            mainCharacterImageView.bottomAnchor.constraint(equalTo: nameLabel.topAnchor, constant: -characterToNameSpacing),
             mainCharacterImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            mainCharacterImageView.widthAnchor.constraint(lessThanOrEqualToConstant: 280)
+            mainCharacterImageView.widthAnchor.constraint(lessThanOrEqualToConstant: characterDisplayWidth)
         ])
     }
     
@@ -449,19 +588,19 @@ class CharacterSelectionViewController: UIViewController {
         let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialDark) // Liquid glass
         let blurView = UIVisualEffectView(effect: blurEffect)
         blurView.translatesAutoresizingMaskIntoConstraints = false
-        blurView.layer.cornerRadius = 35
+        blurView.layer.cornerRadius = Responsive.tabBarCornerRadius
         blurView.clipsToBounds = true
         blurView.isUserInteractionEnabled = false
         tabBarContainer.insertSubview(blurView, at: 0)
-        
+
         NSLayoutConstraint.activate([
             blurView.topAnchor.constraint(equalTo: tabBarContainer.topAnchor),
             blurView.bottomAnchor.constraint(equalTo: tabBarContainer.bottomAnchor),
             blurView.leadingAnchor.constraint(equalTo: tabBarContainer.leadingAnchor),
             blurView.trailingAnchor.constraint(equalTo: tabBarContainer.trailingAnchor)
         ])
-        
-        tabBarContainer.layer.cornerRadius = 35
+
+        tabBarContainer.layer.cornerRadius = Responsive.tabBarCornerRadius
         tabBarContainer.layer.borderWidth = 1.5
         tabBarContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         
@@ -549,12 +688,12 @@ class CharacterSelectionViewController: UIViewController {
             let iconImageView = UIImageView(image: UIImage(named: iconName))
             iconImageView.contentMode = .scaleAspectFit
             iconImageView.translatesAutoresizingMaskIntoConstraints = false
-            iconImageView.widthAnchor.constraint(equalToConstant: 44).isActive = true
-            iconImageView.heightAnchor.constraint(equalToConstant: 34).isActive = true
-            
+            iconImageView.widthAnchor.constraint(equalToConstant: Responsive.size(44)).isActive = true
+            iconImageView.heightAnchor.constraint(equalToConstant: Responsive.size(34)).isActive = true
+
             let label = UILabel()
             label.text = title
-            label.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
+            label.font = UIFont.systemFont(ofSize: Responsive.font(10), weight: .semibold)
             label.textColor = .lightGray
             label.textAlignment = .center
             
@@ -658,8 +797,14 @@ class CharacterSelectionViewController: UIViewController {
 }
 
 extension CharacterSelectionViewController: UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
-    private var spacingBetweenCells: CGFloat { return 15 }
-    private var edgeInsetPadding: CGFloat { return 16 }
+    private var spacingBetweenCells: CGFloat {
+        Responsive.isIPad ? 18 : 14
+    }
+
+    private var edgeInsetPadding: CGFloat {
+        Responsive.isIPad ? 20 : 16
+    }
+
     private var cellsPerRow: CGFloat { return 3 }
     
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
@@ -688,12 +833,11 @@ extension CharacterSelectionViewController: UICollectionViewDelegate, UICollecti
         let totalSpacing = (cellsPerRow - 1) * spacingBetweenCells
         let availableWidth = collectionView.bounds.width - totalPadding - totalSpacing
         let width = floor(availableWidth / cellsPerRow)
-        let height: CGFloat = 70.0
-        return CGSize(width: width, height: height)
+        return CGSize(width: width, height: cellHeight)
     }
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, insetForSectionAt section: Int) -> UIEdgeInsets {
-        return UIEdgeInsets(top: 10, left: edgeInsetPadding, bottom: 10, right: edgeInsetPadding)
+        return UIEdgeInsets(top: collectionTopInset, left: edgeInsetPadding, bottom: collectionBottomInset, right: edgeInsetPadding)
     }
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumLineSpacingForSectionAt section: Int) -> CGFloat {

@@ -168,21 +168,21 @@ class RegisterViewController: UIViewController {
     
     func setupGlassCard() {
         glassCard.backgroundColor = UIColor.white.withAlphaComponent(0.15)
-        glassCard.layer.cornerRadius = 24
+        glassCard.layer.cornerRadius = Responsive.cornerRadius(24)
         glassCard.layer.borderWidth = 1
         glassCard.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         glassCard.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(glassCard)
         
         titleLabel.text = "Create Account"
-        titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: Responsive.font(28), weight: .bold)
         titleLabel.textColor = .white
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(titleLabel)
         
         subtitleLabel.text = "Start your fitness journey today"
-        subtitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        subtitleLabel.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         subtitleLabel.textColor = UIColor(white: 0.9, alpha: 1.0)
         subtitleLabel.textAlignment = .center
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -200,8 +200,8 @@ class RegisterViewController: UIViewController {
     
         signUpButton.setTitle("Sign Up", for: .normal)
         signUpButton.backgroundColor = UIColor(red: 0.0, green: 0.2, blue: 0.4, alpha: 1.0)
-        signUpButton.layer.cornerRadius = 12
-        signUpButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        signUpButton.layer.cornerRadius = Responsive.cornerRadius(12)
+        signUpButton.titleLabel?.font = .systemFont(ofSize: Responsive.font(18), weight: .bold)
         signUpButton.addTarget(self, action: #selector(signUpTapped), for: .touchUpInside)
         signUpButton.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(signUpButton)
@@ -210,12 +210,12 @@ class RegisterViewController: UIViewController {
         loginSwitchStack.translatesAutoresizingMaskIntoConstraints = false
         
         alreadyHaveAccountLabel.text = "Already have an account?"
-        alreadyHaveAccountLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        alreadyHaveAccountLabel.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         alreadyHaveAccountLabel.textColor = UIColor(white: 0.8, alpha: 1.0)
         
         loginSwitchButton.setTitle("Sign in", for: .normal)
         loginSwitchButton.setTitleColor(.white, for: .normal)
-        loginSwitchButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+        loginSwitchButton.titleLabel?.font = .systemFont(ofSize: Responsive.font(16), weight: .bold)
         loginSwitchButton.addTarget(self, action: #selector(loginSwitchTapped), for: .touchUpInside)
         
         loginSwitchStack.addArrangedSubview(alreadyHaveAccountLabel)
@@ -224,44 +224,44 @@ class RegisterViewController: UIViewController {
         
         NSLayoutConstraint.activate([
             glassCard.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            glassCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            glassCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            glassCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 580),
-            
-            titleLabel.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: 40),
+            glassCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Responsive.contentInset),
+            glassCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Responsive.contentInset),
+            glassCard.heightAnchor.constraint(greaterThanOrEqualToConstant: Responsive.verticalSize(580)),
+
+            titleLabel.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: Responsive.padding(40)),
             titleLabel.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: Responsive.padding(8)),
             subtitleLabel.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            
-            firstNameField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 35),
-            firstNameField.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 25),
-            firstNameField.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -25),
-            firstNameField.heightAnchor.constraint(equalToConstant: 50),
-            
-            lastNameField.topAnchor.constraint(equalTo: firstNameField.bottomAnchor, constant: 15),
+
+            firstNameField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: Responsive.padding(35)),
+            firstNameField.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: Responsive.padding(25)),
+            firstNameField.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -Responsive.padding(25)),
+            firstNameField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            lastNameField.topAnchor.constraint(equalTo: firstNameField.bottomAnchor, constant: Responsive.padding(15)),
             lastNameField.leadingAnchor.constraint(equalTo: firstNameField.leadingAnchor),
             lastNameField.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
-            lastNameField.heightAnchor.constraint(equalToConstant: 50),
-            
-            emailField.topAnchor.constraint(equalTo: lastNameField.bottomAnchor, constant: 15),
+            lastNameField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            emailField.topAnchor.constraint(equalTo: lastNameField.bottomAnchor, constant: Responsive.padding(15)),
             emailField.leadingAnchor.constraint(equalTo: firstNameField.leadingAnchor),
             emailField.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
-            emailField.heightAnchor.constraint(equalToConstant: 50),
-            
-            passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 15),
+            emailField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: Responsive.padding(15)),
             passwordField.leadingAnchor.constraint(equalTo: firstNameField.leadingAnchor),
             passwordField.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
-            passwordField.heightAnchor.constraint(equalToConstant: 50),
-            
-            signUpButton.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: 30),
+            passwordField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            signUpButton.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: Responsive.padding(30)),
             signUpButton.leadingAnchor.constraint(equalTo: firstNameField.leadingAnchor),
             signUpButton.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
-            signUpButton.heightAnchor.constraint(equalToConstant: 50),
-            
-            loginSwitchStack.topAnchor.constraint(equalTo: signUpButton.bottomAnchor, constant: 30),
+            signUpButton.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            loginSwitchStack.topAnchor.constraint(equalTo: signUpButton.bottomAnchor, constant: Responsive.padding(30)),
             loginSwitchStack.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            loginSwitchStack.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -30)
+            loginSwitchStack.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -Responsive.padding(30))
         ])
     }
 

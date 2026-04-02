@@ -553,7 +553,7 @@
                                     <constraint firstAttribute="width" secondItem="5kg-WF-wUb" secondAttribute="height" multiplier="1:1.3" id="RBD-iz-RvN"/>
                                 </constraints>
                             </imageView>
-                            <label hidden="YES" opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Today's stats" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="HrE-p1-bOH">
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Today's stats" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="HrE-p1-bOH">
                                 <rect key="frame" x="146.33333333333331" y="610" width="137.33333333333331" height="27.333333333333371"/>
                                 <fontDescription key="fontDescription" type="boldSystem" pointSize="22"/>
                                 <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
@@ -1065,7 +1065,7 @@
                             <constraint firstItem="kl5-qt-q4D" firstAttribute="centerX" secondItem="xxk-w9-zZC" secondAttribute="centerX" id="eGE-4W-LWa"/>
                             <constraint firstItem="A5m-xz-vhv" firstAttribute="centerX" secondItem="xxk-w9-zZC" secondAttribute="centerX" id="egH-gO-tW0"/>
                             <constraint firstItem="uDt-dl-Dfv" firstAttribute="centerX" secondItem="xxk-w9-zZC" secondAttribute="centerX" id="gXb-fj-rcz"/>
-                            <constraint firstItem="cw6-jg-SH8" firstAttribute="leading" secondItem="Eou-kW-D3F" secondAttribute="trailing" constant="-280" id="gdW-s0-IWa"/>
+                            <constraint firstItem="Eou-kW-D3F" firstAttribute="centerX" secondItem="cw6-jg-SH8" secondAttribute="centerX" id="gdW-s0-IWa"/>
                             <constraint firstItem="kl5-qt-q4D" firstAttribute="top" secondItem="ovF-Qq-9gR" secondAttribute="top" constant="60" id="hNK-FZ-fMt"/>
                             <constraint firstItem="aOC-Uj-lAz" firstAttribute="top" secondItem="cw6-jg-SH8" secondAttribute="bottom" constant="25" id="iYt-p8-NuV"/>
                             <constraint firstItem="SIG-0l-ZKx" firstAttribute="top" secondItem="xxk-w9-zZC" secondAttribute="top" id="ia3-ej-3dD"/>

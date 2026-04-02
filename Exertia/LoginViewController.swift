@@ -281,7 +281,7 @@ class LoginViewController: UIViewController {
     
     func setupGlassCard() {
         glassCard.backgroundColor = UIColor.white.withAlphaComponent(0.15)
-        glassCard.layer.cornerRadius = 24
+        glassCard.layer.cornerRadius = Responsive.cornerRadius(24)
         glassCard.layer.borderWidth = 1
         glassCard.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         glassCard.translatesAutoresizingMaskIntoConstraints = false
@@ -293,7 +293,7 @@ class LoginViewController: UIViewController {
         glassCard.addSubview(logoImageView)
         
         titleLabel.text = "Login"
-        titleLabel.font = .systemFont(ofSize: 26, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: Responsive.font(26), weight: .bold)
         titleLabel.textColor = .white
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(titleLabel)
@@ -307,7 +307,7 @@ class LoginViewController: UIViewController {
     
         forgotButton.setTitle("Forgot Password?", for: .normal)
         forgotButton.setTitleColor(.white, for: .normal)
-        forgotButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        forgotButton.titleLabel?.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         forgotButton.contentHorizontalAlignment = .right
         forgotButton.addTarget(self, action: #selector(forgotPasswordTapped), for: .touchUpInside)
         forgotButton.translatesAutoresizingMaskIntoConstraints = false
@@ -315,21 +315,21 @@ class LoginViewController: UIViewController {
         
         signInButton.setTitle("Sign in", for: .normal)
         signInButton.backgroundColor = UIColor(red: 0.0, green: 0.2, blue: 0.4, alpha: 1.0)
-        signInButton.layer.cornerRadius = 12
-        signInButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        signInButton.layer.cornerRadius = Responsive.cornerRadius(12)
+        signInButton.titleLabel?.font = .systemFont(ofSize: Responsive.font(18), weight: .bold)
         signInButton.addTarget(self, action: #selector(signInTapped), for: .touchUpInside)
         signInButton.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(signInButton)
         
         let orLabel = UILabel()
         orLabel.text = "or continue with"
-        orLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        orLabel.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         orLabel.textColor = UIColor(white: 0.9, alpha: 1.0)
         orLabel.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(orLabel)
         
         let socialStack = UIStackView()
-        socialStack.spacing = 25
+        socialStack.spacing = Responsive.padding(25)
         socialStack.translatesAutoresizingMaskIntoConstraints = false
         
         appleBtn = createSocialButton(iconName: "apple.logo", isSystem: true)
@@ -346,12 +346,12 @@ class LoginViewController: UIViewController {
         registerStack.translatesAutoresizingMaskIntoConstraints = false
         
         registerLabel.text = "Don't have an account yet?"
-        registerLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        registerLabel.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         registerLabel.textColor = UIColor(white: 0.8, alpha: 1.0)
         
         registerButton.setTitle("Register for free", for: .normal)
         registerButton.setTitleColor(.white, for: .normal)
-        registerButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+        registerButton.titleLabel?.font = .systemFont(ofSize: Responsive.font(16), weight: .bold)
         registerButton.addTarget(self, action: #selector(registerTapped), for: .touchUpInside)
         
         registerStack.addArrangedSubview(registerLabel)
@@ -360,50 +360,50 @@ class LoginViewController: UIViewController {
         
         NSLayoutConstraint.activate([
             glassCard.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            glassCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            glassCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            glassCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 640),
-            logoImageView.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: 30),
+            glassCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Responsive.contentInset),
+            glassCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Responsive.contentInset),
+            glassCard.heightAnchor.constraint(greaterThanOrEqualToConstant: Responsive.verticalSize(640)),
+            logoImageView.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: Responsive.padding(30)),
             logoImageView.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            logoImageView.heightAnchor.constraint(equalToConstant: 140),
-            logoImageView.widthAnchor.constraint(equalToConstant: 350),
-            
-            titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: 10),
-            titleLabel.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 25),
-            
-            emailField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 20),
-            emailField.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 25),
-            emailField.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -25),
-            emailField.heightAnchor.constraint(equalToConstant: 50),
-            
-            passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 15),
+            logoImageView.heightAnchor.constraint(equalToConstant: Responsive.size(140)),
+            logoImageView.widthAnchor.constraint(equalToConstant: Responsive.size(350)),
+
+            titleLabel.topAnchor.constraint(equalTo: logoImageView.bottomAnchor, constant: Responsive.padding(10)),
+            titleLabel.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: Responsive.padding(25)),
+
+            emailField.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: Responsive.padding(20)),
+            emailField.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: Responsive.padding(25)),
+            emailField.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -Responsive.padding(25)),
+            emailField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: Responsive.padding(15)),
             passwordField.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
             passwordField.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
-            passwordField.heightAnchor.constraint(equalToConstant: 50),
-            
-            forgotButton.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: 12),
+            passwordField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            forgotButton.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: Responsive.padding(12)),
             forgotButton.trailingAnchor.constraint(equalTo: passwordField.trailingAnchor),
-            
-            signInButton.topAnchor.constraint(equalTo: forgotButton.bottomAnchor, constant: 25),
+
+            signInButton.topAnchor.constraint(equalTo: forgotButton.bottomAnchor, constant: Responsive.padding(25)),
             signInButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
             signInButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
-            signInButton.heightAnchor.constraint(equalToConstant: 50),
-            
-            orLabel.topAnchor.constraint(equalTo: signInButton.bottomAnchor, constant: 30),
+            signInButton.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            orLabel.topAnchor.constraint(equalTo: signInButton.bottomAnchor, constant: Responsive.padding(30)),
             orLabel.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            
-            socialStack.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: 20),
+
+            socialStack.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: Responsive.padding(20)),
             socialStack.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            
-            registerStack.topAnchor.constraint(equalTo: socialStack.bottomAnchor, constant: 40),
+
+            registerStack.topAnchor.constraint(equalTo: socialStack.bottomAnchor, constant: Responsive.padding(40)),
             registerStack.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            registerStack.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -30)
+            registerStack.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -Responsive.padding(30))
         ])
     }
 
     func styleTextField(_ textField: UITextField, placeholder: String, icon: String, isSecure: Bool = false) {
         textField.backgroundColor = .white
-        textField.layer.cornerRadius = 10
+        textField.layer.cornerRadius = Responsive.cornerRadius(10)
         textField.placeholder = placeholder
         textField.isSecureTextEntry = isSecure
         textField.textColor = .black
@@ -411,12 +411,15 @@ class LoginViewController: UIViewController {
         textField.autocorrectionType = .no
         textField.spellCheckingType = .no
 
+        let iconSize = Responsive.size(20)
+        let containerWidth = Responsive.size(40)
+        let containerHeight = Responsive.size(50)
         let iconView = UIImageView(image: UIImage(systemName: icon))
         iconView.tintColor = .darkGray
         iconView.contentMode = .scaleAspectFit
 
-        let leftContainer = UIView(frame: CGRect(x: 0, y: 0, width: 40, height: 50))
-        iconView.frame = CGRect(x: 12, y: 15, width: 20, height: 20)
+        let leftContainer = UIView(frame: CGRect(x: 0, y: 0, width: containerWidth, height: containerHeight))
+        iconView.frame = CGRect(x: Responsive.padding(12), y: (containerHeight - iconSize) / 2, width: iconSize, height: iconSize)
         leftContainer.addSubview(iconView)
 
         textField.leftView = leftContainer
@@ -429,9 +432,10 @@ class LoginViewController: UIViewController {
         var config = UIButton.Configuration.filled()
         config.baseBackgroundColor = .white
         config.cornerStyle = .fixed
-        config.background.cornerRadius = 12
+        config.background.cornerRadius = Responsive.cornerRadius(12)
 
-        let targetSize = CGSize(width: 24, height: 24)
+        let iconDim = Responsive.size(24)
+        let targetSize = CGSize(width: iconDim, height: iconDim)
         var originalImage: UIImage?
         
         if isSystem {
@@ -449,8 +453,8 @@ class LoginViewController: UIViewController {
         btn.configuration = config
 
         btn.translatesAutoresizingMaskIntoConstraints = false
-        btn.widthAnchor.constraint(equalToConstant: 140).isActive = true
-        btn.heightAnchor.constraint(equalToConstant: 50).isActive = true
+        btn.widthAnchor.constraint(equalToConstant: Responsive.size(140)).isActive = true
+        btn.heightAnchor.constraint(equalToConstant: Responsive.size(50)).isActive = true
         return btn
     }
 

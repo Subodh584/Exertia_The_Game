@@ -62,12 +62,12 @@ class SessionDetailViewController: UIViewController {
             gradientView.topAnchor.constraint(equalTo: view.topAnchor),
             gradientView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             gradientView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            gradientView.heightAnchor.constraint(equalToConstant: 350)
+            gradientView.heightAnchor.constraint(equalToConstant: Responsive.gradientHeight)
         ])
         let layer = CAGradientLayer()
         layer.colors = [UIColor.neonPink.withAlphaComponent(0.3).cgColor, UIColor.clear.cgColor]
         layer.locations = [0.0, 1.0]
-        layer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 350)
+        layer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: Responsive.gradientHeight)
         gradientView.layer.addSublayer(layer)
     }
 
@@ -85,7 +85,7 @@ class SessionDetailViewController: UIViewController {
         backBtn.addTarget(self, action: #selector(goBack), for: .touchUpInside)
 
         titleLabel.text = session?.trackName ?? "Session"
-        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: Responsive.font(20), weight: .bold)
         titleLabel.textColor = .white
         titleLabel.textAlignment = .center
 
@@ -98,7 +98,7 @@ class SessionDetailViewController: UIViewController {
         if let badge = makeNavBadge() {
             navBar.addSubview(badge)
             NSLayoutConstraint.activate([
-                badge.trailingAnchor.constraint(equalTo: navBar.trailingAnchor, constant: -20),
+                badge.trailingAnchor.constraint(equalTo: navBar.trailingAnchor, constant: -Responsive.contentInset),
                 badge.centerYAnchor.constraint(equalTo: navBar.centerYAnchor)
             ])
         }
@@ -107,12 +107,12 @@ class SessionDetailViewController: UIViewController {
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBar.heightAnchor.constraint(equalToConstant: 50),
+            navBar.heightAnchor.constraint(equalToConstant: Responsive.navBarHeight),
 
-            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 20),
+            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: Responsive.contentInset),
             backBtn.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
-            backBtn.widthAnchor.constraint(equalToConstant: 40),
-            backBtn.heightAnchor.constraint(equalToConstant: 40),
+            backBtn.widthAnchor.constraint(equalToConstant: Responsive.size(40)),
+            backBtn.heightAnchor.constraint(equalToConstant: Responsive.size(40)),
 
             titleLabel.centerXAnchor.constraint(equalTo: navBar.centerXAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: navBar.centerYAnchor)
@@ -138,10 +138,10 @@ class SessionDetailViewController: UIViewController {
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             stackContainer.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: 10),
-            stackContainer.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 20),
-            stackContainer.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -20),
+            stackContainer.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: Responsive.contentInset),
+            stackContainer.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -Responsive.contentInset),
             stackContainer.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -40),
-            stackContainer.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -40)
+            stackContainer.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -Responsive.contentInset * 2)
         ])
     }
 
@@ -165,18 +165,18 @@ class SessionDetailViewController: UIViewController {
 
         let charImg = UIImageView(image: UIImage(named: s.characterImageName))
         charImg.contentMode = .scaleAspectFit
-        charImg.layer.cornerRadius = 30
+        charImg.layer.cornerRadius = Responsive.cornerRadius(30)
         charImg.layer.borderWidth  = 1.5
         charImg.layer.borderColor  = UIColor.white.withAlphaComponent(0.2).cgColor
         charImg.clipsToBounds = true
         charImg.translatesAutoresizingMaskIntoConstraints = false
 
-        let trackLbl = makeLbl(s.trackName,                      size: 20, weight: .bold,    color: .white)
-        let dateLbl  = makeLbl(Self.dateFmt.string(from: s.date), size: 13, weight: .medium,  color: UIColor.white.withAlphaComponent(0.5))
-        let timeLbl  = makeLbl(Self.timeFmt.string(from: s.date), size: 13, weight: .medium,  color: UIColor.white.withAlphaComponent(0.35))
+        let trackLbl = makeLbl(s.trackName,                      size: Responsive.font(20), weight: .bold,    color: .white)
+        let dateLbl  = makeLbl(Self.dateFmt.string(from: s.date), size: Responsive.font(13), weight: .medium,  color: UIColor.white.withAlphaComponent(0.5))
+        let timeLbl  = makeLbl(Self.timeFmt.string(from: s.date), size: Responsive.font(13), weight: .medium,  color: UIColor.white.withAlphaComponent(0.35))
         let arranged: [UIView]
         if isAbandoned {
-            let subtitle = makeLbl("Session ended early", size: 11, weight: .semibold, color: UIColor.systemOrange.withAlphaComponent(0.9))
+            let subtitle = makeLbl("Session ended early", size: Responsive.font(11), weight: .semibold, color: UIColor.systemOrange.withAlphaComponent(0.9))
             arranged = [trackLbl, dateLbl, timeLbl, subtitle]
         } else {
             arranged = [trackLbl, dateLbl, timeLbl]
@@ -188,23 +188,23 @@ class SessionDetailViewController: UIViewController {
         card.addSubview(charImg)
         card.addSubview(infoStack)
         NSLayoutConstraint.activate([
-            charImg.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
-            charImg.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
-            charImg.widthAnchor.constraint(equalToConstant: 62),
-            charImg.heightAnchor.constraint(equalToConstant: 62),
-            charImg.bottomAnchor.constraint(lessThanOrEqualTo: card.bottomAnchor, constant: -20),
+            charImg.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Responsive.padding(20)),
+            charImg.topAnchor.constraint(equalTo: card.topAnchor, constant: Responsive.padding(20)),
+            charImg.widthAnchor.constraint(equalToConstant: Responsive.size(62)),
+            charImg.heightAnchor.constraint(equalToConstant: Responsive.size(62)),
+            charImg.bottomAnchor.constraint(lessThanOrEqualTo: card.bottomAnchor, constant: -Responsive.padding(20)),
 
-            infoStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            infoStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Responsive.padding(20)),
             infoStack.trailingAnchor.constraint(equalTo: charImg.leadingAnchor, constant: -12),
-            infoStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
-            infoStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20)
+            infoStack.topAnchor.constraint(equalTo: card.topAnchor, constant: Responsive.padding(20)),
+            infoStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -Responsive.padding(20))
         ])
         return card
     }
 
     // MARK: Distance card
     private func buildDistCard(_ s: GameSession) -> UIView {
-        let card = glassCard(h: 100)
+        let card = glassCard(h: Responsive.verticalSize(100))
 
         let icon = UIImageView(image: UIImage(systemName: "figure.run"))
         icon.tintColor = .neonPink; icon.contentMode = .scaleAspectFit
@@ -216,26 +216,26 @@ class SessionDetailViewController: UIViewController {
             : "\(Int((s.distanceCovered * 1000).rounded()))"
         let distUnit  = distIsKm ? "km" : "m"
 
-        let numLbl  = makeLbl(distNum,  size: 46, weight: .heavy, color: .white)
-        let unitLbl = makeLbl(distUnit, size: 18, weight: .semibold, color: UIColor.white.withAlphaComponent(0.55))
-        let subLbl  = makeLbl("Distance Covered", size: 12, weight: .medium, color: UIColor.white.withAlphaComponent(0.4))
+        let numLbl  = makeLbl(distNum,  size: Responsive.font(46), weight: .heavy, color: .white)
+        let unitLbl = makeLbl(distUnit, size: Responsive.font(18), weight: .semibold, color: UIColor.white.withAlphaComponent(0.55))
+        let subLbl  = makeLbl("Distance Covered", size: Responsive.font(12), weight: .medium, color: UIColor.white.withAlphaComponent(0.4))
 
         card.addSubview(icon); card.addSubview(numLbl); card.addSubview(unitLbl); card.addSubview(subLbl)
         NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            icon.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Responsive.padding(20)),
             icon.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 28),
-            icon.heightAnchor.constraint(equalToConstant: 28),
+            icon.widthAnchor.constraint(equalToConstant: Responsive.size(28)),
+            icon.heightAnchor.constraint(equalToConstant: Responsive.size(28)),
 
             numLbl.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 14),
-            numLbl.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            numLbl.topAnchor.constraint(equalTo: card.topAnchor, constant: Responsive.padding(16)),
 
             unitLbl.leadingAnchor.constraint(equalTo: numLbl.trailingAnchor, constant: 5),
             unitLbl.bottomAnchor.constraint(equalTo: numLbl.bottomAnchor, constant: -7),
 
             subLbl.leadingAnchor.constraint(equalTo: numLbl.leadingAnchor),
             subLbl.topAnchor.constraint(equalTo: numLbl.bottomAnchor, constant: 1),
-            subLbl.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16)
+            subLbl.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -Responsive.padding(16))
         ])
         return card
     }
@@ -264,7 +264,7 @@ class SessionDetailViewController: UIViewController {
         while col2.count < col1.count {
             let sp = UIView()
             sp.translatesAutoresizingMaskIntoConstraints = false
-            sp.heightAnchor.constraint(equalToConstant: 88).isActive = true
+            sp.heightAnchor.constraint(equalToConstant: Responsive.verticalSize(88)).isActive = true
             col2.append(sp)
         }
 
@@ -280,21 +280,21 @@ class SessionDetailViewController: UIViewController {
     }
 
     private func statCell(icon: String, value: String, title: String, color: UIColor) -> UIView {
-        let card = glassCard(h: 88)
+        let card = glassCard(h: Responsive.verticalSize(88))
         let img = UIImageView(image: UIImage(systemName: icon))
         img.tintColor = color; img.contentMode = .scaleAspectFit
         img.translatesAutoresizingMaskIntoConstraints = false
-        img.widthAnchor.constraint(equalToConstant: 22).isActive  = true
-        img.heightAnchor.constraint(equalToConstant: 22).isActive = true
+        img.widthAnchor.constraint(equalToConstant: Responsive.size(22)).isActive  = true
+        img.heightAnchor.constraint(equalToConstant: Responsive.size(22)).isActive = true
 
-        let vLbl = makeLbl(value, size: 20, weight: .bold, color: .white)
-        let tLbl = makeLbl(title, size: 11, weight: .medium, color: UIColor.white.withAlphaComponent(0.4))
+        let vLbl = makeLbl(value, size: Responsive.font(20), weight: .bold, color: .white)
+        let tLbl = makeLbl(title, size: Responsive.font(11), weight: .medium, color: UIColor.white.withAlphaComponent(0.4))
         let sv = UIStackView(arrangedSubviews: [img, vLbl, tLbl])
         sv.axis = .vertical; sv.spacing = 4; sv.alignment = .leading
         sv.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(sv)
         NSLayoutConstraint.activate([
-            sv.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            sv.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Responsive.padding(16)),
             sv.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -8),
             sv.centerYAnchor.constraint(equalTo: card.centerYAnchor)
         ])
@@ -314,11 +314,11 @@ class SessionDetailViewController: UIViewController {
         let img = UIImageView(image: UIImage(systemName: "trophy.fill"))
         img.tintColor = gold; img.contentMode = .scaleAspectFit
         img.translatesAutoresizingMaskIntoConstraints = false
-        img.widthAnchor.constraint(equalToConstant: 13).isActive  = true
-        img.heightAnchor.constraint(equalToConstant: 13).isActive = true
+        img.widthAnchor.constraint(equalToConstant: Responsive.size(13)).isActive  = true
+        img.heightAnchor.constraint(equalToConstant: Responsive.size(13)).isActive = true
 
         let l = UILabel()
-        l.text = "Best"; l.font = .systemFont(ofSize: 11, weight: .bold); l.textColor = gold
+        l.text = "Best"; l.font = .systemFont(ofSize: Responsive.font(11), weight: .bold); l.textColor = gold
         l.translatesAutoresizingMaskIntoConstraints = false
 
         let sv = UIStackView(arrangedSubviews: [img, l])
@@ -353,7 +353,7 @@ class SessionDetailViewController: UIViewController {
 
         let l = UILabel()
         l.text = text
-        l.font = .systemFont(ofSize: 11, weight: .bold)
+        l.font = .systemFont(ofSize: Responsive.font(11), weight: .bold)
         l.textColor = color
         l.translatesAutoresizingMaskIntoConstraints = false
         v.addSubview(l)
@@ -376,7 +376,7 @@ class SessionDetailViewController: UIViewController {
 
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
         blur.translatesAutoresizingMaskIntoConstraints = false
-        blur.layer.cornerRadius = 24; blur.clipsToBounds = true
+        blur.layer.cornerRadius = Responsive.cornerRadius(24); blur.clipsToBounds = true
         blur.layer.borderColor  = UIColor.white.withAlphaComponent(0.15).cgColor
         blur.layer.borderWidth  = 1
         v.addSubview(blur)

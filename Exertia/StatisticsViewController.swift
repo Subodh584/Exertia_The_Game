@@ -441,12 +441,12 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             gradientView.topAnchor.constraint(equalTo: view.topAnchor),
             gradientView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             gradientView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            gradientView.heightAnchor.constraint(equalToConstant: 350)
+            gradientView.heightAnchor.constraint(equalToConstant: Responsive.gradientHeight)
         ])
         let layer = CAGradientLayer()
         layer.colors = [UIColor.neonPink.withAlphaComponent(0.3).cgColor, UIColor.clear.cgColor]
         layer.locations = [0.0, 1.0]
-        layer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 350)
+        layer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: Responsive.gradientHeight)
         gradientView.layer.addSublayer(layer)
     }
     
@@ -463,7 +463,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         backBtn.addTarget(self, action: #selector(goBack), for: .touchUpInside)
         
         titleLabel.text = "Statistics"
-        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: Responsive.font(20), weight: .bold)
         titleLabel.textColor = .white
         titleLabel.textAlignment = .center
         
@@ -489,20 +489,20 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBar.heightAnchor.constraint(equalToConstant: 50),
-            
-            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 20),
+            navBar.heightAnchor.constraint(equalToConstant: Responsive.navBarHeight),
+
+            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: Responsive.contentInset),
             backBtn.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
-            backBtn.widthAnchor.constraint(equalToConstant: 40),
-            backBtn.heightAnchor.constraint(equalToConstant: 40),
-            
+            backBtn.widthAnchor.constraint(equalToConstant: Responsive.size(40)),
+            backBtn.heightAnchor.constraint(equalToConstant: Responsive.size(40)),
+
             titleLabel.centerXAnchor.constraint(equalTo: navBar.centerXAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
-            
-            profileImg.trailingAnchor.constraint(equalTo: navBar.trailingAnchor, constant: -20),
+
+            profileImg.trailingAnchor.constraint(equalTo: navBar.trailingAnchor, constant: -Responsive.contentInset),
             profileImg.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
-            profileImg.widthAnchor.constraint(equalToConstant: 36),
-            profileImg.heightAnchor.constraint(equalToConstant: 36)
+            profileImg.widthAnchor.constraint(equalToConstant: Responsive.size(36)),
+            profileImg.heightAnchor.constraint(equalToConstant: Responsive.size(36))
         ])
     }
 
@@ -531,25 +531,25 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             mainScroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             
             tabContainer.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -5),
-            tabContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            tabContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            tabContainer.heightAnchor.constraint(equalToConstant: 70),
-            
+            tabContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Responsive.contentInset),
+            tabContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Responsive.contentInset),
+            tabContainer.heightAnchor.constraint(equalToConstant: Responsive.tabBarHeight),
+
             stackContainer.topAnchor.constraint(equalTo: mainScroll.topAnchor),
-            stackContainer.leadingAnchor.constraint(equalTo: mainScroll.leadingAnchor, constant: 20),
-            stackContainer.trailingAnchor.constraint(equalTo: mainScroll.trailingAnchor, constant: -20),
-            stackContainer.bottomAnchor.constraint(equalTo: mainScroll.bottomAnchor, constant: -100),
-            stackContainer.widthAnchor.constraint(equalTo: mainScroll.widthAnchor, constant: -40)
+            stackContainer.leadingAnchor.constraint(equalTo: mainScroll.leadingAnchor, constant: Responsive.contentInset),
+            stackContainer.trailingAnchor.constraint(equalTo: mainScroll.trailingAnchor, constant: -Responsive.contentInset),
+            stackContainer.bottomAnchor.constraint(equalTo: mainScroll.bottomAnchor, constant: -Responsive.verticalSize(100)),
+            stackContainer.widthAnchor.constraint(equalTo: mainScroll.widthAnchor, constant: -(Responsive.contentInset * 2))
         ])
     }
     
     func addHeader() {
         let container = UIView()
         helloLabel.text = "Welcome Back,"
-        helloLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        helloLabel.font = .systemFont(ofSize: Responsive.font(16), weight: .medium)
         helloLabel.textColor = .lightGray
         nameLabel.text = "Player"
-        nameLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        nameLabel.font = .systemFont(ofSize: Responsive.font(28), weight: .bold)
         nameLabel.textColor = .white
         let stack = UIStackView(arrangedSubviews: [helloLabel, nameLabel])
         stack.axis = .vertical
@@ -560,8 +560,9 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: container.topAnchor),
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 5),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -5),
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
-            container.heightAnchor.constraint(equalToConstant: 70)
+            container.heightAnchor.constraint(greaterThanOrEqualToConstant: Responsive.verticalSize(70))
         ])
     }
     
@@ -582,14 +583,14 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         stack.translatesAutoresizingMaskIntoConstraints = false
         toggleBox.addSubview(stack)
         
-        bigStatLabel.font = .systemFont(ofSize: 48, weight: .bold)
+        bigStatLabel.font = .systemFont(ofSize: Responsive.font(48), weight: .bold)
         bigStatLabel.textColor = .white
         bigStatLabel.textAlignment = .center
 
-        subStatLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        subStatLabel.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         subStatLabel.textAlignment = .center
 
-        targetLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        targetLabel.font = .systemFont(ofSize: Responsive.font(11), weight: .semibold)
         targetLabel.textColor = .white.withAlphaComponent(0.45)
         targetLabel.textAlignment = .center
 
@@ -603,15 +604,16 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         drawRings(in: ringBox)
         
         let editTargetsBtn = UIButton(type: .system)
-        editTargetsBtn.setImage(UIImage(systemName: "slider.horizontal.3"), for: .normal)
+        let btnConfig = UIImage.SymbolConfiguration(pointSize: Responsive.font(16), weight: .medium)
+        editTargetsBtn.setImage(UIImage(systemName: "slider.horizontal.3", withConfiguration: btnConfig), for: .normal)
         editTargetsBtn.tintColor = .white.withAlphaComponent(0.6)
         editTargetsBtn.addTarget(self, action: #selector(editTargetsTapped), for: .touchUpInside)
         editTargetsBtn.translatesAutoresizingMaskIntoConstraints = false
 
         card.addSubview(toggleBox)
-        card.addSubview(editTargetsBtn)
         card.addSubview(textStack)
         card.addSubview(ringBox)
+        card.addSubview(editTargetsBtn)  // added last so it's on top for touch
 
         NSLayoutConstraint.activate([
             toggleBox.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
@@ -619,7 +621,9 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             toggleBox.widthAnchor.constraint(equalToConstant: 180),
             toggleBox.heightAnchor.constraint(equalToConstant: 32),
             editTargetsBtn.centerYAnchor.constraint(equalTo: toggleBox.centerYAnchor),
-            editTargetsBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
+            editTargetsBtn.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Responsive.padding(20)),
+            editTargetsBtn.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            editTargetsBtn.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
             stack.topAnchor.constraint(equalTo: toggleBox.topAnchor),
             stack.bottomAnchor.constraint(equalTo: toggleBox.bottomAnchor),
             stack.leadingAnchor.constraint(equalTo: toggleBox.leadingAnchor),
@@ -628,8 +632,8 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             textStack.centerYAnchor.constraint(equalTo: card.centerYAnchor, constant: 20),
             ringBox.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20),
             ringBox.centerYAnchor.constraint(equalTo: card.centerYAnchor, constant: 10),
-            ringBox.widthAnchor.constraint(equalToConstant: 120),
-            ringBox.heightAnchor.constraint(equalToConstant: 120)
+            ringBox.widthAnchor.constraint(equalToConstant: Responsive.size(120)),
+            ringBox.heightAnchor.constraint(equalToConstant: Responsive.size(120))
         ])
         stackContainer.addArrangedSubview(card)
     }
@@ -639,10 +643,10 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         stack.spacing = 15
         stack.distribution = .fillEqually
         
-        runCard = glassCard(h: 130)
+        runCard = glassCard(h: Responsive.verticalSize(130))
         fillSmallCard(view: runCard!, title: "Last Run", tLabel: lastTimeLabel, cLabel: lastCalLabel, statusLabel: lastRunStatusLabel)
-        
-        bestCard = glassCard(h: 130)
+
+        bestCard = glassCard(h: Responsive.verticalSize(130))
         fillSmallCard(view: bestCard!, title: "Personal Best", tLabel: bestTimeLabel, cLabel: bestCalLabel)
         
         let t1 = UITapGestureRecognizer(target: self, action: #selector(openHistoryNormal))
@@ -659,10 +663,10 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     }
     
     func addWeightView() {
-        let card = glassCard(h: 110)
+        let card = glassCard(h: Responsive.verticalSize(110))
         let title = UILabel()
         title.text = "Weight Goal Progress"
-        title.font = .systemFont(ofSize: 14, weight: .bold)
+        title.font = .systemFont(ofSize: Responsive.font(14), weight: .bold)
         title.textColor = .white
         title.translatesAutoresizingMaskIntoConstraints = false
 
@@ -987,23 +991,24 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     func fillSmallCard(view: UIView, title: String, tLabel: UILabel, cLabel: UILabel, statusLabel: UILabel? = nil) {
         let l = UILabel()
         l.text = title
-        l.font = .systemFont(ofSize: 14, weight: .bold)
+        l.font = .systemFont(ofSize: Responsive.font(13), weight: .bold)
         l.textColor = .white
         l.setContentHuggingPriority(.required, for: .horizontal)
+        l.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         if let statusLabel {
-            statusLabel.font = .systemFont(ofSize: 9, weight: .bold)
+            statusLabel.font = .systemFont(ofSize: Responsive.font(8), weight: .bold)
             statusLabel.textColor = .systemOrange
             statusLabel.backgroundColor = UIColor.systemOrange.withAlphaComponent(0.12)
             statusLabel.layer.borderWidth = 1
             statusLabel.layer.borderColor = UIColor.systemOrange.withAlphaComponent(0.45).cgColor
-            statusLabel.layer.cornerRadius = 8
+            statusLabel.layer.cornerRadius = 7
             statusLabel.clipsToBounds = true
             statusLabel.textAlignment = .center
             statusLabel.isHidden = true
             statusLabel.translatesAutoresizingMaskIntoConstraints = false
-            statusLabel.heightAnchor.constraint(equalToConstant: 16).isActive = true
-            statusLabel.widthAnchor.constraint(equalToConstant: 62).isActive = true
+            statusLabel.heightAnchor.constraint(equalToConstant: Responsive.size(14)).isActive = true
+            statusLabel.widthAnchor.constraint(equalToConstant: Responsive.size(55)).isActive = true
         }
 
         let img = UIImageView(image: UIImage(systemName: "chevron.right"))
@@ -1302,31 +1307,31 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         // Liquid glass ultra-thin material
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
         blur.isUserInteractionEnabled = false
-        blur.layer.cornerRadius = 35
+        blur.layer.cornerRadius = Responsive.tabBarCornerRadius
         blur.clipsToBounds = true
         blur.translatesAutoresizingMaskIntoConstraints = false
-        
+
         tabContainer.insertSubview(blur, at: 0)
-        
+
         NSLayoutConstraint.activate([
             blur.topAnchor.constraint(equalTo: tabContainer.topAnchor),
             blur.bottomAnchor.constraint(equalTo: tabContainer.bottomAnchor),
             blur.leadingAnchor.constraint(equalTo: tabContainer.leadingAnchor),
             blur.trailingAnchor.constraint(equalTo: tabContainer.trailingAnchor)
         ])
-        
-        tabContainer.layer.cornerRadius = 35
+
+        tabContainer.layer.cornerRadius = Responsive.tabBarCornerRadius
         tabContainer.layer.borderWidth = 1.5
         tabContainer.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
-        
+
         // Fluid glowing ambient shadow
         tabContainer.layer.shadowColor = UIColor.white.cgColor
         tabContainer.layer.shadowRadius = 15
         tabContainer.layer.shadowOpacity = 0.2
         tabContainer.layer.shadowOffset = .zero
-        
+
         tabIndicator.backgroundColor = UIColor.white.withAlphaComponent(0.25)
-        tabIndicator.layer.cornerRadius = 30
+        tabIndicator.layer.cornerRadius = Responsive.cornerRadius(30)
         tabIndicator.layer.cornerCurve = .continuous
         tabIndicator.layer.shadowColor = UIColor.white.cgColor
         tabIndicator.layer.shadowRadius = 8
@@ -1375,11 +1380,11 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             let img = UIImageView(image: UIImage(named: icon))
             img.contentMode = .scaleAspectFit
             img.translatesAutoresizingMaskIntoConstraints = false
-            img.widthAnchor.constraint(equalToConstant: 44).isActive = true
-            img.heightAnchor.constraint(equalToConstant: 34).isActive = true
+            img.widthAnchor.constraint(equalToConstant: Responsive.size(44)).isActive = true
+            img.heightAnchor.constraint(equalToConstant: Responsive.size(34)).isActive = true
             let l = UILabel()
             l.text = txt
-            l.font = UIFont.systemFont(ofSize: 10, weight: .semibold)
+            l.font = UIFont.systemFont(ofSize: Responsive.font(10), weight: .semibold)
             l.textColor = .lightGray
             l.textAlignment = .center
             tabIcons.append(img)

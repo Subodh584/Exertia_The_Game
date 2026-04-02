@@ -59,6 +59,61 @@ class TrackSelectionViewController: UIViewController {
     private let pickerOverlay = UIButton(type: .custom)
     
     private var rowHeightConstraint: NSLayoutConstraint!
+    private weak var beamView: UIImageView?
+
+    private var videoWidth: CGFloat {
+        if Responsive.isIPad { return min(view.bounds.width * 0.62, 470) }
+        if Responsive.isSmallPhone { return min(view.bounds.width * 0.70, 250) }
+        return min(view.bounds.width * 0.72, 330)
+    }
+
+    private var videoHeight: CGFloat {
+        if Responsive.isIPad { return 300 }
+        if Responsive.isSmallPhone { return 188 }
+        return 240
+    }
+
+    private var videoTopSpacing: CGFloat {
+        if Responsive.isIPad { return 38 }
+        if Responsive.isSmallPhone { return 34 }
+        return 44
+    }
+
+    private var portalWidth: CGFloat {
+        if Responsive.isIPad { return 360 }
+        if Responsive.isSmallPhone { return 228 }
+        return 290
+    }
+
+    private var portalHeight: CGFloat {
+        if Responsive.isIPad { return 210 }
+        if Responsive.isSmallPhone { return 145 }
+        return 180
+    }
+
+    private var portalTopSpacing: CGFloat {
+        if Responsive.isIPad { return 112 }
+        if Responsive.isSmallPhone { return 54 }
+        return 80
+    }
+
+    private var portalScaleX: CGFloat {
+        if Responsive.isIPad { return 8.4 }
+        if Responsive.isSmallPhone { return 4.2 }
+        return 5.4
+    }
+
+    private var portalScaleY: CGFloat {
+        if Responsive.isIPad { return 5.2 }
+        if Responsive.isSmallPhone { return 2.8 }
+        return 3.5
+    }
+
+    private var portalVerticalOffset: CGFloat {
+        if Responsive.isIPad { return 4 }
+        if Responsive.isSmallPhone { return -18 }
+        return -45
+    }
 
     // Flag so the ellipse scan only runs once after layout is real
     private var navEllipsesHidden = false
@@ -74,6 +129,7 @@ class TrackSelectionViewController: UIViewController {
 
         styleNavArea()
         adjustStartButtonAlignment()
+        configureResponsiveHeroLayout()
         setupTrackDesign()
         setupPortalAnimation()
         buildGoalControls()
@@ -101,8 +157,8 @@ class TrackSelectionViewController: UIViewController {
         NSLayoutConstraint.activate([
             startButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -35),
             startButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            startButton.widthAnchor.constraint(equalToConstant: 240),
-            startButton.heightAnchor.constraint(equalToConstant: 58)
+            startButton.widthAnchor.constraint(equalToConstant: Responsive.isIPad ? 280 : (Responsive.isSmallPhone ? 170 : Responsive.size(240))),
+            startButton.heightAnchor.constraint(equalToConstant: Responsive.isSmallPhone ? 52 : Responsive.size(58))
         ])
     }
 
@@ -119,6 +175,7 @@ class TrackSelectionViewController: UIViewController {
         profileButton.clipsToBounds      = true
         backButton.layer.cornerRadius    = backButton.frame.height / 2
         backButton.clipsToBounds         = true
+        alignBeam()
         hideNavArrowEllipses()
     }
 
@@ -174,15 +231,49 @@ class TrackSelectionViewController: UIViewController {
         // Our title: anchored to safeAreaLayoutGuide so it sits correctly on all devices
         let titleLbl = UILabel()
         titleLbl.text          = "Track Selection"
-        titleLbl.font          = .systemFont(ofSize: 20, weight: .bold)
+        titleLbl.font          = .systemFont(ofSize: Responsive.font(20), weight: .bold)
         titleLbl.textColor     = .white
         titleLbl.textAlignment = .center
         titleLbl.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(titleLbl)
         NSLayoutConstraint.activate([
             titleLbl.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            titleLbl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12)
+            titleLbl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: Responsive.isIPad ? 16 : 12)
         ])
+    }
+
+    private func configureResponsiveHeroLayout() {
+        if let titleTopConstraint = view.constraints.first(where: {
+            ($0.firstItem as? UILabel) === trackTitleName && ($0.secondItem as? UILayoutGuide) === view.safeAreaLayoutGuide && $0.firstAttribute == .top && $0.secondAttribute == .top
+        }) {
+            titleTopConstraint.constant = Responsive.isIPad ? 70 : (Responsive.isSmallPhone ? 52 : 60)
+        }
+
+        if let videoWidthConstraint = videoContainerView.constraints.first(where: { $0.firstAttribute == .width }) {
+            videoWidthConstraint.constant = videoWidth
+        }
+        if let videoHeightConstraint = videoContainerView.constraints.first(where: { $0.firstAttribute == .height }) {
+            videoHeightConstraint.constant = videoHeight
+        }
+        if let videoTopConstraint = view.constraints.first(where: {
+            ($0.firstItem as? UIView) === videoContainerView && ($0.secondItem as? UILabel) === trackTitleName && $0.firstAttribute == .top && $0.secondAttribute == .bottom
+        }) {
+            videoTopConstraint.constant = videoTopSpacing
+        }
+
+        if let portalWidthConstraint = portalBaseView.constraints.first(where: { $0.firstAttribute == .width }) {
+            portalWidthConstraint.constant = portalWidth
+        }
+        if let portalHeightConstraint = portalBaseView.constraints.first(where: { $0.firstAttribute == .height }) {
+            portalHeightConstraint.constant = portalHeight
+        }
+        if let portalTopConstraint = view.constraints.first(where: {
+            ($0.firstItem as? UIImageView) === portalBaseView && ($0.secondItem as? UIView) === videoContainerView && $0.firstAttribute == .top && $0.secondAttribute == .bottom
+        }) {
+            portalTopConstraint.constant = portalTopSpacing
+        }
+
+        trackTitleName.font = UIFont(name: "Audiowide-Regular", size: Responsive.isIPad ? 30 : (Responsive.isSmallPhone ? 18 : Responsive.font(24))) ?? .boldSystemFont(ofSize: Responsive.isIPad ? 30 : (Responsive.isSmallPhone ? 18 : Responsive.font(24)))
     }
 
     // MARK: — Track visual design
@@ -195,12 +286,12 @@ class TrackSelectionViewController: UIViewController {
         videoContainerView.layer.shadowRadius  = 30
 
         // Shift the portal upwards to avoid overlapping the new, higher button positions
-        portalBaseView.transform              = CGAffineTransform(translationX: 0, y: -45).scaledBy(x: 5.4, y: 3.5)
+        portalBaseView.transform              = CGAffineTransform(translationX: 0, y: portalVerticalOffset).scaledBy(x: portalScaleX, y: portalScaleY)
         portalBaseView.contentMode            = .scaleAspectFit
         portalBaseView.isUserInteractionEnabled = false
 
         // Audiowide 24pt — slightly smaller than original to feel balanced
-        trackTitleName.font = UIFont(name: "Audiowide-Regular", size: 24) ?? .boldSystemFont(ofSize: 24)
+        trackTitleName.font = UIFont(name: "Audiowide-Regular", size: Responsive.isIPad ? 30 : (Responsive.isSmallPhone ? 18 : Responsive.font(24))) ?? .boldSystemFont(ofSize: Responsive.isIPad ? 30 : (Responsive.isSmallPhone ? 18 : Responsive.font(24)))
 
         startButton.backgroundColor       = UIColor(red: 0.63, green: 0.31, blue: 0.94, alpha: 0.6)
         startButton.layer.shadowColor     = UIColor(red: 0.8, green: 0.5, blue: 1, alpha: 1).cgColor
@@ -210,7 +301,7 @@ class TrackSelectionViewController: UIViewController {
         startButton.layer.borderWidth     = 1.5
         startButton.layer.borderColor     = UIColor(red: 0.9, green: 0.8, blue: 1, alpha: 0.4).cgColor
         startButton.setTitleColor(UIColor(red: 1, green: 0.9, blue: 0.8, alpha: 1), for: .normal)
-        startButton.titleLabel?.font      = UIFont(name: "Audiowide-Regular", size: 22) ?? .boldSystemFont(ofSize: 22)
+        startButton.titleLabel?.font      = UIFont(name: "Audiowide-Regular", size: Responsive.font(22)) ?? .boldSystemFont(ofSize: Responsive.font(22))
     }
 
     private func setupPortalAnimation() {
@@ -222,6 +313,43 @@ class TrackSelectionViewController: UIViewController {
         portalBaseView.animationImages   = frames
         portalBaseView.animationDuration = 5
         portalBaseView.startAnimating()
+    }
+
+    private func alignBeam() {
+        guard let beamView = beamView ?? findBeamView() else { return }
+        self.beamView = beamView
+
+        beamView.center.x = videoContainerView.center.x
+        beamView.layer.zPosition = 1
+        portalBaseView.layer.zPosition = 0
+        videoContainerView.layer.zPosition = 2
+
+        view.bringSubviewToFront(portalBaseView)
+        view.bringSubviewToFront(beamView)
+        view.bringSubviewToFront(backButton)
+        view.bringSubviewToFront(profileButton)
+        view.bringSubviewToFront(startButton)
+    }
+
+    private func findBeamView() -> UIImageView? {
+        allImageViews(in: view).first { imageView in
+            imageView !== portalBaseView &&
+            imageView.bounds.width > 120 &&
+            abs(imageView.center.x - videoContainerView.center.x) < 40 &&
+            imageView.frame.minY >= videoContainerView.frame.maxY - 20 &&
+            imageView.frame.maxY <= portalBaseView.frame.maxY + 20
+        }
+    }
+
+    private func allImageViews(in root: UIView) -> [UIImageView] {
+        var results: [UIImageView] = []
+        for subview in root.subviews {
+            if let imageView = subview as? UIImageView {
+                results.append(imageView)
+            }
+            results.append(contentsOf: allImageViews(in: subview))
+        }
+        return results
     }
 
     // MARK: — Goal controls row (Distance + Calories), built in code
@@ -247,12 +375,12 @@ class TrackSelectionViewController: UIViewController {
         view.addSubview(row)
         view.bringSubviewToFront(row)
 
-        rowHeightConstraint = row.heightAnchor.constraint(equalToConstant: 54)
-        
+        rowHeightConstraint = row.heightAnchor.constraint(equalToConstant: Responsive.size(54))
+
         NSLayoutConstraint.activate([
-            row.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            row.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            row.bottomAnchor.constraint(equalTo: startButton.topAnchor, constant: -24),
+            row.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Responsive.contentInset),
+            row.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Responsive.contentInset),
+            row.bottomAnchor.constraint(equalTo: startButton.topAnchor, constant: Responsive.isSmallPhone ? -18 : -24),
             rowHeightConstraint
         ])
         
@@ -356,7 +484,7 @@ class TrackSelectionViewController: UIViewController {
     private func makeGlassPill() -> UIView {
         let v = UIView()
         v.translatesAutoresizingMaskIntoConstraints = false
-        v.layer.cornerRadius = 14
+        v.layer.cornerRadius = Responsive.cornerRadius(14)
         v.layer.cornerCurve  = .continuous
         v.clipsToBounds      = true
         v.layer.borderWidth  = 1
@@ -377,7 +505,7 @@ class TrackSelectionViewController: UIViewController {
 
     // MARK: — Title Update Logic
     private func updateButtonTitles() {
-        let font = UIFont.systemFont(ofSize: 16, weight: .bold)
+        let font = UIFont.systemFont(ofSize: Responsive.font(16), weight: .bold)
         
         var distCfg = distBtn.configuration
         distCfg?.attributedTitle = AttributedString(String(format: "%.1f km", distanceKm), attributes: AttributeContainer([.font: font]))
@@ -557,7 +685,7 @@ extension TrackSelectionViewController: UIPickerViewDataSource, UIPickerViewDele
         label.backgroundColor = .clear
         
         // Maintain the bold style, using a slightly striking color for the scroll effect
-        label.font = .systemFont(ofSize: 20, weight: .bold) 
+        label.font = .systemFont(ofSize: Responsive.font(20), weight: .bold)
         label.textColor = UIColor(red: 0.8, green: 0.7, blue: 1, alpha: 1.0) 
         
         let km = Double(row + 1) * 0.1
@@ -589,7 +717,7 @@ extension TrackSelectionViewController {
         distancePicker.isHidden = false
         calPicker.isHidden = false
         
-        self.rowHeightConstraint.constant = 110 // Expands exactly to reveal roughly 3 perfectly framed options natively cut off by the pill mask!
+        self.rowHeightConstraint.constant = Responsive.size(110) // Expands exactly to reveal roughly 3 perfectly framed options natively cut off by the pill mask!
         
         UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.2, options: .curveEaseInOut) {
             self.pickerOverlay.alpha = 1
@@ -663,7 +791,7 @@ extension TrackSelectionViewController {
         calPicker.alpha = 0
         distBtn.alpha = 1
         calBtn.alpha = 1
-        rowHeightConstraint.constant = 54
+        rowHeightConstraint.constant = Responsive.size(54)
         pickerOverlay.isHidden = true
         distancePicker.isHidden = true
         calPicker.isHidden = true
@@ -673,8 +801,8 @@ extension TrackSelectionViewController {
     @objc private func dismissInlinePicker() {
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         
-        self.rowHeightConstraint.constant = 54
-        
+        self.rowHeightConstraint.constant = Responsive.size(54)
+
         UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.2, options: .curveEaseInOut, animations: {
             self.pickerOverlay.alpha = 0
             self.distancePicker.alpha = 0
