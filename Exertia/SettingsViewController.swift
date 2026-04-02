@@ -1,5 +1,6 @@
 import UIKit
 import ObjectiveC
+import SafariServices
 
 /// Key for objc_setAssociatedObject linking eye buttons to their UITextField.
 private var eyeBtnKey: UInt8 = 0
@@ -141,6 +142,7 @@ class SettingsViewController: UIViewController {
 
         stackContainer.addArrangedSubview(buildAudioCard())
         stackContainer.addArrangedSubview(buildAccountCard())
+        stackContainer.addArrangedSubview(buildInfoCard())
         stackContainer.addArrangedSubview(buildDangerSection())
     }
 
@@ -332,6 +334,105 @@ class SettingsViewController: UIViewController {
             tapBtn.trailingAnchor.constraint(equalTo: inner.trailingAnchor)
         ])
         return card
+    }
+
+    // MARK: - Info Card (Privacy Policy & Contact Us)
+
+    private func buildInfoCard() -> UIView {
+        let card = glassCard()
+        let header = sectionHeader("Info")
+
+        let privacyRow = makeInfoRow(
+            icon: "lock.shield.fill",
+            title: "Privacy Policy",
+            action: #selector(openPrivacyPolicy)
+        )
+        let sep = makeSeparator()
+        let contactRow = makeInfoRow(
+            icon: "envelope.fill",
+            title: "Contact Us",
+            action: #selector(openContactUs)
+        )
+
+        let inner = UIStackView(arrangedSubviews: [header, privacyRow, sep, contactRow])
+        inner.axis    = .vertical
+        inner.spacing = 4
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        inner.setCustomSpacing(14, after: header)
+        card.addSubview(inner)
+        NSLayoutConstraint.activate([
+            inner.topAnchor.constraint(equalTo: card.topAnchor, constant: 20),
+            inner.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -20),
+            inner.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 20),
+            inner.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -20)
+        ])
+        return card
+    }
+
+    private func makeInfoRow(icon: String, title: String, action: Selector) -> UIView {
+        let symCfg   = UIImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+        let iconView = UIImageView(image: UIImage(systemName: icon, withConfiguration: symCfg))
+        iconView.tintColor = UIColor(red: 0.0, green: 0.95, blue: 0.63, alpha: 1)
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.widthAnchor.constraint(equalToConstant: 22).isActive = true
+
+        let label      = UILabel()
+        label.text     = title
+        label.font     = .systemFont(ofSize: 15, weight: .semibold)
+        label.textColor = .white
+        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let chevron = UIImageView(image: UIImage(systemName: "chevron.right",
+                                                  withConfiguration: symCfg))
+        chevron.tintColor   = UIColor(white: 0.5, alpha: 1)
+        chevron.contentMode = .scaleAspectFit
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+        chevron.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        chevron.setContentHuggingPriority(.required, for: .horizontal)
+        chevron.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let row = UIStackView(arrangedSubviews: [iconView, label, chevron])
+        row.axis      = .horizontal
+        row.spacing   = 12
+        row.alignment = .center
+
+        let tapBtn = UIButton(type: .system)
+        tapBtn.addTarget(self, action: action, for: .touchUpInside)
+        tapBtn.translatesAutoresizingMaskIntoConstraints = false
+        row.addSubview(tapBtn)
+        NSLayoutConstraint.activate([
+            tapBtn.topAnchor.constraint(equalTo: row.topAnchor),
+            tapBtn.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+            tapBtn.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            tapBtn.trailingAnchor.constraint(equalTo: row.trailingAnchor)
+        ])
+
+        row.isLayoutMarginsRelativeArrangement = true
+        row.layoutMargins = UIEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
+        return row
+    }
+
+    // Permanent Cloudflare Pages URL — no trailing slash, no hash.
+    // Update this once after deploying exertia-web.
+    private let webBaseURL = "https://exertia-web.pages.dev"
+
+    // Opens the Exertia web page and auto-scrolls to the given section.
+    // hash should be e.g. "#privacy" or "#contact"
+    private func openWebPage(hash: String) {
+        let urlString = webBaseURL + hash
+        guard let url = URL(string: urlString) else { return }
+        let safariVC = SFSafariViewController(url: url)
+        safariVC.preferredBarTintColor     = UIColor(red: 0.07, green: 0.07, blue: 0.26, alpha: 1)
+        safariVC.preferredControlTintColor = UIColor(red: 0.0, green: 0.96, blue: 0.63, alpha: 1)
+        present(safariVC, animated: true)
+    }
+
+    @objc private func openPrivacyPolicy() {
+        openWebPage(hash: "#privacy")
+    }
+
+    @objc private func openContactUs() {
+        openWebPage(hash: "#contact")
     }
 
     // MARK: - Danger Section
