@@ -79,12 +79,12 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
             gradientView.topAnchor.constraint(equalTo: view.topAnchor),
             gradientView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             gradientView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            gradientView.heightAnchor.constraint(equalToConstant: 350)
+            gradientView.heightAnchor.constraint(equalToConstant: Responsive.gradientHeight)
         ])
         let layer = CAGradientLayer()
         layer.colors = [UIColor.neonPink.withAlphaComponent(0.3).cgColor, UIColor.clear.cgColor]
         layer.locations = [0.0, 1.0]
-        layer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 350)
+        layer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: Responsive.gradientHeight)
         gradientView.layer.addSublayer(layer)
     }
 
@@ -102,7 +102,7 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         backBtn.addTarget(self, action: #selector(goBack), for: .touchUpInside)
 
         titleLabel.text = "Run History"
-        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: Responsive.font(20), weight: .bold)
         titleLabel.textColor = .white
         titleLabel.textAlignment = .center
 
@@ -115,12 +115,12 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
             navBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             navBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             navBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            navBar.heightAnchor.constraint(equalToConstant: 50),
+            navBar.heightAnchor.constraint(equalToConstant: Responsive.navBarHeight),
 
-            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: 20),
+            backBtn.leadingAnchor.constraint(equalTo: navBar.leadingAnchor, constant: Responsive.contentInset),
             backBtn.centerYAnchor.constraint(equalTo: navBar.centerYAnchor),
-            backBtn.widthAnchor.constraint(equalToConstant: 40),
-            backBtn.heightAnchor.constraint(equalToConstant: 40),
+            backBtn.widthAnchor.constraint(equalToConstant: Responsive.size(40)),
+            backBtn.heightAnchor.constraint(equalToConstant: Responsive.size(40)),
 
             titleLabel.centerXAnchor.constraint(equalTo: navBar.centerXAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: navBar.centerYAnchor)
@@ -142,9 +142,9 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         for (i, filter) in StatusFilter.allCases.enumerated() {
             let btn = UIButton()
             btn.setTitle(filter.title, for: .normal)
-            btn.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
-            btn.contentEdgeInsets = UIEdgeInsets(top: 7, left: 16, bottom: 7, right: 16)
-            btn.layer.cornerRadius = 14
+            btn.titleLabel?.font = .systemFont(ofSize: Responsive.font(13), weight: .semibold)
+            btn.contentEdgeInsets = UIEdgeInsets(top: Responsive.padding(7), left: Responsive.padding(16), bottom: Responsive.padding(7), right: Responsive.padding(16))
+            btn.layer.cornerRadius = Responsive.cornerRadius(14)
             btn.tag = i
             btn.addTarget(self, action: #selector(filterTapped(_:)), for: .touchUpInside)
             styleChip(btn, selected: i == 0)
@@ -153,10 +153,10 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         }
 
         NSLayoutConstraint.activate([
-            filterScroll.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: 10),
-            filterScroll.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            filterScroll.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            filterScroll.heightAnchor.constraint(equalToConstant: 36),
+            filterScroll.topAnchor.constraint(equalTo: navBar.bottomAnchor, constant: Responsive.padding(10)),
+            filterScroll.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Responsive.contentInset),
+            filterScroll.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Responsive.contentInset),
+            filterScroll.heightAnchor.constraint(equalToConstant: Responsive.size(36)),
 
             chipStack.topAnchor.constraint(equalTo: filterScroll.topAnchor),
             chipStack.bottomAnchor.constraint(equalTo: filterScroll.bottomAnchor),
@@ -236,16 +236,16 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         emptyLabel.text = "No runs yet.\nPlay your first session!"
         emptyLabel.numberOfLines = 0
         emptyLabel.textAlignment = .center
-        emptyLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        emptyLabel.font = .systemFont(ofSize: Responsive.font(16), weight: .medium)
         emptyLabel.textColor = UIColor.white.withAlphaComponent(0.3)
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
         emptyLabel.isHidden = true
         view.addSubview(emptyLabel)
 
         NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: filterScroll.bottomAnchor, constant: 10),
-            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            tableView.topAnchor.constraint(equalTo: filterScroll.bottomAnchor, constant: Responsive.padding(10)),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Responsive.contentInset),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Responsive.contentInset),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -324,7 +324,7 @@ class RunHistoryViewController: UIViewController, UITableViewDataSource, UITable
         return cell
     }
 
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { 100 }
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { Responsive.size(100) }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -371,7 +371,7 @@ class HistoryRowCell: UITableViewCell {
 
     private func buildUI() {
         // Glass card
-        blurView.layer.cornerRadius = 20
+        blurView.layer.cornerRadius = Responsive.cornerRadius(20)
         blurView.clipsToBounds = true
         blurView.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
         blurView.layer.borderWidth = 1
@@ -379,19 +379,19 @@ class HistoryRowCell: UITableViewCell {
         contentView.addSubview(blurView)
 
         // Date
-        dateLbl.font = .systemFont(ofSize: 11, weight: .semibold)
+        dateLbl.font = .systemFont(ofSize: Responsive.font(11), weight: .semibold)
         dateLbl.textColor = UIColor.white.withAlphaComponent(0.45)
         dateLbl.translatesAutoresizingMaskIntoConstraints = false
         blurView.contentView.addSubview(dateLbl)
 
         // Track name
-        trackLbl.font = .systemFont(ofSize: 16, weight: .bold)
+        trackLbl.font = .systemFont(ofSize: Responsive.font(16), weight: .bold)
         trackLbl.textColor = .white
         trackLbl.translatesAutoresizingMaskIntoConstraints = false
         blurView.contentView.addSubview(trackLbl)
 
         // Distance — neon pink, large
-        distLbl.font = .systemFont(ofSize: 20, weight: .heavy)
+        distLbl.font = .systemFont(ofSize: Responsive.font(20), weight: .heavy)
         distLbl.textColor = .neonPink
         distLbl.textAlignment = .right
         distLbl.setContentHuggingPriority(.required, for: .horizontal)
@@ -400,7 +400,7 @@ class HistoryRowCell: UITableViewCell {
         blurView.contentView.addSubview(distLbl)
 
         // Calories
-        calLbl.font = .systemFont(ofSize: 11, weight: .medium)
+        calLbl.font = .systemFont(ofSize: Responsive.font(11), weight: .medium)
         calLbl.textColor = UIColor.white.withAlphaComponent(0.4)
         calLbl.textAlignment = .right
         calLbl.setContentHuggingPriority(.required, for: .horizontal)
@@ -432,33 +432,33 @@ class HistoryRowCell: UITableViewCell {
             blurView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
 
             // Arrow — far right, vertically centered
-            arrowImg.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -16),
+            arrowImg.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -Responsive.padding(16)),
             arrowImg.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
-            arrowImg.widthAnchor.constraint(equalToConstant: 12),
-            arrowImg.heightAnchor.constraint(equalToConstant: 12),
+            arrowImg.widthAnchor.constraint(equalToConstant: Responsive.size(12)),
+            arrowImg.heightAnchor.constraint(equalToConstant: Responsive.size(12)),
 
             // Distance — top right, left of arrow
-            distLbl.trailingAnchor.constraint(equalTo: arrowImg.leadingAnchor, constant: -8),
-            distLbl.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: 18),
+            distLbl.trailingAnchor.constraint(equalTo: arrowImg.leadingAnchor, constant: -Responsive.padding(8)),
+            distLbl.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: Responsive.padding(18)),
 
             // Calories — below distance
             calLbl.trailingAnchor.constraint(equalTo: distLbl.trailingAnchor),
-            calLbl.topAnchor.constraint(equalTo: distLbl.bottomAnchor, constant: 3),
+            calLbl.topAnchor.constraint(equalTo: distLbl.bottomAnchor, constant: Responsive.padding(3)),
 
             // Date — top left
-            dateLbl.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 18),
-            dateLbl.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: 18),
-            dateLbl.trailingAnchor.constraint(lessThanOrEqualTo: distLbl.leadingAnchor, constant: -8),
+            dateLbl.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: Responsive.padding(18)),
+            dateLbl.topAnchor.constraint(equalTo: blurView.contentView.topAnchor, constant: Responsive.padding(18)),
+            dateLbl.trailingAnchor.constraint(lessThanOrEqualTo: distLbl.leadingAnchor, constant: -Responsive.padding(8)),
 
             // Track — below date
-            trackLbl.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 18),
-            trackLbl.topAnchor.constraint(equalTo: dateLbl.bottomAnchor, constant: 2),
-            trackLbl.trailingAnchor.constraint(lessThanOrEqualTo: distLbl.leadingAnchor, constant: -8),
+            trackLbl.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: Responsive.padding(18)),
+            trackLbl.topAnchor.constraint(equalTo: dateLbl.bottomAnchor, constant: Responsive.padding(2)),
+            trackLbl.trailingAnchor.constraint(lessThanOrEqualTo: distLbl.leadingAnchor, constant: -Responsive.padding(8)),
 
             // Badges — always pinned to the LEFT, directly below track name
-            badgeStack.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 18),
-            badgeStack.topAnchor.constraint(equalTo: trackLbl.bottomAnchor, constant: 7),
-            badgeStack.bottomAnchor.constraint(lessThanOrEqualTo: blurView.contentView.bottomAnchor, constant: -10)
+            badgeStack.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: Responsive.padding(18)),
+            badgeStack.topAnchor.constraint(equalTo: trackLbl.bottomAnchor, constant: Responsive.padding(7)),
+            badgeStack.bottomAnchor.constraint(lessThanOrEqualTo: blurView.contentView.bottomAnchor, constant: -Responsive.padding(10))
         ])
     }
 

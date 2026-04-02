@@ -1,6 +1,6 @@
 import UIKit
 
-struct Badge {
+struct Badge: Codable {
     let id: String
     let title: String
     let description: String
@@ -12,6 +12,14 @@ struct Badge {
 }
 
 class ProfileViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+    private struct CachedProfileSnapshot: Codable {
+        let displayName: String
+        let username: String
+        let shortId: String
+        let realUserId: String
+        let inProgressBadges: [Badge]
+        let completedBadges: [Badge]
+    }
 
     private let backgroundImageView = UIImageView()
     private let headerView = UIView()
@@ -32,6 +40,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     private let completedButton = UIButton()
     private let tabIndicator = UIView()
     private let tableView = UITableView()
+    private let emptyStateLabel = UILabel()
 
     private let loadingIndicator = UIActivityIndicatorView(style: .large)
     private var isShowingCompleted = false
@@ -40,6 +49,23 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     private var activeBadges: [Badge] { return isShowingCompleted ? completedBadges : inProgressBadges }
     private var realUserId: String = ""
 
+    private var headerTopInset: CGFloat {
+        Responsive.isIPad ? 14 : 0
+    }
+
+    private var headerHeight: CGFloat {
+        Responsive.isIPad ? 72 : Responsive.navBarHeight
+    }
+
+    private var headerSideInset: CGFloat {
+        Responsive.isIPad ? 28 : Responsive.contentInset
+    }
+
+    private var profileCacheKey: String? {
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return nil }
+        return "profile.cache.\(userId)"
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -47,6 +73,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         setupUI()
         setupActions()
         updateTabSelection()
+        applyCachedProfileSnapshot()
         fetchRealProfileData()
     }
 
@@ -58,16 +85,26 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     func fetchRealProfileData() {
         guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
 
-        loadingIndicator.startAnimating()
+        if !applyCachedProfileSnapshot() {
+            loadingIndicator.startAnimating()
+        }
         Task {
+            var fetchedDisplayName: String?
+            var fetchedUsername: String?
+            var fetchedShortId: String?
+            var fetchedRealUserId: String?
+
             // ── 1. Profile header (must always succeed) ──────────────────────
             do {
                 let user = try await SupabaseManager.shared.getUser(userId: userId)
+                fetchedDisplayName = user.display_name ?? user.username ?? "Player"
+                fetchedUsername = "@\(user.username ?? "")"
+                fetchedShortId = String(user.id.prefix(8)).uppercased()
+                fetchedRealUserId = user.id
                 DispatchQueue.main.async {
-                    self.nameLabel.text  = user.display_name ?? user.username ?? "Player"
-                    self.emailLabel.text = "@\(user.username ?? "")"
-                    let shortId = String(user.id.prefix(8)).uppercased()
-                    self.idLabel.text = "ID: \(shortId)"
+                    self.nameLabel.text  = fetchedDisplayName
+                    self.emailLabel.text = fetchedUsername
+                    self.idLabel.text = "ID: \(fetchedShortId ?? "...")"
                     self.realUserId   = user.id
                 }
             } catch {
@@ -78,7 +115,8 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
             do {
                 async let userBadgesFetch = SupabaseManager.shared.getUserBadges(userId: userId)
                 async let allBadgesFetch  = SupabaseManager.shared.getAllBadges()
-                let (userBadges, allBadges) = try await (userBadgesFetch, allBadgesFetch)
+                async let sessionsFetch   = SupabaseManager.shared.getUserSessions(userId: userId)
+                let (userBadges, allBadges, sessions) = try await (userBadgesFetch, allBadgesFetch, sessionsFetch)
 
                 // Build a lookup: badge id → UserBadge progress record
                 let progressMap = Dictionary(uniqueKeysWithValues: userBadges.compactMap { ub -> (String, AppUserBadge)? in
@@ -86,14 +124,28 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
                     return (bid, ub)
                 })
 
+                let qualifyingSessions = sessions.filter(\.countsTowardDailyProgress)
+                let derivedDistanceProgress = qualifyingSessions.compactMap(\.distance_covered).reduce(0, +)
+                let derivedCaloriesProgress = Double(qualifyingSessions.compactMap(\.calories_burned).reduce(0, +))
+
                 var inProgress: [Badge] = []
                 var completed:  [Badge] = []
 
                 for badge in allBadges {
                     let userBadge    = progressMap[badge.id]
-                    let isCompleted  = userBadge?.is_completed ?? false
-                    let current      = userBadge?.current_progress ?? 0
+                    let storedCurrent = userBadge?.current_progress ?? 0
+                    let derivedCurrent: Double
+                    switch badge.badge_type {
+                    case "distance":
+                        derivedCurrent = derivedDistanceProgress
+                    case "calories":
+                        derivedCurrent = derivedCaloriesProgress
+                    default:
+                        derivedCurrent = storedCurrent
+                    }
+                    let current = max(storedCurrent, derivedCurrent)
                     let target       = badge.target_value
+                    let isCompleted  = (userBadge?.is_completed ?? false) || current >= target
                     let progress     = target > 0 ? Float(current / target) : 0
                     let progressText = self.formatProgress(current, target: target, type: badge.badge_type)
                     let completionToken = self.completionToken(for: badge.id, userBadge: userBadge)
@@ -119,6 +171,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
                     self.inProgressBadges = inProgress
                     self.completedBadges  = completed
                     self.tableView.reloadData()
+                    self.updateEmptyState()
 
                     let shownCompletionTokens = self.shownBadgeCompletionTokens(for: userId)
                     let newlyCompletedBadges = completed.filter { badge in
@@ -132,11 +185,22 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
 
                     let currentCompletionTokens = Set(completed.compactMap(\.completionToken))
                     self.storeShownBadgeCompletionTokens(currentCompletionTokens, for: userId)
+                    self.persistProfileSnapshot(
+                        displayName: fetchedDisplayName ?? self.nameLabel.text ?? "Player",
+                        username: fetchedUsername ?? self.emailLabel.text ?? "",
+                        shortId: fetchedShortId ?? self.shortDisplayId(),
+                        realUserId: fetchedRealUserId ?? self.realUserId,
+                        inProgressBadges: inProgress,
+                        completedBadges: completed
+                    )
 
                     print("✅ Badges: \(inProgress.count) in progress, \(completed.count) completed (catalogue: \(allBadges.count))")
                 }
             } catch {
-                DispatchQueue.main.async { self.loadingIndicator.stopAnimating() }
+                DispatchQueue.main.async {
+                    self.loadingIndicator.stopAnimating()
+                    self.updateEmptyState()
+                }
                 print("❌ Failed to fetch badges: \(error) — profile header still visible")
             }
         }
@@ -196,6 +260,71 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         }
         return badgeId
     }
+
+    @discardableResult
+    private func applyCachedProfileSnapshot() -> Bool {
+        guard let key = profileCacheKey,
+              let data = UserDefaults.standard.data(forKey: key),
+              let snapshot = try? JSONDecoder().decode(CachedProfileSnapshot.self, from: data) else {
+            return false
+        }
+
+        nameLabel.text = snapshot.displayName
+        emailLabel.text = snapshot.username
+        idLabel.text = "ID: \(snapshot.shortId)"
+        realUserId = snapshot.realUserId
+        inProgressBadges = snapshot.inProgressBadges
+        completedBadges = snapshot.completedBadges
+        tableView.reloadData()
+        updateEmptyState()
+        return true
+    }
+
+    private func persistProfileSnapshot(
+        displayName: String,
+        username: String,
+        shortId: String,
+        realUserId: String,
+        inProgressBadges: [Badge],
+        completedBadges: [Badge]
+    ) {
+        guard let key = profileCacheKey else { return }
+        let snapshot = CachedProfileSnapshot(
+            displayName: displayName,
+            username: username,
+            shortId: shortId,
+            realUserId: realUserId,
+            inProgressBadges: inProgressBadges,
+            completedBadges: completedBadges
+        )
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    private func shortDisplayId() -> String {
+        if let text = idLabel.text?.replacingOccurrences(of: "ID: ", with: ""), !text.isEmpty, text != "..." {
+            return text
+        }
+        if let userId = UserDefaults.standard.string(forKey: "supabaseUserID") {
+            return String(userId.prefix(8)).uppercased()
+        }
+        return "..."
+    }
+
+    private func updateEmptyState() {
+        let totalBadgeCount = inProgressBadges.count + completedBadges.count
+        let message: String?
+
+        if isShowingCompleted {
+            message = completedBadges.isEmpty ? "No badges earned yet" : nil
+        } else {
+            message = (totalBadgeCount > 0 && inProgressBadges.isEmpty) ? "All badges earned" : nil
+        }
+
+        emptyStateLabel.text = message
+        emptyStateLabel.isHidden = (message == nil)
+        tableView.backgroundView = message == nil ? nil : emptyStateLabel
+    }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
@@ -236,6 +365,11 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         tableView.delegate = self
         tableView.register(BadgeCell.self, forCellReuseIdentifier: "BadgeCell")
         tableView.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateLabel.font = .systemFont(ofSize: Responsive.font(15), weight: .semibold)
+        emptyStateLabel.textColor = UIColor.white.withAlphaComponent(0.55)
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.numberOfLines = 0
+        emptyStateLabel.isHidden = true
         view.addSubview(tableView)
         
         NSLayoutConstraint.activate([
@@ -257,13 +391,14 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     
     func setupHeader() {
         headerView.translatesAutoresizingMaskIntoConstraints = false
+        headerView.backgroundColor = Responsive.isIPad ? UIColor.black.withAlphaComponent(0.10) : .clear
         view.addSubview(headerView)
         
         setupGlassButton(backButton, icon: "chevron.left")
         setupGlassButton(settingsButton, icon: "gearshape")
         
         titleLabel.text = "Profile"
-        titleLabel.font = .systemFont(ofSize: 20, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: Responsive.font(20), weight: .bold)
         titleLabel.textColor = .white
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         
@@ -272,20 +407,20 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         headerView.addSubview(titleLabel)
         
         NSLayoutConstraint.activate([
-            headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: headerTopInset),
             headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            headerView.heightAnchor.constraint(equalToConstant: 60),
-            
-            backButton.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 20),
+            headerView.heightAnchor.constraint(equalToConstant: headerHeight),
+
+            backButton.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: headerSideInset),
             backButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            backButton.widthAnchor.constraint(equalToConstant: 44),
-            backButton.heightAnchor.constraint(equalToConstant: 44),
-            
-            settingsButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -20),
+            backButton.widthAnchor.constraint(equalToConstant: Responsive.size(44)),
+            backButton.heightAnchor.constraint(equalToConstant: Responsive.size(44)),
+
+            settingsButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -headerSideInset),
             settingsButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            settingsButton.widthAnchor.constraint(equalToConstant: 44),
-            settingsButton.heightAnchor.constraint(equalToConstant: 44),
+            settingsButton.widthAnchor.constraint(equalToConstant: Responsive.size(44)),
+            settingsButton.heightAnchor.constraint(equalToConstant: Responsive.size(44)),
             
             titleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: headerView.centerYAnchor)
@@ -301,7 +436,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         avatarImageView.translatesAutoresizingMaskIntoConstraints = false
 
         editLabel.text = "Edit Profile"
-        editLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        editLabel.font = .systemFont(ofSize: Responsive.font(12), weight: .medium)
         editLabel.textColor = UIColor(red: 0.6, green: 0.4, blue: 1.0, alpha: 1)
         editLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -309,11 +444,11 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         editButton.translatesAutoresizingMaskIntoConstraints = false
         editButton.addTarget(self, action: #selector(editProfileTapped), for: .touchUpInside)
         nameLabel.text = ""
-        nameLabel.font = .systemFont(ofSize: 22, weight: .bold)
+        nameLabel.font = .systemFont(ofSize: Responsive.font(22), weight: .bold)
         nameLabel.textColor = .white
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
         emailLabel.text = ""
-        emailLabel.font = .systemFont(ofSize: 12)
+        emailLabel.font = .systemFont(ofSize: Responsive.font(12))
         emailLabel.textColor = .gray
         emailLabel.translatesAutoresizingMaskIntoConstraints = false
         idPillView.backgroundColor = UIColor.white.withAlphaComponent(0.1)
@@ -321,7 +456,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         idPillView.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
         idPillView.translatesAutoresizingMaskIntoConstraints = false
         idLabel.text = "ID: ..."
-        idLabel.font = .systemFont(ofSize: 12, weight: .bold)
+        idLabel.font = .systemFont(ofSize: Responsive.font(12), weight: .bold)
         idLabel.textColor = .white
         idLabel.translatesAutoresizingMaskIntoConstraints = false
         
@@ -348,39 +483,39 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         idPillView.addSubview(copyButton)   // on top — catches all taps on the pill
 
         NSLayoutConstraint.activate([
-            avatarImageView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 10),
+            avatarImageView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: Responsive.padding(10)),
             avatarImageView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            avatarImageView.widthAnchor.constraint(equalToConstant: 100),
-            avatarImageView.heightAnchor.constraint(equalToConstant: 100),
+            avatarImageView.widthAnchor.constraint(equalToConstant: Responsive.size(100)),
+            avatarImageView.heightAnchor.constraint(equalToConstant: Responsive.size(100)),
 
-            editLabel.topAnchor.constraint(equalTo: avatarImageView.bottomAnchor, constant: 8),
+            editLabel.topAnchor.constraint(equalTo: avatarImageView.bottomAnchor, constant: Responsive.padding(8)),
             editLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             // Edit button covers the avatar + edit label so the whole area is tappable
             editButton.topAnchor.constraint(equalTo: avatarImageView.topAnchor),
             editButton.bottomAnchor.constraint(equalTo: editLabel.bottomAnchor),
             editButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            editButton.widthAnchor.constraint(equalToConstant: 120),
-            
-            nameLabel.topAnchor.constraint(equalTo: editLabel.bottomAnchor, constant: 8),
+            editButton.widthAnchor.constraint(equalToConstant: Responsive.size(120)),
+
+            nameLabel.topAnchor.constraint(equalTo: editLabel.bottomAnchor, constant: Responsive.padding(8)),
             nameLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             
-            emailLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 4),
+            emailLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: Responsive.padding(4)),
             emailLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             
-            idPillView.topAnchor.constraint(equalTo: emailLabel.bottomAnchor, constant: 12),
+            idPillView.topAnchor.constraint(equalTo: emailLabel.bottomAnchor, constant: Responsive.padding(12)),
             idPillView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            idPillView.heightAnchor.constraint(equalToConstant: 32),
-            idPillView.widthAnchor.constraint(greaterThanOrEqualToConstant: 140),
-            
-            idLabel.leadingAnchor.constraint(equalTo: idPillView.leadingAnchor, constant: 16),
+            idPillView.heightAnchor.constraint(equalToConstant: Responsive.size(32)),
+            idPillView.widthAnchor.constraint(greaterThanOrEqualToConstant: Responsive.size(140)),
+
+            idLabel.leadingAnchor.constraint(equalTo: idPillView.leadingAnchor, constant: Responsive.padding(16)),
             idLabel.centerYAnchor.constraint(equalTo: idPillView.centerYAnchor),
             
-            copyIcon.leadingAnchor.constraint(equalTo: idLabel.trailingAnchor, constant: 8),
-            copyIcon.trailingAnchor.constraint(equalTo: idPillView.trailingAnchor, constant: -12),
+            copyIcon.leadingAnchor.constraint(equalTo: idLabel.trailingAnchor, constant: Responsive.padding(8)),
+            copyIcon.trailingAnchor.constraint(equalTo: idPillView.trailingAnchor, constant: -Responsive.padding(12)),
             copyIcon.centerYAnchor.constraint(equalTo: idPillView.centerYAnchor),
-            copyIcon.widthAnchor.constraint(equalToConstant: 14),
-            copyIcon.heightAnchor.constraint(equalToConstant: 14),
+            copyIcon.widthAnchor.constraint(equalToConstant: Responsive.size(14)),
+            copyIcon.heightAnchor.constraint(equalToConstant: Responsive.size(14)),
 
             // Copy button fills the entire pill
             copyButton.topAnchor.constraint(equalTo: idPillView.topAnchor),
@@ -396,7 +531,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         
         let header = UILabel()
         header.text = "Badges"
-        header.font = .systemFont(ofSize: 20, weight: .bold)
+        header.font = .systemFont(ofSize: Responsive.font(20), weight: .bold)
         header.textColor = .white
         header.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(header)
@@ -417,13 +552,13 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         view.addSubview(divider)
         
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: idPillView.bottomAnchor, constant: 30),
+            header.topAnchor.constraint(equalTo: idPillView.bottomAnchor, constant: Responsive.padding(30)),
             header.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            
-            tabContainer.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 15),
-            tabContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            tabContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            tabContainer.heightAnchor.constraint(equalToConstant: 40),
+
+            tabContainer.topAnchor.constraint(equalTo: header.bottomAnchor, constant: Responsive.padding(15)),
+            tabContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Responsive.contentInset),
+            tabContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Responsive.contentInset),
+            tabContainer.heightAnchor.constraint(equalToConstant: Responsive.size(40)),
             
             inProgressButton.leadingAnchor.constraint(equalTo: tabContainer.leadingAnchor),
             inProgressButton.topAnchor.constraint(equalTo: tabContainer.topAnchor),
@@ -567,6 +702,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
 
         isShowingCompleted = isCompletedTab
         updateTabSelection()
+        updateEmptyState()
 
         UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.8,
                        initialSpringVelocity: 0.5, options: .curveEaseOut) {
@@ -581,6 +717,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
 
             tableView.transform = CGAffineTransform(translationX: slideDirection * tableView.bounds.width, y: 0)
             tableView.reloadData()
+            updateEmptyState()
 
             UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.85,
                            initialSpringVelocity: 0.5, options: .curveEaseOut, animations: {
@@ -592,6 +729,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
             }
         } else {
             tableView.reloadData()
+            updateEmptyState()
         }
     }
     
@@ -604,7 +742,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
         button.backgroundColor = UIColor.white.withAlphaComponent(0.1)
         button.layer.borderWidth = 1
         button.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
-        let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .bold)
+        let config = UIImage.SymbolConfiguration(pointSize: Responsive.font(16), weight: .bold)
         button.setImage(UIImage(systemName: icon, withConfiguration: config), for: .normal)
         button.tintColor = .white
         button.translatesAutoresizingMaskIntoConstraints = false
@@ -612,7 +750,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     
     func configureTabButton(_ button: UIButton, title: String) {
         button.setTitle(title, for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+        button.titleLabel?.font = .systemFont(ofSize: Responsive.font(14), weight: .semibold)
         button.setTitleColor(.gray, for: .normal)
         button.translatesAutoresizingMaskIntoConstraints = false
     }
@@ -629,7 +767,7 @@ class ProfileViewController: UIViewController, UITableViewDataSource, UITableVie
     }
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 100
+        return Responsive.size(100)
     }
 }
 
@@ -655,14 +793,14 @@ class BadgeCell: UITableViewCell {
     
     func setupUI() {
         containerView.backgroundColor = UIColor.white.withAlphaComponent(0.08)
-        containerView.layer.cornerRadius = 20
+        containerView.layer.cornerRadius = Responsive.cornerRadius(20)
         containerView.layer.borderWidth = 1
         containerView.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
         containerView.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(containerView)
         
         iconContainer.backgroundColor = UIColor(red: 0.15, green: 0.1, blue: 0.25, alpha: 1.0)
-        iconContainer.layer.cornerRadius = 12
+        iconContainer.layer.cornerRadius = Responsive.cornerRadius(12)
         iconContainer.layer.borderWidth = 1
         iconContainer.clipsToBounds = true
         iconContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -678,11 +816,11 @@ class BadgeCell: UITableViewCell {
         lockImageView.isHidden = true
         iconContainer.addSubview(lockImageView)
         
-        titleLabel.font = .systemFont(ofSize: 16, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: Responsive.font(16), weight: .bold)
         titleLabel.textColor = .white
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        
-        descLabel.font = .systemFont(ofSize: 12)
+
+        descLabel.font = .systemFont(ofSize: Responsive.font(12))
         descLabel.textColor = .lightGray
         descLabel.numberOfLines = 2
         descLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -693,7 +831,7 @@ class BadgeCell: UITableViewCell {
         progressBar.clipsToBounds = true
         progressBar.translatesAutoresizingMaskIntoConstraints = false
         
-        progressLabel.font = .systemFont(ofSize: 10)
+        progressLabel.font = .systemFont(ofSize: Responsive.font(10))
         progressLabel.textColor = .gray
         progressLabel.lineBreakMode = .byClipping
         progressLabel.adjustsFontSizeToFitWidth = true
@@ -707,15 +845,15 @@ class BadgeCell: UITableViewCell {
         containerView.addSubview(progressLabel)
         
         NSLayoutConstraint.activate([
-            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
-            containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            
-            iconContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 15),
+            containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Responsive.padding(8)),
+            containerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -Responsive.padding(8)),
+            containerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Responsive.contentInset),
+            containerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Responsive.contentInset),
+
+            iconContainer.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: Responsive.padding(15)),
             iconContainer.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            iconContainer.widthAnchor.constraint(equalToConstant: 50),
-            iconContainer.heightAnchor.constraint(equalToConstant: 50),
+            iconContainer.widthAnchor.constraint(equalToConstant: Responsive.size(50)),
+            iconContainer.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
 
             iconImageView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
             iconImageView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
@@ -724,24 +862,24 @@ class BadgeCell: UITableViewCell {
 
             lockImageView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
             lockImageView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
-            lockImageView.widthAnchor.constraint(equalToConstant: 24),
-            lockImageView.heightAnchor.constraint(equalToConstant: 24),
+            lockImageView.widthAnchor.constraint(equalToConstant: Responsive.size(24)),
+            lockImageView.heightAnchor.constraint(equalToConstant: Responsive.size(24)),
+
+            titleLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: Responsive.padding(15)),
+            titleLabel.leadingAnchor.constraint(equalTo: iconContainer.trailingAnchor, constant: Responsive.padding(15)),
+            titleLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Responsive.padding(15)),
             
-            titleLabel.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 15),
-            titleLabel.leadingAnchor.constraint(equalTo: iconContainer.trailingAnchor, constant: 15),
-            titleLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -15),
-            
-            descLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            descLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: Responsive.padding(4)),
             descLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             descLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
             
-            progressBar.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -15),
+            progressBar.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -Responsive.padding(15)),
             progressBar.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             progressBar.trailingAnchor.constraint(equalTo: progressLabel.leadingAnchor, constant: -10),
             progressBar.heightAnchor.constraint(equalToConstant: 6),
             
             progressLabel.centerYAnchor.constraint(equalTo: progressBar.centerYAnchor),
-            progressLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -15),
+            progressLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -Responsive.padding(15)),
             progressLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 70)
         ])
     }

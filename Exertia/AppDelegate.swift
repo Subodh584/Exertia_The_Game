@@ -19,11 +19,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ = SupabaseManager.shared
         AudioManager.shared.configureAudioSession()
         AudioManager.shared.applySavedSettings()
+        application.isIdleTimerDisabled = true
 
         // NOTE: Do NOT call setUserOnline here — the splash screen handles auth first.
         // Calling authenticated API here races with token refresh and can blacklist the refresh token.
 
         return true
+    }
+
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        .portrait
     }
 
     // MARK: UISceneSession Lifecycle

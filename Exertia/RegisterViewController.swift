@@ -64,51 +64,59 @@ class RegisterViewController: UIViewController {
             return
         }
 
-        let fullName  = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
-        // Derive username from the part before @ — e.g. "john" from "john@example.com"
-        let username  = email.components(separatedBy: "@").first?.lowercased() ?? "player\(Int.random(in: 1000...9999))"
+        let fullName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+        let username = email.components(separatedBy: "@").first?.lowercased() ?? "player\(Int.random(in: 1000...9999))"
 
-        signUpButton.isEnabled = false
-        signUpButton.setTitle("Creating account…", for: .normal)
-        signUpButton.alpha = 0.7
-
-        print("🚀 Creating new user in Supabase: username=\(username), email=\(email)…")
+        setLoading(true, title: "Checking…")
 
         Task {
-            defer {
-                DispatchQueue.main.async {
-                    self.signUpButton.isEnabled = true
-                    self.signUpButton.setTitle("Sign Up", for: .normal)
-                    self.signUpButton.alpha = 1.0
-                }
-            }
+            defer { DispatchQueue.main.async { self.setLoading(false) } }
 
             do {
-                let userId = try await SupabaseManager.shared.signUp(
-                    email: email,
-                    password: password,
-                    username: username,
-                    displayName: fullName
-                )
+                // 1. Make sure this email isn't already registered
+                let exists = try await SupabaseManager.shared.checkEmailExists(email)
+                if exists {
+                    DispatchQueue.main.async {
+                        self.showAlert(title: "Email Taken",
+                                       message: "An account with this email already exists. Try logging in instead.")
+                    }
+                    return
+                }
 
-                UserDefaults.standard.set(userId, forKey: "supabaseUserID")
-                print("✅ SUPABASE SIGNUP SUCCESS! User ID: \(userId), username: \(username)")
+                // 2. Ask the mail server to send an OTP (URL fetched fresh inside sendOTP)
+                DispatchQueue.main.async { self.setLoading(true, title: "Sending code…") }
+                try await MailServerManager.sendOTP(to: email, purpose: "register")
 
+                print("✅ OTP sent to \(email). Navigating to verification…")
+
+                // 3. Hand off to OTPViewController — actual Supabase signup happens AFTER verification
                 DispatchQueue.main.async {
                     let otpVC = OTPViewController()
+                    otpVC.mode        = .register
+                    otpVC.email       = email
+                    otpVC.password    = password
+                    otpVC.displayName = fullName
+                    otpVC.username    = username
                     otpVC.modalPresentationStyle = .fullScreen
-                    otpVC.modalTransitionStyle = .crossDissolve
+                    otpVC.modalTransitionStyle   = .crossDissolve
                     self.present(otpVC, animated: true)
                 }
 
             } catch {
-                print("❌ SUPABASE SIGNUP FAILED: \(error)")
+                print("❌ Registration pre-check failed: \(error)")
                 DispatchQueue.main.async {
-                    self.showAlert(title: "Registration Failed",
-                                   message: "Could not create your account. The email may already be taken, or the server is unreachable. Please try again.")
+                    self.showAlert(title: "Something Went Wrong",
+                                   message: error.localizedDescription)
                 }
             }
         }
+    }
+
+    // MARK: - Loading state helper
+    private func setLoading(_ loading: Bool, title: String = "Sign Up") {
+        signUpButton.isEnabled = !loading
+        signUpButton.setTitle(loading ? title : "Sign Up", for: .normal)
+        signUpButton.alpha = loading ? 0.7 : 1.0
     }
 
     // MARK: - Alert Helper
@@ -160,21 +168,21 @@ class RegisterViewController: UIViewController {
     
     func setupGlassCard() {
         glassCard.backgroundColor = UIColor.white.withAlphaComponent(0.15)
-        glassCard.layer.cornerRadius = 24
+        glassCard.layer.cornerRadius = Responsive.cornerRadius(24)
         glassCard.layer.borderWidth = 1
         glassCard.layer.borderColor = UIColor.white.withAlphaComponent(0.3).cgColor
         glassCard.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(glassCard)
         
         titleLabel.text = "Create Account"
-        titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: Responsive.font(28), weight: .bold)
         titleLabel.textColor = .white
         titleLabel.textAlignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(titleLabel)
         
         subtitleLabel.text = "Start your fitness journey today"
-        subtitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        subtitleLabel.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         subtitleLabel.textColor = UIColor(white: 0.9, alpha: 1.0)
         subtitleLabel.textAlignment = .center
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -192,8 +200,8 @@ class RegisterViewController: UIViewController {
     
         signUpButton.setTitle("Sign Up", for: .normal)
         signUpButton.backgroundColor = UIColor(red: 0.0, green: 0.2, blue: 0.4, alpha: 1.0)
-        signUpButton.layer.cornerRadius = 12
-        signUpButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        signUpButton.layer.cornerRadius = Responsive.cornerRadius(12)
+        signUpButton.titleLabel?.font = .systemFont(ofSize: Responsive.font(18), weight: .bold)
         signUpButton.addTarget(self, action: #selector(signUpTapped), for: .touchUpInside)
         signUpButton.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(signUpButton)
@@ -202,12 +210,12 @@ class RegisterViewController: UIViewController {
         loginSwitchStack.translatesAutoresizingMaskIntoConstraints = false
         
         alreadyHaveAccountLabel.text = "Already have an account?"
-        alreadyHaveAccountLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        alreadyHaveAccountLabel.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
         alreadyHaveAccountLabel.textColor = UIColor(white: 0.8, alpha: 1.0)
         
         loginSwitchButton.setTitle("Sign in", for: .normal)
         loginSwitchButton.setTitleColor(.white, for: .normal)
-        loginSwitchButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .bold)
+        loginSwitchButton.titleLabel?.font = .systemFont(ofSize: Responsive.font(16), weight: .bold)
         loginSwitchButton.addTarget(self, action: #selector(loginSwitchTapped), for: .touchUpInside)
         
         loginSwitchStack.addArrangedSubview(alreadyHaveAccountLabel)
@@ -216,44 +224,44 @@ class RegisterViewController: UIViewController {
         
         NSLayoutConstraint.activate([
             glassCard.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            glassCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            glassCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            glassCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 580),
-            
-            titleLabel.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: 40),
+            glassCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Responsive.contentInset),
+            glassCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Responsive.contentInset),
+            glassCard.heightAnchor.constraint(greaterThanOrEqualToConstant: Responsive.verticalSize(580)),
+
+            titleLabel.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: Responsive.padding(40)),
             titleLabel.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: Responsive.padding(8)),
             subtitleLabel.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            
-            firstNameField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 35),
-            firstNameField.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 25),
-            firstNameField.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -25),
-            firstNameField.heightAnchor.constraint(equalToConstant: 50),
-            
-            lastNameField.topAnchor.constraint(equalTo: firstNameField.bottomAnchor, constant: 15),
+
+            firstNameField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: Responsive.padding(35)),
+            firstNameField.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: Responsive.padding(25)),
+            firstNameField.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -Responsive.padding(25)),
+            firstNameField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            lastNameField.topAnchor.constraint(equalTo: firstNameField.bottomAnchor, constant: Responsive.padding(15)),
             lastNameField.leadingAnchor.constraint(equalTo: firstNameField.leadingAnchor),
             lastNameField.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
-            lastNameField.heightAnchor.constraint(equalToConstant: 50),
-            
-            emailField.topAnchor.constraint(equalTo: lastNameField.bottomAnchor, constant: 15),
+            lastNameField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            emailField.topAnchor.constraint(equalTo: lastNameField.bottomAnchor, constant: Responsive.padding(15)),
             emailField.leadingAnchor.constraint(equalTo: firstNameField.leadingAnchor),
             emailField.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
-            emailField.heightAnchor.constraint(equalToConstant: 50),
-            
-            passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 15),
+            emailField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: Responsive.padding(15)),
             passwordField.leadingAnchor.constraint(equalTo: firstNameField.leadingAnchor),
             passwordField.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
-            passwordField.heightAnchor.constraint(equalToConstant: 50),
-            
-            signUpButton.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: 30),
+            passwordField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            signUpButton.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: Responsive.padding(30)),
             signUpButton.leadingAnchor.constraint(equalTo: firstNameField.leadingAnchor),
             signUpButton.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
-            signUpButton.heightAnchor.constraint(equalToConstant: 50),
-            
-            loginSwitchStack.topAnchor.constraint(equalTo: signUpButton.bottomAnchor, constant: 30),
+            signUpButton.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            loginSwitchStack.topAnchor.constraint(equalTo: signUpButton.bottomAnchor, constant: Responsive.padding(30)),
             loginSwitchStack.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-            loginSwitchStack.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -30)
+            loginSwitchStack.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -Responsive.padding(30))
         ])
     }
 

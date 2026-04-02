@@ -58,11 +58,11 @@ class DayStatsViewController: UIViewController {
             scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            stack.topAnchor.constraint(equalTo: scroll.topAnchor, constant: 24),
-            stack.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -20),
-            stack.bottomAnchor.constraint(equalTo: scroll.bottomAnchor, constant: -32),
-            stack.widthAnchor.constraint(equalTo: scroll.widthAnchor, constant: -40)
+            stack.topAnchor.constraint(equalTo: scroll.topAnchor, constant: Responsive.padding(24)),
+            stack.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: Responsive.padding(20)),
+            stack.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -Responsive.padding(20)),
+            stack.bottomAnchor.constraint(equalTo: scroll.bottomAnchor, constant: -Responsive.padding(32)),
+            stack.widthAnchor.constraint(equalTo: scroll.widthAnchor, constant: -Responsive.padding(40))
         ])
 
         stack.addArrangedSubview(buildHeader())
@@ -72,7 +72,7 @@ class DayStatsViewController: UIViewController {
         } else {
             stack.addArrangedSubview(buildTotalsCard())
 
-            let sectionLbl = makeLbl("Sessions", size: 13, weight: .semibold,
+            let sectionLbl = makeLbl("Sessions", size: Responsive.font(13), weight: .semibold,
                                      color: UIColor.white.withAlphaComponent(0.4))
             stack.addArrangedSubview(sectionLbl)
 
@@ -104,15 +104,15 @@ class DayStatsViewController: UIViewController {
         let gold = UIColor(red: 1, green: 0.86, blue: 0.24, alpha: 1)
         let v = UIView()
         v.backgroundColor = gold.withAlphaComponent(0.15)
-        v.layer.cornerRadius = 12; v.layer.borderWidth = 1
+        v.layer.cornerRadius = Responsive.cornerRadius(12); v.layer.borderWidth = 1
         v.layer.borderColor = gold.withAlphaComponent(0.6).cgColor
         v.translatesAutoresizingMaskIntoConstraints = false
 
         let img = UIImageView(image: UIImage(systemName: "checkmark.seal.fill"))
         img.tintColor = gold; img.contentMode = .scaleAspectFit
         img.translatesAutoresizingMaskIntoConstraints = false
-        img.widthAnchor.constraint(equalToConstant: 13).isActive = true
-        img.heightAnchor.constraint(equalToConstant: 13).isActive = true
+        img.widthAnchor.constraint(equalToConstant: Responsive.size(13)).isActive = true
+        img.heightAnchor.constraint(equalToConstant: Responsive.size(13)).isActive = true
 
         let l = makeLbl("Target Met", size: 11, weight: .bold, color: gold)
         let sv = UIStackView(arrangedSubviews: [img, l])
@@ -152,10 +152,10 @@ class DayStatsViewController: UIViewController {
 
         let card = glassCard(h: nil)
 
-        let titleLbl = makeLbl("Day Summary", size: 13, weight: .semibold,
+        let titleLbl = makeLbl("Day Summary", size: Responsive.font(13), weight: .semibold,
                                color: UIColor.white.withAlphaComponent(0.45))
-        let distNum  = makeLbl(String(format: "%.2f", totalDist), size: 40, weight: .heavy, color: .white)
-        let distUnit = makeLbl("km", size: 16, weight: .semibold, color: UIColor.white.withAlphaComponent(0.5))
+        let distNum  = makeLbl(String(format: "%.2f", totalDist), size: Responsive.font(40), weight: .heavy, color: .white)
+        let distUnit = makeLbl("km", size: Responsive.font(16), weight: .semibold, color: UIColor.white.withAlphaComponent(0.5))
         let distSub  = makeLbl("Total Distance", size: 11, weight: .medium,
                                color: UIColor.white.withAlphaComponent(0.35))
         [titleLbl, distNum, distUnit, distSub].forEach {
@@ -192,7 +192,7 @@ class DayStatsViewController: UIViewController {
             gridRow.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
             gridRow.topAnchor.constraint(equalTo: distSub.bottomAnchor, constant: 16),
             gridRow.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -18),
-            gridRow.heightAnchor.constraint(equalToConstant: 56)
+            gridRow.heightAnchor.constraint(equalToConstant: Responsive.size(56))
         ])
         return card
     }
@@ -202,8 +202,8 @@ class DayStatsViewController: UIViewController {
         let img = UIImageView(image: UIImage(systemName: icon))
         img.tintColor = color; img.contentMode = .scaleAspectFit
         img.translatesAutoresizingMaskIntoConstraints = false
-        img.widthAnchor.constraint(equalToConstant: 16).isActive = true
-        img.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        img.widthAnchor.constraint(equalToConstant: Responsive.size(16)).isActive = true
+        img.heightAnchor.constraint(equalToConstant: Responsive.size(16)).isActive = true
 
         let valLbl   = makeLbl(value, size: 14, weight: .bold,   color: .white)
         let titleLbl = makeLbl(title, size: 9,  weight: .medium, color: UIColor.white.withAlphaComponent(0.35))
@@ -374,7 +374,7 @@ class DayStatsViewController: UIViewController {
 
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
         blur.translatesAutoresizingMaskIntoConstraints = false
-        blur.layer.cornerRadius = 20; blur.clipsToBounds = true
+        blur.layer.cornerRadius = Responsive.cornerRadius(20); blur.clipsToBounds = true
         if isAbandoned {
             blur.layer.borderColor = abandonedOrange.withAlphaComponent(0.65).cgColor
             blur.layer.borderWidth = 1.25
