@@ -7,7 +7,7 @@
 
 import UIKit
 
-class OnboardingProfileViewController: UIViewController {
+class OnboardingProfileViewController: UIViewController, UITextFieldDelegate {
 
     // MARK: - UI Components
     private let backgroundImageView = UIImageView()
@@ -25,16 +25,29 @@ class OnboardingProfileViewController: UIViewController {
     private let saveButton = UIButton()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
 
+    // MARK: - Username validation
+    private let usernameStatusLabel    = UILabel()
+    private let usernameCheckIndicator = UIActivityIndicatorView(style: .medium)
+    private var debounceTimer: Timer?
+    private var usernameValidated      = false
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         setupKeyboardDismiss()
+        usernameField.delegate = self
+        usernameField.addTarget(self, action: #selector(usernameTextChanged), for: .editingChanged)
     }
 
     // MARK: - Save Action
     @objc func saveTapped() {
         guard let username = usernameField.text, !username.isEmpty else {
             showAlert(title: "Missing Username", message: "Please enter a username.")
+            return
+        }
+
+        guard username.count >= 3, usernameValidated else {
+            showAlert(title: "Invalid Username", message: "Please choose an available username (min 3 characters).")
             return
         }
 
@@ -168,11 +181,30 @@ class OnboardingProfileViewController: UIViewController {
         styleTextField(targetMinutesField, placeholder: "Daily Target Distance in km (e.g. 5.0)", icon: "figure.run")
         targetMinutesField.keyboardType = .decimalPad
 
+        // Spinner inside username field right-view
+        usernameCheckIndicator.color = .darkGray
+        usernameCheckIndicator.hidesWhenStopped = true
+        let indicatorContainer = UIView(frame: CGRect(x: 0, y: 0, width: 36, height: 50))
+        usernameCheckIndicator.center = CGPoint(x: 18, y: 25)
+        indicatorContainer.addSubview(usernameCheckIndicator)
+        usernameField.rightView = indicatorContainer
+        usernameField.rightViewMode = .always
+
         glassCard.addSubview(usernameField)
+
+        // Status label below username field
+        usernameStatusLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        usernameStatusLabel.textColor = .white
+        usernameStatusLabel.layer.cornerRadius = 5
+        usernameStatusLabel.clipsToBounds = true
+        usernameStatusLabel.translatesAutoresizingMaskIntoConstraints = false
+        usernameStatusLabel.isHidden = true
+        glassCard.addSubview(usernameStatusLabel)
+
         glassCard.addSubview(targetCaloriesField)
         glassCard.addSubview(targetMinutesField)
 
-        // Save Button
+        // Save Button (disabled until username is validated)
         saveButton.setTitle("Save & Continue", for: .normal)
         saveButton.backgroundColor = UIColor(red: 0.0, green: 0.2, blue: 0.4, alpha: 1.0)
         saveButton.layer.cornerRadius = Responsive.cornerRadius(12)
@@ -180,6 +212,8 @@ class OnboardingProfileViewController: UIViewController {
         saveButton.setTitleColor(.white, for: .normal)
         saveButton.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
         saveButton.translatesAutoresizingMaskIntoConstraints = false
+        saveButton.isEnabled = false
+        saveButton.alpha = 0.5
         glassCard.addSubview(saveButton)
 
         // Activity indicator centered on button
@@ -205,7 +239,11 @@ class OnboardingProfileViewController: UIViewController {
             usernameField.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -25),
             usernameField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
 
-            targetCaloriesField.topAnchor.constraint(equalTo: usernameField.bottomAnchor, constant: 15),
+            usernameStatusLabel.topAnchor.constraint(equalTo: usernameField.bottomAnchor, constant: 6),
+            usernameStatusLabel.leadingAnchor.constraint(equalTo: usernameField.leadingAnchor, constant: 4),
+            usernameStatusLabel.trailingAnchor.constraint(equalTo: usernameField.trailingAnchor),
+
+            targetCaloriesField.topAnchor.constraint(equalTo: usernameStatusLabel.bottomAnchor, constant: 8),
             targetCaloriesField.leadingAnchor.constraint(equalTo: usernameField.leadingAnchor),
             targetCaloriesField.trailingAnchor.constraint(equalTo: usernameField.trailingAnchor),
             targetCaloriesField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
@@ -246,6 +284,77 @@ class OnboardingProfileViewController: UIViewController {
         textField.leftView = leftContainer
         textField.leftViewMode = .always
         textField.translatesAutoresizingMaskIntoConstraints = false
+    }
+
+    // MARK: - Username Validation
+
+    @objc private func usernameTextChanged() {
+        // Auto-correct: lowercase, no spaces
+        let raw = usernameField.text ?? ""
+        let corrected = String(raw.lowercased().filter { !$0.isWhitespace })
+        if raw != corrected { usernameField.text = corrected }
+
+        debounceTimer?.invalidate()
+        usernameValidated = false
+        updateSaveButton()
+
+        let text = corrected
+
+        guard text.count >= 3 else {
+            if text.isEmpty {
+                usernameStatusLabel.isHidden = true
+            } else {
+                setUsernameStatus("  Minimum 3 characters  ", color: .systemOrange)
+            }
+            usernameCheckIndicator.stopAnimating()
+            return
+        }
+
+        usernameStatusLabel.isHidden = true
+        debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in
+            self?.performUsernameCheck(text)
+        }
+    }
+
+    private func performUsernameCheck(_ username: String) {
+        usernameCheckIndicator.startAnimating()
+        usernameStatusLabel.isHidden = true
+
+        Task {
+            do {
+                let taken = try await SupabaseManager.shared.checkUsernameExists(username)
+                DispatchQueue.main.async {
+                    self.usernameCheckIndicator.stopAnimating()
+                    if taken {
+                        self.setUsernameStatus("  Username already taken  ", color: .systemRed)
+                        self.usernameValidated = false
+                    } else {
+                        self.setUsernameStatus("  Available  ", color: .systemGreen)
+                        self.usernameValidated = true
+                    }
+                    self.updateSaveButton()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.usernameCheckIndicator.stopAnimating()
+                    self.setUsernameStatus("  Could not check — try again  ", color: .systemOrange)
+                    self.usernameValidated = false
+                    self.updateSaveButton()
+                }
+            }
+        }
+    }
+
+    private func setUsernameStatus(_ text: String, color: UIColor) {
+        usernameStatusLabel.isHidden = false
+        usernameStatusLabel.text = text
+        usernameStatusLabel.textColor = .white
+        usernameStatusLabel.backgroundColor = color.withAlphaComponent(0.85)
+    }
+
+    private func updateSaveButton() {
+        saveButton.isEnabled = usernameValidated
+        saveButton.alpha     = usernameValidated ? 1.0 : 0.5
     }
 
     func setupKeyboardDismiss() {
