@@ -293,7 +293,7 @@ class ForgotPasswordViewController: UIViewController {
                                  keyboardType: UIKeyboardType = .default) {
         textField.backgroundColor        = .white
         textField.layer.cornerRadius     = 10
-        textField.placeholder            = placeholder
+        textField.attributedPlaceholder  = NSAttributedString(string: placeholder, attributes: [.foregroundColor: UIColor.systemGray])
         textField.isSecureTextEntry      = isSecure
         textField.textColor              = .black
         textField.autocapitalizationType = .none
