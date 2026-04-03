@@ -99,10 +99,11 @@ class CrouchDetector {
     }
 
     /// Returns the vertical pixel distance between hip and toe.
-    /// When standing, hips are far above toes (large value).
-    /// When crouching, hips drop toward toe level (smaller value).
+    /// In camera coordinates, X is the vertical axis (lower X = higher on screen).
+    /// When standing, hips are far above toes → large abs(hip.x - toe.x).
+    /// When crouching, hips drop toward toe level → smaller abs(hip.x - toe.x).
     private func calculateHipToToeDistance(hip: VisionPoint, toe: VisionPoint) -> CGFloat {
-        return abs(hip.y - toe.y)
+        return abs(hip.x - toe.x)
     }
 
     private func smoothValue(_ value: CGFloat, history: inout [CGFloat]) -> CGFloat {
