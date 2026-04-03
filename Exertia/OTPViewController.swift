@@ -89,26 +89,70 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
     // Register: create Supabase account after OTP passes
     private func handleRegisterVerified() async {
         do {
-            let userId = try await SupabaseManager.shared.signUp(
-                email: email,
-                password: password,
-                username: username,
-                displayName: displayName
-            )
+            let userId = try await performSignUp()
             UserDefaults.standard.set(userId, forKey: "supabaseUserID")
             print("✅ Signup complete. User ID: \(userId)")
+            DispatchQueue.main.async { self.navigateToOnboarding() }
 
-            DispatchQueue.main.async {
-                let onboardingVC = OnboardingProfileViewController()
-                onboardingVC.modalPresentationStyle = .fullScreen
-                onboardingVC.modalTransitionStyle   = .crossDissolve
-                self.present(onboardingVC, animated: true)
+        } catch {
+            let msg = error.localizedDescription.lowercased()
+            // "User already registered" means Supabase Auth has the email but
+            // public.users may not — usually caused by a crashed/incomplete
+            // previous attempt.  Try to clean up the orphan and retry once.
+            if msg.contains("already registered") || msg.contains("user already exists") {
+                await handleOrphanedAuthUser()
+            } else {
+                DispatchQueue.main.async {
+                    self.showAlert(title: "Account Creation Failed", message: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// Asks the server to delete the dangling auth.users row (if safe), then retries signup.
+    private func handleOrphanedAuthUser() async {
+        do {
+            let cleaned = try await MailServerManager.cleanupOrphanedUser(email: email)
+
+            if cleaned {
+                // Orphan removed — retry signup fresh
+                print("♻️  Orphaned auth user cleaned up, retrying signup…")
+                let userId = try await performSignUp()
+                UserDefaults.standard.set(userId, forKey: "supabaseUserID")
+                print("✅ Signup complete after cleanup. User ID: \(userId)")
+                DispatchQueue.main.async { self.navigateToOnboarding() }
+            } else {
+                // Server says the account is real — direct user to login
+                DispatchQueue.main.async {
+                    self.showAlert(
+                        title: "Email Already In Use",
+                        message: "An account with this email already exists. Please log in or use Forgot Password to regain access."
+                    )
+                }
             }
         } catch {
             DispatchQueue.main.async {
                 self.showAlert(title: "Account Creation Failed", message: error.localizedDescription)
             }
         }
+    }
+
+    /// Pure signup call — extracted so both the first attempt and the post-cleanup
+    /// retry share identical logic.
+    private func performSignUp() async throws -> String {
+        try await SupabaseManager.shared.signUp(
+            email: email,
+            password: password,
+            username: username,
+            displayName: displayName
+        )
+    }
+
+    private func navigateToOnboarding() {
+        let onboardingVC = OnboardingProfileViewController()
+        onboardingVC.modalPresentationStyle = .fullScreen
+        onboardingVC.modalTransitionStyle   = .crossDissolve
+        present(onboardingVC, animated: true)
     }
 
     // Reset: show the new password fields

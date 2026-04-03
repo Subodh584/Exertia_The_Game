@@ -83,12 +83,13 @@ class DifficultySettings {
         }
     }
     
-    /// CrouchDetector crouchThreshold
+    /// CrouchDetector crouchThreshold (vertical pixel distance between hip and toe)
+    /// Lower value = must crouch further to trigger detection
     var crouchThreshold: CGFloat {
         switch currentDifficulty {
-        case .easy: return 120.0   // Less crouch required (higher angle)
-        case .medium: return 135.0
-        case .hard: return 150.0   // More crouch required (even higher angle means easier detection)
+        case .easy: return 200.0   // Triggers at a shallower crouch (hip closer to toe)
+        case .medium: return 180.0
+        case .hard: return 160.0   // Requires a deeper crouch to trigger
         }
     }
     
@@ -100,7 +101,7 @@ class DifficultySettings {
         print("🎮 Difficulty set to: \(difficulty.rawValue)")
         print("   SpotRunning refDistance: \(spotRunningRefDistance)")
         print("   Lean thresholds: \(leanRightThreshold)° / \(leanLeftThreshold)°")
-        print("   Crouch threshold: \(crouchThreshold)°")
+        print("   Crouch threshold: \(crouchThreshold)px")
         
         // Post notification for any listeners
         NotificationCenter.default.post(
