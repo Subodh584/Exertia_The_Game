@@ -204,7 +204,7 @@ class HomeViewController: UIViewController {
             } else if Responsive.isSmallPhone {
                 labelTopConstraint.constant = 175
             } else {
-                labelTopConstraint.constant = 160
+                labelTopConstraint.constant = 140
             }
         }
 
@@ -214,7 +214,7 @@ class HomeViewController: UIViewController {
             $0.firstAttribute == .top &&
             $0.secondAttribute == .bottom
         }) {
-            rowTopConstraint.constant = Responsive.isSmallPhone ? 16 : 14
+            rowTopConstraint.constant = Responsive.isSmallPhone ? 16 : 10
         }
 
         if let startTopConstraint = view.constraints.first(where: {
@@ -228,7 +228,7 @@ class HomeViewController: UIViewController {
             } else if Responsive.isSmallPhone {
                 startTopConstraint.constant = 72
             } else {
-                startTopConstraint.constant = 62
+                startTopConstraint.constant = 48
             }
         }
     }
