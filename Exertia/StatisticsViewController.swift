@@ -1514,6 +1514,7 @@ class GlassEditModalController: UIViewController {
     private var asyncValidated    = false
     private var asyncConfig: AsyncFieldValidation?
     private weak var saveButton: UIButton?
+    private weak var asyncFieldContainer: UIView?  // the glass card border we animate
 
     init(
         title: String,
@@ -1657,10 +1658,9 @@ class GlassEditModalController: UIViewController {
             saveBtn.isEnabled = false
             saveBtn.alpha = 0.5
 
-            asyncStatusLabel.font = .systemFont(ofSize: 11, weight: .semibold)
-            asyncStatusLabel.textColor = .white
-            asyncStatusLabel.layer.cornerRadius = 5
-            asyncStatusLabel.clipsToBounds = true
+            asyncStatusLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+            asyncStatusLabel.textColor = UIColor.white.withAlphaComponent(0.8)
+            asyncStatusLabel.backgroundColor = .clear
             asyncStatusLabel.isHidden = true
             asyncStatusLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -1671,6 +1671,11 @@ class GlassEditModalController: UIViewController {
             spinContainer.addSubview(asyncCheckSpinner)
             textFields[config.fieldIndex].rightView = spinContainer
             textFields[config.fieldIndex].rightViewMode = .always
+
+            // Store the field container so we can animate its border
+            if let fieldContainer = fieldsStack.arrangedSubviews[config.fieldIndex] as? UIView {
+                asyncFieldContainer = fieldContainer
+            }
 
             fieldsStack.insertArrangedSubview(asyncStatusLabel, at: config.fieldIndex + 1)
 
@@ -1875,7 +1880,7 @@ class GlassEditModalController: UIViewController {
         // Blank = keep existing, allow save
         if text.isEmpty {
             asyncValidated = true
-            asyncStatusLabel.isHidden = true
+            clearAsyncStatus()
             updateAsyncSaveButton()
             return
         }
@@ -1883,18 +1888,18 @@ class GlassEditModalController: UIViewController {
         // Same as current value → skip re-check
         if text == config.currentValue.lowercased() {
             asyncValidated = true
-            asyncStatusLabel.isHidden = true
+            clearAsyncStatus()
             updateAsyncSaveButton()
             return
         }
 
         guard text.count >= config.minLength else {
-            setAsyncStatus("  Minimum \(config.minLength) characters  ", color: .systemOrange)
+            setAsyncStatus("Minimum \(config.minLength) characters", color: .systemOrange)
             asyncCheckSpinner.stopAnimating()
             return
         }
 
-        asyncStatusLabel.isHidden = true
+        clearAsyncStatus()
         asyncDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in
             self?.performAsyncCheck(text)
         }
@@ -1910,10 +1915,10 @@ class GlassEditModalController: UIViewController {
                 DispatchQueue.main.async {
                     self.asyncCheckSpinner.stopAnimating()
                     if taken {
-                        self.setAsyncStatus("  Username already taken  ", color: .systemRed)
+                        self.setAsyncStatus("Username already taken", color: .systemRed)
                         self.asyncValidated = false
                     } else {
-                        self.setAsyncStatus("  Available  ", color: .systemGreen)
+                        self.setAsyncStatus("Username is available", color: .systemGreen)
                         self.asyncValidated = true
                     }
                     self.updateAsyncSaveButton()
@@ -1921,7 +1926,7 @@ class GlassEditModalController: UIViewController {
             } catch {
                 DispatchQueue.main.async {
                     self.asyncCheckSpinner.stopAnimating()
-                    self.setAsyncStatus("  Could not check — try again  ", color: .systemOrange)
+                    self.setAsyncStatus("Could not verify — try again", color: .systemOrange)
                     self.asyncValidated = false
                     self.updateAsyncSaveButton()
                 }
@@ -1932,8 +1937,22 @@ class GlassEditModalController: UIViewController {
     private func setAsyncStatus(_ text: String, color: UIColor) {
         asyncStatusLabel.isHidden = false
         asyncStatusLabel.text = text
-        asyncStatusLabel.textColor = .white
-        asyncStatusLabel.backgroundColor = color.withAlphaComponent(0.85)
+        asyncStatusLabel.textColor = color
+
+        // Animate field border to match status colour
+        UIView.animate(withDuration: 0.25) {
+            self.asyncFieldContainer?.layer.borderColor = color.withAlphaComponent(0.7).cgColor
+            self.asyncFieldContainer?.layer.borderWidth = 1.5
+        }
+    }
+
+    private func clearAsyncStatus() {
+        asyncStatusLabel.isHidden = true
+        asyncStatusLabel.text = nil
+        UIView.animate(withDuration: 0.25) {
+            self.asyncFieldContainer?.layer.borderColor = UIColor.white.withAlphaComponent(0.1).cgColor
+            self.asyncFieldContainer?.layer.borderWidth = 1
+        }
     }
 
     private func updateAsyncSaveButton() {
