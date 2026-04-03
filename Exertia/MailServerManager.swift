@@ -27,9 +27,10 @@ enum MailServerError: LocalizedError {
 struct MailServerManager {
 
     // MARK: - Private response models
-    private struct SendResponse:   Decodable { let success: Bool; let message: String? }
-    private struct VerifyResponse: Decodable { let valid: Bool;   let message: String? }
-    private struct ResetResponse:  Decodable { let success: Bool; let message: String? }
+    private struct SendResponse:    Decodable { let success: Bool; let message: String? }
+    private struct VerifyResponse:  Decodable { let valid: Bool;   let message: String? }
+    private struct ResetResponse:   Decodable { let success: Bool; let message: String? }
+    private struct CleanupResponse: Decodable { let cleaned: Bool; let message: String? }
 
     // MARK: - Public API (no baseURL param — always fetched fresh)
 
@@ -61,6 +62,20 @@ struct MailServerManager {
         return true
     }
 
+    /// Removes a dangling `auth.users` entry that has no matching `public.users` row.
+    /// Returns `true` if the orphan was deleted (caller should retry signup).
+    /// Returns `false` if the account is real (caller should prompt the user to log in).
+    @discardableResult
+    static func cleanupOrphanedUser(email: String) async throws -> Bool {
+        let baseURL = try await freshBaseURL()
+        let resp: CleanupResponse = try await post(
+            path: "/cleanup-auth-orphan",
+            body: ["email": email],
+            baseURL: baseURL
+        )
+        return resp.cleaned
+    }
+
     /// Resets the password. Requires /verify-otp to have passed first (reset flow only).
     static func resetPassword(email: String, newPassword: String) async throws {
         let baseURL = try await freshBaseURL()
@@ -80,8 +95,12 @@ struct MailServerManager {
     private static func freshBaseURL() async throws -> String {
         do {
             return try await SupabaseManager.shared.fetchMailServerURL()
-        } catch {
+        } catch let e as NSError where e.domain == "SupabaseManager" {
+            // The table exists but has no row — URL genuinely not configured
             throw MailServerError.noURLConfigured
+        } catch {
+            // Network failure, Supabase timeout, etc. — surface the real error
+            throw MailServerError.networkError(error)
         }
     }
 
