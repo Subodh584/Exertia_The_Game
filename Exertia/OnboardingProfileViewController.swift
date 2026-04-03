@@ -181,25 +181,27 @@ class OnboardingProfileViewController: UIViewController, UITextFieldDelegate {
         styleTextField(targetMinutesField, placeholder: "Daily Target Distance in km (e.g. 5.0)", icon: "figure.run")
         targetMinutesField.keyboardType = .decimalPad
 
-        // Spinner inside username field right-view
+        // Right-view: spinner + status label inside the white field
         usernameCheckIndicator.color = .darkGray
         usernameCheckIndicator.hidesWhenStopped = true
-        let indicatorContainer = UIView(frame: CGRect(x: 0, y: 0, width: 36, height: 50))
-        usernameCheckIndicator.center = CGPoint(x: 18, y: 25)
-        indicatorContainer.addSubview(usernameCheckIndicator)
-        usernameField.rightView = indicatorContainer
+
+        let rightContainer = UIView(frame: CGRect(x: 0, y: 0, width: 130, height: 50))
+
+        usernameCheckIndicator.frame = CGRect(x: 105, y: 15, width: 20, height: 20)
+        rightContainer.addSubview(usernameCheckIndicator)
+
+        usernameStatusLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        usernameStatusLabel.textAlignment = .center
+        usernameStatusLabel.layer.cornerRadius = 8
+        usernameStatusLabel.clipsToBounds = true
+        usernameStatusLabel.frame = CGRect(x: 5, y: 13, width: 112, height: 24)
+        usernameStatusLabel.isHidden = true
+        rightContainer.addSubview(usernameStatusLabel)
+
+        usernameField.rightView = rightContainer
         usernameField.rightViewMode = .always
 
         glassCard.addSubview(usernameField)
-
-        // Status label below username field
-        usernameStatusLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-        usernameStatusLabel.textColor = .white
-        usernameStatusLabel.layer.cornerRadius = 5
-        usernameStatusLabel.clipsToBounds = true
-        usernameStatusLabel.translatesAutoresizingMaskIntoConstraints = false
-        usernameStatusLabel.isHidden = true
-        glassCard.addSubview(usernameStatusLabel)
 
         glassCard.addSubview(targetCaloriesField)
         glassCard.addSubview(targetMinutesField)
@@ -239,11 +241,7 @@ class OnboardingProfileViewController: UIViewController, UITextFieldDelegate {
             usernameField.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -25),
             usernameField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
 
-            usernameStatusLabel.topAnchor.constraint(equalTo: usernameField.bottomAnchor, constant: 6),
-            usernameStatusLabel.leadingAnchor.constraint(equalTo: usernameField.leadingAnchor, constant: 4),
-            usernameStatusLabel.trailingAnchor.constraint(equalTo: usernameField.trailingAnchor),
-
-            targetCaloriesField.topAnchor.constraint(equalTo: usernameStatusLabel.bottomAnchor, constant: 8),
+            targetCaloriesField.topAnchor.constraint(equalTo: usernameField.bottomAnchor, constant: 15),
             targetCaloriesField.leadingAnchor.constraint(equalTo: usernameField.leadingAnchor),
             targetCaloriesField.trailingAnchor.constraint(equalTo: usernameField.trailingAnchor),
             targetCaloriesField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
@@ -268,7 +266,7 @@ class OnboardingProfileViewController: UIViewController, UITextFieldDelegate {
     func styleTextField(_ textField: UITextField, placeholder: String, icon: String) {
         textField.backgroundColor = .white
         textField.layer.cornerRadius = Responsive.cornerRadius(10)
-        textField.placeholder = placeholder
+        textField.attributedPlaceholder = NSAttributedString(string: placeholder, attributes: [.foregroundColor: UIColor.systemGray])
         textField.textColor = .black
         textField.autocapitalizationType = .none
         textField.autocorrectionType = .no
@@ -302,15 +300,15 @@ class OnboardingProfileViewController: UIViewController, UITextFieldDelegate {
 
         guard text.count >= 3 else {
             if text.isEmpty {
-                usernameStatusLabel.isHidden = true
+                clearUsernameStatus()
             } else {
-                setUsernameStatus("  Minimum 3 characters  ", color: .systemOrange)
+                setUsernameStatus("Min. 3 chars", color: .systemOrange)
             }
             usernameCheckIndicator.stopAnimating()
             return
         }
 
-        usernameStatusLabel.isHidden = true
+        clearUsernameStatus()
         debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in
             self?.performUsernameCheck(text)
         }
@@ -326,10 +324,10 @@ class OnboardingProfileViewController: UIViewController, UITextFieldDelegate {
                 DispatchQueue.main.async {
                     self.usernameCheckIndicator.stopAnimating()
                     if taken {
-                        self.setUsernameStatus("  Username already taken  ", color: .systemRed)
+                        self.setUsernameStatus("Already taken", color: .systemRed)
                         self.usernameValidated = false
                     } else {
-                        self.setUsernameStatus("  Available  ", color: .systemGreen)
+                        self.setUsernameStatus("Available", color: .systemGreen)
                         self.usernameValidated = true
                     }
                     self.updateSaveButton()
@@ -337,7 +335,7 @@ class OnboardingProfileViewController: UIViewController, UITextFieldDelegate {
             } catch {
                 DispatchQueue.main.async {
                     self.usernameCheckIndicator.stopAnimating()
-                    self.setUsernameStatus("  Could not check — try again  ", color: .systemOrange)
+                    self.setUsernameStatus("Check failed", color: .systemOrange)
                     self.usernameValidated = false
                     self.updateSaveButton()
                 }
@@ -350,6 +348,20 @@ class OnboardingProfileViewController: UIViewController, UITextFieldDelegate {
         usernameStatusLabel.text = text
         usernameStatusLabel.textColor = .white
         usernameStatusLabel.backgroundColor = color.withAlphaComponent(0.85)
+
+        UIView.animate(withDuration: 0.25) {
+            self.usernameField.layer.borderColor = color.withAlphaComponent(0.8).cgColor
+            self.usernameField.layer.borderWidth = 1.5
+        }
+    }
+
+    private func clearUsernameStatus() {
+        usernameStatusLabel.isHidden = true
+        usernameStatusLabel.text = nil
+        usernameStatusLabel.backgroundColor = .clear
+        UIView.animate(withDuration: 0.25) {
+            self.usernameField.layer.borderWidth = 0
+        }
     }
 
     private func updateSaveButton() {
