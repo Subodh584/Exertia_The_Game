@@ -46,7 +46,7 @@ class CharacterCell: UICollectionViewCell {
         glossLayer.cornerCurve = .continuous
     }
 
-    func configure(player: Player, isSelected: Bool, isLocked: Bool = false) {
+    func configure(player: Player, isSelected: Bool, isLocked: Bool = false, characterIndex: Int = 0) {
         // Always clean up previous state first
         containerView.subviews.filter { $0 is UIVisualEffectView }.forEach { $0.removeFromSuperview() }
         containerView.subviews.filter { $0.tag == 902 }.forEach { $0.removeFromSuperview() }
@@ -78,19 +78,21 @@ class CharacterCell: UICollectionViewCell {
             frostedBlur.alpha = 0.5
             containerView.addSubview(frostedBlur)
 
-            // Dark silhouette behind the lock
-            let mysteryCfg = UIImage.SymbolConfiguration(pointSize: 46, weight: .regular)
-            let mysteryIcon = UIImageView(image: UIImage(systemName: "person.fill", withConfiguration: mysteryCfg))
-            mysteryIcon.tag = 902
-            mysteryIcon.tintColor = UIColor.black.withAlphaComponent(0.6)
-            mysteryIcon.contentMode = .scaleAspectFit
-            mysteryIcon.translatesAutoresizingMaskIntoConstraints = false
-            containerView.addSubview(mysteryIcon)
+            // Character thumbnail (dimmed) behind the lock
+            let charImageName = "char\(characterIndex + 1)"
+            let charThumb = UIImageView()
+            charThumb.tag = 902
+            charThumb.image = UIImage(named: charImageName)
+            charThumb.contentMode = .scaleAspectFit
+            charThumb.alpha = 0.8
+            charThumb.clipsToBounds = true
+            charThumb.translatesAutoresizingMaskIntoConstraints = false
+            containerView.addSubview(charThumb)
             NSLayoutConstraint.activate([
-                mysteryIcon.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
-                mysteryIcon.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-                mysteryIcon.widthAnchor.constraint(equalToConstant: 56),
-                mysteryIcon.heightAnchor.constraint(equalToConstant: 56)
+                charThumb.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+                charThumb.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+                charThumb.widthAnchor.constraint(equalTo: containerView.widthAnchor, multiplier: 0.75),
+                charThumb.heightAnchor.constraint(equalTo: containerView.heightAnchor, multiplier: 0.75)
             ])
 
             // Lock icon with a subtle glowing halo

@@ -32,9 +32,9 @@ class CharacterSelectionViewController: UIViewController {
     /// Shift the character left (–) or right (+) in scene units
     private let characterOffsetX: Float = 0.0
     /// Shift the character down (–) or up (+) in scene units
-    private let characterOffsetY: Float = -1.2
+    private let characterOffsetY: Float = 0.0
     /// Move the character closer (+) or further away (–) from the camera
-    private let characterOffsetZ: Float = 0.4
+    private let characterOffsetZ: Float = 0.0
 
     var gameData = GameData.shared
     var currentViewingIndex: Int = 0
@@ -189,204 +189,131 @@ class CharacterSelectionViewController: UIViewController {
         }
         characterSceneView = scnView
 
-        // LOAD THE PHYSICAL GEOMETRY MESH (Skin + Bones)
-        guard let importedScene = SCNScene(named: "Character.scnassets/Idle.dae") else {
-            print("⚠️ Could not load Character.scnassets/Idle.dae")
-            return
-        }
-
-        // Build a mathematically clean master view scene container!
-        let masterScene = SCNScene()
+        // LOAD THE PHYSICAL GEOMETRY MESH ASYNCHRONOUSLY TO PREVENT MAIN THREAD BLOCKING!
+        scnView.alpha = 0
         
-        // Safely extract the completely intact payload geometry shell from the freshly parsed .dae without breaking its internal bone/animation target paths!
-        // We MUST mathematically .clone() the root node instead of directly referencing it, because SceneKit forbids explicitly unparenting a root node from its host scene!
-        let characterShell = importedScene.rootNode.clone()
-        masterScene.rootNode.addChildNode(characterShell)
-        characterNode = characterShell
-        
-        // --- PREVENT MATERIAL GLITCHING & Z-FIGHTING OVERLAPS ---
-        // Shader modifier: nudge vertices outward along their normals by a tiny amount.
-        // This is the cleanest way to fix Z-fighting between flush/coplanar geometry
-        // without visibly distorting the model's shape.
-        let zFightShader = """
-        #pragma body
-        float offset = 0.0005;
-        _geometry.position.xyz += _geometry.normal * offset;
-        """
-        
-        let chestNodes: Set<String> = ["chest_armor_detail", "chest_armor_detail-001", "chest_armor_main"]
-        let darkSuit = UIColor(red: 0.12, green: 0.12, blue: 0.14, alpha: 1)
-        let exactPink = UIColor(red: 194/255.0, green: 149/255.0, blue: 144/255.0, alpha: 1.0) // #C29590
-        
-        characterShell.enumerateChildNodes { node, _ in
-            if let name = node.name?.lowercased(),
-               let geometry = node.geometry {
-                
-                // Determine if this mesh is visually functioning as exterior armor
-                let isWhiteArmor = geometry.materials.contains { $0.name == "white_suit" }
-                
-                // Z-fight shader: Push overlapping armor/helmet parts micro-units outward 
-                // so they definitively sit on top of the black undersuit!
-                if name.contains("helm") || name.contains("chest") || name.contains("armor") || name.contains("shield") || isWhiteArmor {
-                    geometry.shaderModifiers = [.geometry: zFightShader]
-                }
-                
-                for material in geometry.materials {
-                    material.isDoubleSided = false
-                    material.lightingModel = .phong
-                    
-                    // The Helmet shell renders beautifully with direct node targeting
-                    if name == "____helm" {
-                        material.diffuse.contents = UIColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
-                        material.specular.contents = UIColor(white: 0.15, alpha: 1.0)
-                    }
-                    // The Visor face plate
-                    else if name == "cube-001" {
-                        material.diffuse.contents = UIColor(red: 0.08, green: 0.08, blue: 0.10, alpha: 1)
-                        material.specular.contents = UIColor.white
-                        material.shininess = 1.0
-                    }
-                    // The Stomach plate
-                    else if name == "stomach_plate" {
-                        material.diffuse.contents = UIColor(red: 0.78, green: 0.78, blue: 0.80, alpha: 1)
-                        material.specular.contents = UIColor(white: 0.15, alpha: 1.0)
-                    }
-                    // The 3 Chest Armor nodes override unconditionally
-                    else if chestNodes.contains(name) {
-                        material.diffuse.contents = UIColor.white
-                        material.specular.contents = UIColor(white: 0.15, alpha: 1.0)
-                    }
-                    else if material.name == "undersuit" {
-                        material.diffuse.contents = darkSuit
-                        material.specular.contents = UIColor(white: 0.1, alpha: 1.0)
-                    } 
-                    else if material.name == "metallic_pink" {
-                        // User reported PBR looks brown in ambient light. 
-                        // Using strong .phong specular reflection over the exact hex prevents color muting.
-                        material.diffuse.contents = exactPink
-                        material.specular.contents = UIColor(white: 0.7, alpha: 1.0)
-                        material.shininess = 0.5
-                    } 
-                    else if material.name == "white_suit" {
-                        // Force all armor plates strictly white
-                        material.diffuse.contents = UIColor.white
-                        material.specular.contents = UIColor(white: 0.2, alpha: 1.0)
-                    } 
-                    else if material.name == "neon_glow" {
-                        // "make the eyes balck"
-                        material.diffuse.contents = UIColor.black
-                        material.emission.contents = UIColor.black
-                    } 
-                    else {
-                        // Unmapped material names [] just fallback to dark suit organically
-                        material.diffuse.contents = darkSuit
-                    }
-                }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            guard let importedScene = SCNScene(named: "Character.scnassets/MascotFinal.usdz") else {
+                print("⚠️ Could not load Character.scnassets/charMain.usdz")
+                return
             }
-        }
 
-        let (minB, maxB) = characterShell.boundingBox
-        let modelHeight = maxB.y - minB.y
-        let autoScale: Float = modelHeight > 0 ? (1.8 / modelHeight) * characterScale : characterScale
-        
+            // Build a mathematically clean master view scene container!
+            let masterScene = SCNScene()
+            
+            // Safely extract the completely intact payload geometry shell from the freshly parsed .dae without breaking its internal bone/animation target paths!
+            let characterShell = importedScene.rootNode.clone()
+            
+            // Wrap the character in a master container to cleanly handle global spinning without messing up its local Z-up orientation correction!
+            let wrapperNode = SCNNode()
+            wrapperNode.addChildNode(characterShell)
+            masterScene.rootNode.addChildNode(wrapperNode)
+            
+            // Force the USDZ to stand up if it was exported laying down (Z-up)
+            characterShell.eulerAngles = SCNVector3(-Float.pi / 2, 0, 0)
+            
+            // Note: MascotFinal.usdz has baked textures, so we DO NOT inject procedural materials here!
+            
+
+            
+            // Compute bounds AFTER rotation/injection
+            let (minB, maxB) = characterShell.boundingBox
+            
+            // Use the largest dimension as the "height" since bounding box might be weirdly rotated
+            let modelSpanX = maxB.x - minB.x
+            let modelSpanY = maxB.y - minB.y
+            let modelSpanZ = maxB.z - minB.z
+            let maxDim = max(modelSpanX, modelSpanY, modelSpanZ)
+            
+            let autoScale: Float = maxDim > 0 ? (1.8 / maxDim) : 1.0
+            
+            characterShell.scale = SCNVector3(1, 1, 1)
+
+            let midX = (minB.x + maxB.x) / 2
+            let midY = (minB.y + maxB.y) / 2
+            
+            // Mathematically inversely cleanly scale the standard UI mathematical layout parameter
+            let virtualShiftX = self.characterOffsetX / autoScale
+            let virtualShiftY = self.characterOffsetY / autoScale
+            
+            characterShell.position = SCNVector3(-midX + virtualShiftX, -midY + virtualShiftY, 0)
+
+            // VERY IMPORTANT: Since we restored native PBR materials, they need an environment to reflect,
+            // otherwise they turn pitch black when you spin the character.
+            masterScene.lightingEnvironment.contents = UIColor(white: 0.2, alpha: 1.0)
+            
+            let ambientNode = SCNNode()
+            let ambient = SCNLight()
+            ambient.type = .ambient
+            ambient.color = UIColor.white
+            ambient.intensity = 600
+            ambientNode.light = ambient
+            masterScene.rootNode.addChildNode(ambientNode)
+
+            let dirNode = SCNNode()
+            let dir = SCNLight()
+            dir.type = .directional
+            dir.color = UIColor.white
+            dir.intensity = 900
+            dirNode.light = dir
+            dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
+            masterScene.rootNode.addChildNode(dirNode)
+
+            let cameraNode = SCNNode()
+            cameraNode.camera = SCNCamera()
+            cameraNode.camera?.fieldOfView = 50
+            
+            // Re-tuned to 2.1 to pull the camera back slightly and prevent the model from clipping out of the view bounds!
+            let visualCameraZ = 2.5 / autoScale
+            let visualOffsetZ = self.characterOffsetZ / autoScale
       
-        characterShell.scale = SCNVector3(1, 1, 1)
+            cameraNode.camera?.zNear = Double(visualCameraZ) * 0.05
+            cameraNode.camera?.zFar = Double(visualCameraZ) * 5.0
+            cameraNode.position = SCNVector3(0, 0, visualCameraZ - visualOffsetZ)
+            
+            masterScene.rootNode.addChildNode(cameraNode)
 
-        let midX = (minB.x + maxB.x) / 2
-        let midY = (minB.y + maxB.y) / 2
-        
-        // Mathematically inversely cleanly scale the standard UI mathematical layout parameter targeting structurally explicitly directly inversely proportionally so they physically natively accurately perfectly project identically proportionally right onto the virtual lens screen beautifully!
-        let virtualShiftX = characterOffsetX / autoScale
-        let virtualShiftY = characterOffsetY / autoScale
-        
-        characterShell.position = SCNVector3(-midX + virtualShiftX, -midY + virtualShiftY, 0)
+            // START SLOW AUTO-ROTATION
+            let spin = SCNAction.rotateBy(x: 0, y: CGFloat.pi * 2, z: 0, duration: 15.0)
+            let repeatSpin = SCNAction.repeatForever(spin)
+            wrapperNode.runAction(repeatSpin)
 
-        // VERY IMPORTANT: Since we restored native PBR materials, they need an environment to reflect,
-        // otherwise they turn pitch black when you spin the character.
-        masterScene.lightingEnvironment.contents = UIColor(white: 0.2, alpha: 1.0)
-        
-        let ambientNode = SCNNode()
-        let ambient = SCNLight()
-        ambient.type = .ambient
-        ambient.color = UIColor.white
-        ambient.intensity = 600
-        ambientNode.light = ambient
-        masterScene.rootNode.addChildNode(ambientNode)
+            // Safely deploy fully built complex mathematical memory hierarchy onto main UIKit rendering thread smoothly
+            DispatchQueue.main.async {
+                self.characterNode = wrapperNode
+                scnView.scene = masterScene
+                scnView.pointOfView = cameraNode
+                scnView.isPlaying = true 
 
-        let dirNode = SCNNode()
-        let dir = SCNLight()
-        dir.type = .directional
-        dir.color = UIColor.white
-        dir.intensity = 900
-        dirNode.light = dir
-        dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
-        masterScene.rootNode.addChildNode(dirNode)
-
-        let cameraNode = SCNNode()
-        cameraNode.camera = SCNCamera()
-        cameraNode.camera?.fieldOfView = 50
-        
-        // Physically inherently mathematically uniquely translate the master virtual camera dynamically linearly violently backwards physically into expansive massive depth space matching the geometrically identical fractional inversion sizing logically natively!
-        let visualCameraZ = 3.5 / autoScale
-        let visualOffsetZ = characterOffsetZ / autoScale
-  
-        cameraNode.camera?.zNear = Double(visualCameraZ) * 0.05
-        cameraNode.camera?.zFar = Double(visualCameraZ) * 5.0
-        cameraNode.position = SCNVector3(0, 0, visualCameraZ - visualOffsetZ)
-        
-        masterScene.rootNode.addChildNode(cameraNode)
-
-        scnView.scene = masterScene
-        scnView.pointOfView = cameraNode
-        scnView.isPlaying = true // Natively force explicit animation frame rendering evaluation dynamically!
-
-        // GRAFT UNSKINNED ANIMATION RIG ONTO PHYSICAL SCENE
-        injectUnskinnedAnimation(into: characterShell)
-
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleCharacterPan(_:)))
-        scnView.addGestureRecognizer(pan)
-    }
-
-    private func injectUnskinnedAnimation(into targetArmature: SCNNode) {
-        // Silently mathematically load the raw animation data rig in the background!
-        guard let animScene = SCNScene(named: "Character.scnassets/Shuffling.dae") else {
-            print("⚠️ Could not load Character.scnassets/Shuffling.dae for animation extraction")
-            return
-        }
-        
-        // Recursively rip through the pure bone structure of Idle-2 and physically graft every CAAnimation tracking player mapping directly onto the exact identical bone natively inside our `Idle.dae` mesh!
-        func spliceAnimationKeys(from sourceBone: SCNNode, to targetBone: SCNNode) {
-            for key in sourceBone.animationKeys {
-                if let player = sourceBone.animationPlayer(forKey: key) {
-                    player.animation.repeatCount = .infinity
-                    
-                    // If the source bone cleanly publishes its structural ID, rigorously find the identical bone natively inside our loaded physical target mesh!
-                    if let boneName = sourceBone.name, let matchingBone = targetBone.childNode(withName: boneName, recursively: true) {
-                        matchingBone.addAnimationPlayer(player, forKey: key)
-                    } else {
-                        // Blanket fallback: just attach the isolated transform path physically directly to the master node
-                        targetBone.addAnimationPlayer(player, forKey: key)
-                    }
+                let pan = UIPanGestureRecognizer(target: self, action: #selector(self.handleCharacterPan(_:)))
+                scnView.addGestureRecognizer(pan)
+                
+                UIView.animate(withDuration: 0.4) {
+                    scnView.alpha = 1.0
                 }
             }
-            // Dive mathematically deeper into the sub-bones recursively exploring the entire animation hierarchy!
-            sourceBone.childNodes.forEach { spliceAnimationKeys(from: $0, to: targetBone) }
         }
-        
-        spliceAnimationKeys(from: animScene.rootNode, to: targetArmature)
     }
+
+
 
     @objc private func handleCharacterPan(_ gesture: UIPanGestureRecognizer) {
         guard let node = characterNode else { return }
-        let translation = gesture.translation(in: gesture.view)
+        
+        // Temporarily pause auto-rotation while user is aggressively swiping
         switch gesture.state {
         case .began:
-            lastPanX = translation.x
+            lastPanX = gesture.translation(in: gesture.view).x
+            node.isPaused = true
         case .changed:
-            let delta = translation.x - lastPanX
-            lastPanX = translation.x
+            let translation = gesture.translation(in: gesture.view).x
+            let delta = translation - lastPanX
+            lastPanX = translation
             node.eulerAngles.y += Float(delta) * 0.01
         default:
+            node.isPaused = false
             break
         }
     }
@@ -816,7 +743,7 @@ extension CharacterSelectionViewController: UICollectionViewDelegate, UICollecti
         let player = gameData.players[indexPath.row]
         let isLocked = indexPath.row > 0          // only the first character is unlocked for now
         let isCurrentlyViewing = (indexPath.row == currentViewingIndex) && !isLocked
-        cell.configure(player: player, isSelected: isCurrentlyViewing, isLocked: isLocked)
+        cell.configure(player: player, isSelected: isCurrentlyViewing, isLocked: isLocked, characterIndex: indexPath.row)
         return cell
     }
 
