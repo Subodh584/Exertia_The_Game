@@ -19,11 +19,20 @@ class ForgotPasswordViewController: UIViewController {
     private let sendButton    = UIButton()
     private let backButton    = UIButton(type: .system)
 
+    // MARK: - Resend Timer
+    private var resendTimer: Timer?
+    private var resendCountdown: Int = 60
+
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
         setupKeyboardDismiss()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopResendTimer()
     }
 
     // MARK: - Actions
@@ -43,27 +52,29 @@ class ForgotPasswordViewController: UIViewController {
         setLoading(true)
 
         Task {
-            defer { DispatchQueue.main.async { self.setLoading(false) } }
-
             do {
                 // 1. Make sure the email is actually registered
                 let exists = try await SupabaseManager.shared.checkEmailExists(email)
                 guard exists else {
                     DispatchQueue.main.async {
+                        self.setLoading(false)
                         self.showAlert(title: "No Account Found",
                                        message: "We couldn't find an account with that email address.")
                     }
                     return
                 }
 
-                // 2. Send reset OTP (URL fetched fresh inside sendOTP)
+                // 2. Send reset OTP
                 DispatchQueue.main.async { self.setLoading(true, title: "Sending code…") }
                 try await MailServerManager.sendOTP(to: email, purpose: "reset")
 
                 print("✅ Reset OTP sent to \(email)")
 
-                // 3. Push to OTPViewController in reset mode
+                // 3. Start the 60s resend timer, then navigate to OTP screen
                 DispatchQueue.main.async {
+                    self.setLoading(false)
+                    self.startResendTimer()
+
                     let otpVC = OTPViewController()
                     otpVC.mode  = .resetPassword
                     otpVC.email = email
@@ -74,21 +85,73 @@ class ForgotPasswordViewController: UIViewController {
 
             } catch {
                 DispatchQueue.main.async {
+                    self.setLoading(false)
                     self.showAlert(title: "Something Went Wrong", message: error.localizedDescription)
                 }
             }
         }
     }
 
+    @objc private func clearFieldsTapped() {
+        emailField.text = ""
+        updateClearButton()
+    }
+
+    @objc private func emailEditingChanged() {
+        updateClearButton()
+    }
+
     @objc private func backTapped() {
         dismiss(animated: true)
     }
 
+    // MARK: - Resend Timer
+
+    private func startResendTimer() {
+        resendCountdown = 60
+        updateTimerButton()
+        resendTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.resendCountdown -= 1
+            if self.resendCountdown <= 0 {
+                self.stopResendTimer()
+            } else {
+                self.updateTimerButton()
+            }
+        }
+    }
+
+    private func stopResendTimer() {
+        resendTimer?.invalidate()
+        resendTimer = nil
+        DispatchQueue.main.async {
+            self.sendButton.isEnabled = true
+            self.sendButton.alpha     = 1.0
+            self.sendButton.setTitle("Send Code", for: .normal)
+        }
+    }
+
+    private func updateTimerButton() {
+        let minutes = resendCountdown / 60
+        let seconds = resendCountdown % 60
+        sendButton.setTitle(String(format: "Resend in %d:%02d", minutes, seconds), for: .normal)
+        sendButton.isEnabled = false
+        sendButton.alpha     = 0.6
+    }
+
     // MARK: - Loading helper
     private func setLoading(_ on: Bool, title: String = "Send Code") {
+        // Don't re-enable if the resend timer is still running
+        if !on && resendTimer != nil { return }
         sendButton.isEnabled = !on
         sendButton.alpha     = on ? 0.7 : 1.0
         sendButton.setTitle(on ? title : "Send Code", for: .normal)
+    }
+
+    // MARK: - Clear button helper
+    private func updateClearButton() {
+        let hasText = !(emailField.text?.isEmpty ?? true)
+        emailField.rightViewMode = hasText ? .always : .never
     }
 
     private func showAlert(title: String, message: String) {
@@ -174,6 +237,18 @@ class ForgotPasswordViewController: UIViewController {
         glassCard.addSubview(subtitleLabel)
 
         styleTextField(emailField, placeholder: "Email Address", icon: "envelope", keyboardType: .emailAddress)
+
+        // ── Clear (×) button inside the email field ──
+        let clearBtn = UIButton(type: .system)
+        clearBtn.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        clearBtn.tintColor = .systemGray3
+        clearBtn.frame = CGRect(x: 0, y: 0, width: 36, height: 50)
+        clearBtn.contentEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 10)
+        clearBtn.addTarget(self, action: #selector(clearFieldsTapped), for: .touchUpInside)
+        emailField.rightView     = clearBtn
+        emailField.rightViewMode = .never   // shown only when field has text
+        emailField.addTarget(self, action: #selector(emailEditingChanged), for: .editingChanged)
+
         glassCard.addSubview(emailField)
 
         sendButton.setTitle("Send Code", for: .normal)
@@ -218,7 +293,7 @@ class ForgotPasswordViewController: UIViewController {
                                  keyboardType: UIKeyboardType = .default) {
         textField.backgroundColor        = .white
         textField.layer.cornerRadius     = 10
-        textField.placeholder            = placeholder
+        textField.attributedPlaceholder  = NSAttributedString(string: placeholder, attributes: [.foregroundColor: UIColor.systemGray])
         textField.isSecureTextEntry      = isSecure
         textField.textColor              = .black
         textField.autocapitalizationType = .none

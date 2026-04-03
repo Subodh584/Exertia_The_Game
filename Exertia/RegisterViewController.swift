@@ -270,7 +270,7 @@ class RegisterViewController: UIViewController {
                         capitalization: UITextAutocapitalizationType = .none) {
         textField.backgroundColor = .white
         textField.layer.cornerRadius = 10
-        textField.placeholder = placeholder
+        textField.attributedPlaceholder = NSAttributedString(string: placeholder, attributes: [.foregroundColor: UIColor.systemGray])
         textField.isSecureTextEntry = isSecure
         textField.textColor = .black
         textField.autocapitalizationType = capitalization

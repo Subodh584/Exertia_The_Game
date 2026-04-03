@@ -404,7 +404,7 @@ class LoginViewController: UIViewController {
     func styleTextField(_ textField: UITextField, placeholder: String, icon: String, isSecure: Bool = false) {
         textField.backgroundColor = .white
         textField.layer.cornerRadius = Responsive.cornerRadius(10)
-        textField.placeholder = placeholder
+        textField.attributedPlaceholder = NSAttributedString(string: placeholder, attributes: [.foregroundColor: UIColor.systemGray])
         textField.isSecureTextEntry = isSecure
         textField.textColor = .black
         textField.autocapitalizationType = .none

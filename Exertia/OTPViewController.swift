@@ -25,11 +25,15 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
     private let titleLabel          = UILabel()
     private let subtitleLabel       = UILabel()
 
-    private let otpFields: [UITextField] = (0..<6).map { _ in UITextField() }
+    private let otpFields: [OTPDigitField] = (0..<6).map { _ in OTPDigitField() }
     private let otpStackView = UIStackView()
 
+    private let backButton     = UIButton(type: .system)
     private let actionButton   = UIButton(type: .system)
     private let resendButton   = UIButton(type: .system)
+
+    private var resendTimer: Timer?
+    private var resendCountdown: Int = 0
 
     // Reset-password — new password step (hidden initially)
     private let newPasswordCard    = UIView()
@@ -170,8 +174,13 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
         }
     }
 
+    @objc private func backTapped() {
+        dismiss(animated: true)
+    }
+
     @objc private func resendTapped() {
         resendButton.isEnabled = false
+        startResendTimer()
 
         Task {
             do {
@@ -179,17 +188,44 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
                 try await MailServerManager.sendOTP(to: email, purpose: purpose)
                 DispatchQueue.main.async {
                     self.showAlert(title: "Code Resent", message: "A new 6-digit code was sent to \(self.email).")
-                    // Re-enable after 30 s to prevent spam
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                        self.resendButton.isEnabled = true
-                    }
                 }
             } catch {
                 DispatchQueue.main.async {
                     self.showAlert(title: "Resend Failed", message: error.localizedDescription)
-                    self.resendButton.isEnabled = true
+                    self.stopResendTimer()
                 }
             }
+        }
+    }
+
+    private func startResendTimer() {
+        resendCountdown = 30
+        updateResendButton()
+        resendTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.resendCountdown -= 1
+            if self.resendCountdown <= 0 {
+                self.stopResendTimer()
+            } else {
+                self.updateResendButton()
+            }
+        }
+    }
+
+    private func stopResendTimer() {
+        resendTimer?.invalidate()
+        resendTimer = nil
+        DispatchQueue.main.async {
+            self.resendButton.isEnabled = true
+            self.resendButton.setTitle("Resend Code", for: .normal)
+            self.resendButton.setTitleColor(UIColor(white: 0.75, alpha: 1), for: .normal)
+        }
+    }
+
+    private func updateResendButton() {
+        DispatchQueue.main.async {
+            self.resendButton.setTitle("Resend in \(self.resendCountdown)s", for: .normal)
+            self.resendButton.setTitleColor(UIColor(white: 0.5, alpha: 1), for: .normal)
         }
     }
 
@@ -226,7 +262,7 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
     func textField(_ textField: UITextField,
                    shouldChangeCharactersIn range: NSRange,
                    replacementString string: String) -> Bool {
-        guard let index = otpFields.firstIndex(of: textField) else { return false }
+        guard let index = otpFields.firstIndex(of: textField as! OTPDigitField) else { return false }
 
         if string.isEmpty {
             textField.text = ""
@@ -297,6 +333,17 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
         glassCard.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(glassCard)
 
+        // ── Back button ──
+        var backConfig = UIButton.Configuration.plain()
+        backConfig.image = UIImage(systemName: "chevron.left")
+        backConfig.imagePlacement = .leading
+        backConfig.title = "Back"
+        backConfig.baseForegroundColor = .white
+        backButton.configuration = backConfig
+        backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+        backButton.translatesAutoresizingMaskIntoConstraints = false
+        glassCard.addSubview(backButton)
+
         // ── Title ──
         titleLabel.font          = .systemFont(ofSize: 28, weight: .bold)
         titleLabel.textColor     = .white
@@ -319,7 +366,7 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
         otpStackView.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(otpStackView)
 
-        for field in otpFields {
+        for (i, field) in otpFields.enumerated() {
             field.backgroundColor    = .white
             field.layer.cornerRadius = 12
             field.textColor          = .black
@@ -331,6 +378,10 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
             field.layer.shadowOpacity = 0.1
             field.layer.shadowOffset  = CGSize(width: 0, height: 2)
             field.layer.shadowRadius  = 4
+            field.onDeleteBackward = { [weak self] in
+                guard let self, i > 0 else { return }
+                self.otpFields[i - 1].becomeFirstResponder()
+            }
             otpStackView.addArrangedSubview(field)
             field.heightAnchor.constraint(equalTo: field.widthAnchor).isActive = true
         }
@@ -362,7 +413,10 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
             glassCard.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 40),
             glassCard.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -40),
 
-            titleLabel.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: 40),
+            backButton.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: 16),
+            backButton.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 16),
+
+            titleLabel.topAnchor.constraint(equalTo: backButton.bottomAnchor, constant: 8),
             titleLabel.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 20),
             titleLabel.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -20),
 
@@ -435,7 +489,7 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
                                  isSecure: Bool = false) {
         textField.backgroundColor    = .white
         textField.layer.cornerRadius = 10
-        textField.placeholder        = placeholder
+        textField.attributedPlaceholder = NSAttributedString(string: placeholder, attributes: [.foregroundColor: UIColor.systemGray])
         textField.isSecureTextEntry  = isSecure
         textField.textColor          = .black
         textField.autocapitalizationType = .none
@@ -450,5 +504,19 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
         textField.leftView    = container
         textField.leftViewMode = .always
         textField.translatesAutoresizingMaskIntoConstraints = false
+    }
+}
+
+// MARK: - OTPDigitField
+// Custom UITextField that fires a callback when backspace is pressed on an empty field,
+// so the focus can move to the previous box.
+class OTPDigitField: UITextField {
+    var onDeleteBackward: (() -> Void)?
+
+    override func deleteBackward() {
+        if text?.isEmpty == true {
+            onDeleteBackward?()
+        }
+        super.deleteBackward()
     }
 }

@@ -599,6 +599,19 @@ class SupabaseManager {
         return !rows.isEmpty
     }
 
+    /// Returns true if the given username is already taken in `public.users`.
+    func checkUsernameExists(_ username: String) async throws -> Bool {
+        struct UsernameRow: Decodable { let username: String }
+        let rows: [UsernameRow] = try await client
+            .from("users")
+            .select("username")
+            .ilike("username", value: username.trimmingCharacters(in: .whitespacesAndNewlines))
+            .limit(1)
+            .execute()
+            .value
+        return !rows.isEmpty
+    }
+
     // MARK: - Session Expired Handler
     func handleSessionExpired() {
         UserDefaults.standard.removeObject(forKey: "supabaseUserID")

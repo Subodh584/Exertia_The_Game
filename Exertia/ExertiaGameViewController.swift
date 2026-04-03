@@ -80,6 +80,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     private var caloriesTargetMet: Bool = false
     private var distanceTargetMet: Bool = false
     private var allTargetsPopupShown: Bool = false
+    private var sessionAlreadySaved: Bool = false
     private(set) var isShowingTargetsPopup: Bool = false
     private var targetCheckAccumulator: Float = 0.0
     private var caloriesBadgeView: UIView?
@@ -2132,6 +2133,10 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     // MARK: - Exit → Summary
 
     func exitAndShowSummary() {
+        // Prevent duplicate saves if this is somehow called more than once per session
+        guard !sessionAlreadySaved else { return }
+        sessionAlreadySaved = true
+
         // Stop the game
         isGameRunning = false
         isPaused      = false
@@ -2165,40 +2170,33 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
             totalSteps:       totalSteps
         )
 
-        // Capture values for the closure (avoid capturing self strongly in summary)
-        let capturedDuration          = durationMinutes
-        let capturedCal               = caloriesBurned
-        let capturedDist              = distanceMeters
-        let capturedSpeed             = avgSpeed
-        let capturedJumps             = totalJumps
-        let capturedCrouches          = totalCrouches
-        let capturedLeftLeans         = totalLeftLeans
-        let capturedRightLeans        = totalRightLeans
-        let capturedSteps             = totalSteps
-        let capturedCompletionStatus  = completionStatus
-        let capturedCharacter         = character
-        let capturedTrack             = trackName
-        let capturedTrackId           = trackId
+        // Snapshot personal bests BEFORE saving, so the high-score comparison
+        // is against the previous record (not the one we're about to set).
+        let prevBestCal  = GameData.shared.stats.personalBestCalories
+        let prevBestDist = GameData.shared.stats.personalBestDistance
+
+        // Save the session immediately — before any UI is shown, so data is never lost
+        // even if the user force-quits before tapping "Go Home".
+        GameData.shared.addSession(
+            duration:        durationMinutes,
+            calories:        caloriesBurned,
+            track:           trackName,
+            trackId:         trackId,
+            characterId:     character.id,
+            jumps:           totalJumps,
+            crouches:        totalCrouches,
+            leftLeans:       totalLeftLeans,
+            rightLeans:      totalRightLeans,
+            steps:           totalSteps,
+            distanceCovered: distanceMeters,
+            averageSpeed:    avgSpeed,
+            completionStatus: completionStatus
+        )
 
         // Dismiss pause menu (no animation) then show summary or high score
         let presentSummary = { [weak self] in
             guard let self = self else { return }
             let summaryView = SessionSummaryView(summary: summaryData) {
-                GameData.shared.addSession(
-                    duration:        capturedDuration,
-                    calories:        capturedCal,
-                    track:           capturedTrack,
-                    trackId:         capturedTrackId,
-                    characterId:     capturedCharacter.id,
-                    jumps:           capturedJumps,
-                    crouches:        capturedCrouches,
-                    leftLeans:       capturedLeftLeans,
-                    rightLeans:      capturedRightLeans,
-                    steps:           capturedSteps,
-                    distanceCovered: capturedDist,
-                    averageSpeed:    capturedSpeed,
-                    completionStatus: capturedCompletionStatus
-                )
                 NotificationCenter.default.post(name: .navigateToHome, object: nil)
             }
             let hosting = UIHostingController(rootView: summaryView)
@@ -2212,38 +2210,35 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         let showNextScreen = { [weak self] in
             guard let self = self else { return }
 
-            let oldBestCal = GameData.shared.stats.personalBestCalories
-            let oldBestDist = GameData.shared.stats.personalBestDistance
             let capturedDistKm = distanceMeters / 1000.0
 
-            let beatCal = oldBestCal > 0 && caloriesBurned > oldBestCal
-            let beatDist = oldBestDist > 0 && capturedDistKm > oldBestDist
+            // Use the pre-save snapshot so we compare against the old record, not the one
+            // we just set. Also show the popup on the very first run (prevBest == 0).
+            let beatCal  = caloriesBurned > prevBestCal
+            let beatDist = capturedDistKm  > prevBestDist
             let isNewBest = beatCal || beatDist
 
             if isNewBest {
                 let metricName = beatDist ? "DISTANCE" : "CALORIES"
                 let newVal = beatDist ? String(format: "%.2f", capturedDistKm) : "\(caloriesBurned)"
-                let oldVal = beatDist ? String(format: "%.2f", oldBestDist) : "\(oldBestCal)"
+                let oldVal = beatDist ? String(format: "%.2f", prevBestDist) : "\(prevBestCal)"
                 let unit = beatDist ? "km" : "kcal"
 
-                let highScoreView = HighScorePopupView(
-                    metricName: metricName,
-                    newValue: newVal,
-                    oldValue: oldVal,
-                    unit: unit
-                ) { [weak self] in
-                    // Dismiss high score popup, then show session summary
+                let highScoreVC = HighScoreViewController()
+                highScoreVC.metricName = metricName
+                highScoreVC.newValue   = newVal
+                highScoreVC.oldValue   = oldVal
+                highScoreVC.unit       = unit
+                highScoreVC.onContinue = { [weak self] in
                     self?.highScoreHostingController?.dismiss(animated: true) {
                         self?.highScoreHostingController = nil
                         presentSummary()
                     }
                 }
-                let hosting = UIHostingController(rootView: highScoreView)
-                hosting.modalPresentationStyle = .overFullScreen
-                hosting.modalTransitionStyle = .crossDissolve
-                hosting.view.backgroundColor = .clear
-                self.present(hosting, animated: true)
-                self.highScoreHostingController = hosting
+                highScoreVC.modalPresentationStyle = .overFullScreen
+                highScoreVC.modalTransitionStyle   = .crossDissolve
+                self.present(highScoreVC, animated: true)
+                self.highScoreHostingController = highScoreVC
             } else {
                 presentSummary()
             }
@@ -2396,6 +2391,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         distanceTargetMet       = false
         allTargetsPopupShown    = false
         isShowingTargetsPopup   = false
+        sessionAlreadySaved     = false
         targetCheckAccumulator  = 0.0
         caloriesBadgeView?.removeFromSuperview()
         caloriesBadgeView = nil

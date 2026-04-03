@@ -343,6 +343,11 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 }
                 self.allCompletedSessions = calendarSessions   // stored for calendar day-stats
 
+                // If no sessions exist at all, clear streak calendar cache immediately
+                if sessions.isEmpty {
+                    self.activeDateStrings = []
+                }
+
                 // Compute TODAY (IST) totals for the ring / big stat label
                 let todaySessions = sessions.filter { s in
                     guard s.countsTowardDailyProgress,
@@ -364,11 +369,18 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                     self.apiLastSessionCalories = lastSession.calories_burned
                     self.apiLastSessionDistance = lastSession.distance_covered
                     self.apiLastSessionStatus = lastSession.completion_status
+                } else {
+                    self.apiLastSessionDuration = nil
+                    self.apiLastSessionCalories = nil
+                    self.apiLastSessionDistance = nil
+                    self.apiLastSessionStatus = nil
                 }
 
                 // If stats endpoint doesn't have best duration, compute from sessions
                 if let bestSession = completed.max(by: { ($0.calories_burned ?? 0) < ($1.calories_burned ?? 0) }) {
                     self.apiBestSessionDuration = bestSession.duration_minutes
+                } else {
+                    self.apiBestSessionDuration = nil
                 }
 
                 DispatchQueue.main.async {
@@ -1473,6 +1485,13 @@ class GlassEditModalController: UIViewController {
         var unit: String = ""
     }
 
+    struct AsyncFieldValidation {
+        let fieldIndex: Int
+        let currentValue: String
+        let minLength: Int
+        let check: (String) async throws -> Bool
+    }
+
     private let modalTitle: String
     private let subtitle: String
     private let iconName: String
@@ -1488,16 +1507,26 @@ class GlassEditModalController: UIViewController {
     private var textFields: [UITextField] = []
     private var cardBottomConstraint: NSLayoutConstraint!
 
+    // Async username validation
+    private let asyncStatusLabel  = UILabel()
+    private let asyncCheckSpinner = UIActivityIndicatorView(style: .medium)
+    private var asyncDebounceTimer: Timer?
+    private var asyncValidated    = false
+    private var asyncConfig: AsyncFieldValidation?
+    private weak var saveButton: UIButton?
+
     init(
         title: String,
         subtitle: String,
         icon: String,
         accentColor: UIColor,
         fields: [FieldConfig],
+        asyncValidation: AsyncFieldValidation? = nil,
         validator: (([String]) -> String?)? = nil,
         onSave: @escaping ([String]) -> Void,
         onValidationError: ((String) -> Void)? = nil
     ) {
+        self.asyncConfig = asyncValidation
         self.modalTitle = title
         self.subtitle = subtitle
         self.iconName = icon
@@ -1621,6 +1650,37 @@ class GlassEditModalController: UIViewController {
 
         let saveBtn = makeActionButton(title: "Save", filled: true)
         saveBtn.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
+        self.saveButton = saveBtn
+
+        // Wire up async validation if configured
+        if let config = asyncConfig {
+            saveBtn.isEnabled = false
+            saveBtn.alpha = 0.5
+
+            asyncStatusLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+            asyncStatusLabel.textColor = .white
+            asyncStatusLabel.layer.cornerRadius = 5
+            asyncStatusLabel.clipsToBounds = true
+            asyncStatusLabel.isHidden = true
+            asyncStatusLabel.translatesAutoresizingMaskIntoConstraints = false
+
+            asyncCheckSpinner.color = accentColor
+            asyncCheckSpinner.hidesWhenStopped = true
+            let spinContainer = UIView(frame: CGRect(x: 0, y: 0, width: 32, height: 44))
+            asyncCheckSpinner.center = CGPoint(x: 16, y: 22)
+            spinContainer.addSubview(asyncCheckSpinner)
+            textFields[config.fieldIndex].rightView = spinContainer
+            textFields[config.fieldIndex].rightViewMode = .always
+
+            fieldsStack.insertArrangedSubview(asyncStatusLabel, at: config.fieldIndex + 1)
+
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(asyncFieldTextChanged(_:)),
+                name: UITextField.textDidChangeNotification,
+                object: textFields[config.fieldIndex]
+            )
+        }
 
         let btnStack = UIStackView(arrangedSubviews: [cancelBtn, saveBtn])
         btnStack.spacing = 12
@@ -1796,9 +1856,102 @@ class GlassEditModalController: UIViewController {
         animateOut()
     }
 
+    // MARK: - Async Field Validation
+
+    @objc private func asyncFieldTextChanged(_ notification: Notification) {
+        guard let config = asyncConfig, let tf = notification.object as? UITextField else { return }
+
+        // Auto-correct: lowercase, no spaces
+        let raw = tf.text ?? ""
+        let corrected = String(raw.lowercased().filter { !$0.isWhitespace })
+        if raw != corrected { tf.text = corrected }
+
+        asyncDebounceTimer?.invalidate()
+        asyncValidated = false
+        updateAsyncSaveButton()
+
+        let text = corrected
+
+        // Blank = keep existing, allow save
+        if text.isEmpty {
+            asyncValidated = true
+            asyncStatusLabel.isHidden = true
+            updateAsyncSaveButton()
+            return
+        }
+
+        // Same as current value → skip re-check
+        if text == config.currentValue.lowercased() {
+            asyncValidated = true
+            asyncStatusLabel.isHidden = true
+            updateAsyncSaveButton()
+            return
+        }
+
+        guard text.count >= config.minLength else {
+            setAsyncStatus("  Minimum \(config.minLength) characters  ", color: .systemOrange)
+            asyncCheckSpinner.stopAnimating()
+            return
+        }
+
+        asyncStatusLabel.isHidden = true
+        asyncDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in
+            self?.performAsyncCheck(text)
+        }
+    }
+
+    private func performAsyncCheck(_ username: String) {
+        asyncCheckSpinner.startAnimating()
+        asyncStatusLabel.isHidden = true
+
+        Task {
+            do {
+                let taken = try await asyncConfig?.check(username) ?? false
+                DispatchQueue.main.async {
+                    self.asyncCheckSpinner.stopAnimating()
+                    if taken {
+                        self.setAsyncStatus("  Username already taken  ", color: .systemRed)
+                        self.asyncValidated = false
+                    } else {
+                        self.setAsyncStatus("  Available  ", color: .systemGreen)
+                        self.asyncValidated = true
+                    }
+                    self.updateAsyncSaveButton()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.asyncCheckSpinner.stopAnimating()
+                    self.setAsyncStatus("  Could not check — try again  ", color: .systemOrange)
+                    self.asyncValidated = false
+                    self.updateAsyncSaveButton()
+                }
+            }
+        }
+    }
+
+    private func setAsyncStatus(_ text: String, color: UIColor) {
+        asyncStatusLabel.isHidden = false
+        asyncStatusLabel.text = text
+        asyncStatusLabel.textColor = .white
+        asyncStatusLabel.backgroundColor = color.withAlphaComponent(0.85)
+    }
+
+    private func updateAsyncSaveButton() {
+        let enabled = asyncConfig == nil || asyncValidated
+        saveButton?.isEnabled = enabled
+        saveButton?.alpha     = enabled ? 1.0 : 0.5
+    }
+
     @objc private func saveTapped() {
         AudioManager.shared.playEffect(.buttonTapped)
         let values = textFields.map { $0.text ?? "" }
+
+        guard asyncConfig == nil || asyncValidated else {
+            showValidationError("Please wait for username validation to complete.")
+            shakeCard()
+            return
+        }
+
         // Validate all fields are non-empty
         guard values.allSatisfy({ !$0.isEmpty }) else {
             showValidationError("Please fill in all fields.")
