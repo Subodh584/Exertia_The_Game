@@ -18,10 +18,11 @@ class RegisterViewController: UIViewController {
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     
-    private let firstNameField = UITextField()
-    private let lastNameField = UITextField()
-    private let emailField = UITextField()
-    private let passwordField = UITextField()
+    private let firstNameField       = UITextField()
+    private let lastNameField        = UITextField()
+    private let emailField           = UITextField()
+    private let passwordField        = UITextField()
+    private let confirmPasswordField = UITextField()
     
     private let signUpButton = UIButton()
     private let loginSwitchStack = UIStackView()
@@ -61,6 +62,17 @@ class RegisterViewController: UIViewController {
         }
         guard password.count >= 6 else {
             showAlert(title: "Password Too Short", message: "Your password must be at least 6 characters.")
+            return
+        }
+        let confirmPassword = confirmPasswordField.text ?? ""
+        guard !confirmPassword.isEmpty else {
+            showAlert(title: "Confirm Password Required", message: "Please confirm your password.")
+            return
+        }
+        guard password == confirmPassword else {
+            showAlert(title: "Passwords Don't Match", message: "The passwords you entered don't match. Please try again.")
+            confirmPasswordField.text = ""
+            confirmPasswordField.becomeFirstResponder()
             return
         }
 
@@ -188,15 +200,17 @@ class RegisterViewController: UIViewController {
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(subtitleLabel)
         
-        styleTextField(firstNameField, placeholder: "First Name",  icon: "person",   capitalization: .words)
-        styleTextField(lastNameField,  placeholder: "Last Name (Optional)", icon: "person", capitalization: .words)
-        styleTextField(emailField,     placeholder: "Email",      icon: "envelope", keyboardType: .emailAddress)
-        styleTextField(passwordField,  placeholder: "Password",   icon: "lock",     isSecure: true)
-        
+        styleTextField(firstNameField,       placeholder: "First Name",           icon: "person",    capitalization: .words)
+        styleTextField(lastNameField,        placeholder: "Last Name (Optional)", icon: "person",    capitalization: .words)
+        styleTextField(emailField,           placeholder: "Email",                icon: "envelope",  keyboardType: .emailAddress)
+        styleTextField(passwordField,        placeholder: "Password",             icon: "lock",      isSecure: true)
+        styleTextField(confirmPasswordField, placeholder: "Confirm Password",     icon: "lock.fill", isSecure: true)
+
         glassCard.addSubview(firstNameField)
         glassCard.addSubview(lastNameField)
         glassCard.addSubview(emailField)
         glassCard.addSubview(passwordField)
+        glassCard.addSubview(confirmPasswordField)
     
         signUpButton.setTitle("Sign Up", for: .normal)
         signUpButton.backgroundColor = UIColor(red: 0.0, green: 0.2, blue: 0.4, alpha: 1.0)
@@ -226,7 +240,7 @@ class RegisterViewController: UIViewController {
             glassCard.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             glassCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Responsive.contentInset),
             glassCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Responsive.contentInset),
-            glassCard.heightAnchor.constraint(greaterThanOrEqualToConstant: Responsive.verticalSize(580)),
+            glassCard.heightAnchor.constraint(greaterThanOrEqualToConstant: Responsive.verticalSize(645)),
 
             titleLabel.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: Responsive.padding(40)),
             titleLabel.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
@@ -254,7 +268,12 @@ class RegisterViewController: UIViewController {
             passwordField.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
             passwordField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
 
-            signUpButton.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: Responsive.padding(30)),
+            confirmPasswordField.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: Responsive.padding(15)),
+            confirmPasswordField.leadingAnchor.constraint(equalTo: firstNameField.leadingAnchor),
+            confirmPasswordField.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
+            confirmPasswordField.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
+
+            signUpButton.topAnchor.constraint(equalTo: confirmPasswordField.bottomAnchor, constant: Responsive.padding(30)),
             signUpButton.leadingAnchor.constraint(equalTo: firstNameField.leadingAnchor),
             signUpButton.trailingAnchor.constraint(equalTo: firstNameField.trailingAnchor),
             signUpButton.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
