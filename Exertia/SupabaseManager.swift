@@ -588,28 +588,24 @@ class SupabaseManager {
 
     /// Returns true if the given email already has an account in `public.users`.
     func checkEmailExists(_ email: String) async throws -> Bool {
-        struct EmailRow: Decodable { let email: String }
-        let rows: [EmailRow] = try await client
+        let response = try await client
             .from("users")
-            .select("email")
+            .select("id")
             .eq("email", value: email.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))
             .limit(1)
-            .execute()
-            .value
-        return !rows.isEmpty
+            .execute(options: .init(count: .exact))
+        return (response.count ?? 0) > 0
     }
 
     /// Returns true if the given username is already taken in `public.users`.
     func checkUsernameExists(_ username: String) async throws -> Bool {
-        struct UsernameRow: Decodable { let username: String }
-        let rows: [UsernameRow] = try await client
+        let response = try await client
             .from("users")
-            .select("username")
+            .select("id")
             .ilike("username", value: username.trimmingCharacters(in: .whitespacesAndNewlines))
             .limit(1)
-            .execute()
-            .value
-        return !rows.isEmpty
+            .execute(options: .init(count: .exact))
+        return (response.count ?? 0) > 0
     }
 
     // MARK: - Session Expired Handler

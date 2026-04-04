@@ -131,6 +131,12 @@ class LoginViewController: UIViewController {
         signInButton.alpha = loading ? 0.7 : 1.0
     }
     
+    @objc private func toggleLoginPasswordVisibility(_ sender: UIButton) {
+        passwordField.isSecureTextEntry.toggle()
+        let icon = passwordField.isSecureTextEntry ? "eye.slash" : "eye"
+        sender.setImage(UIImage(systemName: icon), for: .normal)
+    }
+
     @objc func forgotPasswordTapped() {
         let forgotVC = ForgotPasswordViewController()
         forgotVC.modalPresentationStyle = .fullScreen
@@ -205,6 +211,7 @@ class LoginViewController: UIViewController {
 
                     DispatchQueue.main.async {
                         let onboardingVC = OnboardingProfileViewController()
+                        onboardingVC.isOAuthUser = true
                         onboardingVC.modalPresentationStyle = .fullScreen
                         onboardingVC.modalTransitionStyle = .crossDissolve
                         self.present(onboardingVC, animated: true)
@@ -301,7 +308,17 @@ class LoginViewController: UIViewController {
         // 🔥 CHANGED THIS LINE: Now it visually asks for a Username
         styleTextField(emailField, placeholder: "Username", icon: "person")
         styleTextField(passwordField, placeholder: "Password", icon: "lock", isSecure: true)
-        
+
+        // Eye toggle for password
+        let eyeBtn = UIButton(type: .custom)
+        eyeBtn.setImage(UIImage(systemName: "eye.slash"), for: .normal)
+        eyeBtn.tintColor = .darkGray
+        eyeBtn.frame = CGRect(x: 0, y: 0, width: 44, height: 50)
+        eyeBtn.contentEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 12)
+        eyeBtn.addTarget(self, action: #selector(toggleLoginPasswordVisibility(_:)), for: .touchUpInside)
+        passwordField.rightView     = eyeBtn
+        passwordField.rightViewMode = .always
+
         glassCard.addSubview(emailField)
         glassCard.addSubview(passwordField)
     
