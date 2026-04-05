@@ -41,6 +41,10 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
     private let confirmPasswordField = UITextField()
     private let resetButton        = UIButton(type: .system)
 
+    // Eye toggle buttons for reset-password fields
+    private let newPwEyeButton     = UIButton(type: .custom)
+    private let confirmPwEyeButton = UIButton(type: .custom)
+
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -67,7 +71,6 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
             defer { DispatchQueue.main.async { self.setLoading(false) } }
 
             do {
-                // Verify OTP with the mail server
                 try await MailServerManager.verifyOTP(email: email, otp: otp)
 
                 switch mode {
@@ -96,10 +99,10 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
 
         } catch {
             let msg = error.localizedDescription.lowercased()
-            // "User already registered" means Supabase Auth has the email but
-            // public.users may not — usually caused by a crashed/incomplete
-            // previous attempt.  Try to clean up the orphan and retry once.
-            if msg.contains("already registered") || msg.contains("user already exists") {
+            if msg.contains("already registered")
+                || msg.contains("user already exists")
+                || msg.contains("couldn't be read")
+                || error is DecodingError {
                 await handleOrphanedAuthUser()
             } else {
                 DispatchQueue.main.async {
@@ -109,20 +112,17 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
         }
     }
 
-    /// Asks the server to delete the dangling auth.users row (if safe), then retries signup.
     private func handleOrphanedAuthUser() async {
         do {
             let cleaned = try await MailServerManager.cleanupOrphanedUser(email: email)
 
             if cleaned {
-                // Orphan removed — retry signup fresh
                 print("♻️  Orphaned auth user cleaned up, retrying signup…")
                 let userId = try await performSignUp()
                 UserDefaults.standard.set(userId, forKey: "supabaseUserID")
                 print("✅ Signup complete after cleanup. User ID: \(userId)")
                 DispatchQueue.main.async { self.navigateToOnboarding() }
             } else {
-                // Server says the account is real — direct user to login
                 DispatchQueue.main.async {
                     self.showAlert(
                         title: "Email Already In Use",
@@ -137,8 +137,6 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
         }
     }
 
-    /// Pure signup call — extracted so both the first attempt and the post-cleanup
-    /// retry share identical logic.
     private func performSignUp() async throws -> String {
         try await SupabaseManager.shared.signUp(
             email: email,
@@ -157,7 +155,6 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
 
     // Reset: show the new password fields
     private func transitionToNewPasswordStep() {
-        // Animate OTP card out, new-password card in
         UIView.animate(withDuration: 0.25, animations: {
             self.otpStackView.alpha  = 0
             self.actionButton.alpha  = 0
@@ -205,7 +202,6 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
                         preferredStyle: .alert
                     )
                     alert.addAction(UIAlertAction(title: "Log In", style: .default) { [weak self] _ in
-                        // Dismiss all the way back to LoginViewController
                         self?.view.window?.rootViewController?.dismiss(animated: true)
                     })
                     self.present(alert, animated: true)
@@ -302,6 +298,29 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
         present(alert, animated: true)
     }
 
+    // MARK: - Eye toggles (reset password)
+    @objc private func toggleNewPwVisibility(_ sender: UIButton) {
+        newPasswordField.isSecureTextEntry.toggle()
+        let icon = newPasswordField.isSecureTextEntry ? "eye.slash" : "eye"
+        sender.setImage(UIImage(systemName: icon), for: .normal)
+    }
+
+    @objc private func toggleConfirmPwVisibility(_ sender: UIButton) {
+        confirmPasswordField.isSecureTextEntry.toggle()
+        let icon = confirmPasswordField.isSecureTextEntry ? "eye.slash" : "eye"
+        sender.setImage(UIImage(systemName: icon), for: .normal)
+    }
+
+    private func makeEyeButton(action: Selector) -> UIButton {
+        let btn = UIButton(type: .custom)
+        btn.setImage(UIImage(systemName: "eye.slash"), for: .normal)
+        btn.tintColor = .darkGray
+        btn.frame = CGRect(x: 0, y: 0, width: 44, height: 50)
+        btn.contentEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 12)
+        btn.addTarget(self, action: action, for: .touchUpInside)
+        return btn
+    }
+
     // MARK: - UITextFieldDelegate (OTP auto-advance)
     func textField(_ textField: UITextField,
                    shouldChangeCharactersIn range: NSRange,
@@ -369,7 +388,6 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
     }
 
     private func setupGlassCard() {
-        // ── Outer card ──
         glassCard.backgroundColor    = UIColor.white.withAlphaComponent(0.15)
         glassCard.layer.cornerRadius = 24
         glassCard.layer.borderWidth  = 1
@@ -424,6 +442,7 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
             field.layer.shadowRadius  = 4
             field.onDeleteBackward = { [weak self] in
                 guard let self, i > 0 else { return }
+                self.otpFields[i - 1].text = ""
                 self.otpFields[i - 1].becomeFirstResponder()
             }
             otpStackView.addArrangedSubview(field)
@@ -484,7 +503,6 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
             newPasswordCard.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 25),
             newPasswordCard.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -25),
 
-            // Card bottom ties to whichever group is visible
             resendButton.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -35)
         ])
     }
@@ -497,6 +515,15 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
 
         styleTextField(newPasswordField,     placeholder: "New Password",     icon: "lock",    isSecure: true)
         styleTextField(confirmPasswordField, placeholder: "Confirm Password", icon: "lock.fill", isSecure: true)
+
+        // Eye buttons for reset password fields
+        let eye1 = makeEyeButton(action: #selector(toggleNewPwVisibility))
+        newPasswordField.rightView     = eye1
+        newPasswordField.rightViewMode = .always
+
+        let eye2 = makeEyeButton(action: #selector(toggleConfirmPwVisibility))
+        confirmPasswordField.rightView     = eye2
+        confirmPasswordField.rightViewMode = .always
 
         newPasswordCard.addSubview(newPasswordField)
         newPasswordCard.addSubview(confirmPasswordField)
@@ -552,15 +579,14 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
 }
 
 // MARK: - OTPDigitField
-// Custom UITextField that fires a callback when backspace is pressed on an empty field,
-// so the focus can move to the previous box.
 class OTPDigitField: UITextField {
     var onDeleteBackward: (() -> Void)?
 
     override func deleteBackward() {
         if text?.isEmpty == true {
             onDeleteBackward?()
+        } else {
+            super.deleteBackward()
         }
-        super.deleteBackward()
     }
 }

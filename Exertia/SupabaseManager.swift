@@ -36,6 +36,7 @@ struct AppUser: Codable {
     let display_name: String?
     let daily_target_distance: Double?
     let daily_target_calories: Int?
+    let initial_weight: Double?
     let current_weight: Double?
     let target_weight: Double?
     let current_streak: Int?
@@ -421,6 +422,17 @@ class SupabaseManager {
         try await client.rpc("abandon_session", params: ["p_session_id": sessionId]).execute()
     }
 
+    /// Returns true if the user has completed at least one game session.
+    func hasCompletedAnySession(userId: String) async throws -> Bool {
+        let response = try await client
+            .from("game_sessions")
+            .select("id")
+            .eq("user_id", value: userId)
+            .limit(1)
+            .execute(options: .init(count: .exact))
+        return (response.count ?? 0) > 0
+    }
+
     func getUserSessions(userId: String) async throws -> [AppSession] {
         return try await client.from("game_sessions")
             .select()
@@ -559,10 +571,28 @@ class SupabaseManager {
         try await performAccountDeletion(userId: user.id)
     }
 
-    /// Shared deletion logic
+    /// Shared deletion logic – deletes child rows first to avoid trigger conflicts
     private func performAccountDeletion(userId: UUID) async throws {
-        print("🗑️ Deleting user profile from database...")
+        print("🗑️ Deleting user data from database...")
+
+        // 1. Delete child tables that reference 'users' or whose triggers
+        //    could try to write back during CASCADE (e.g. trg_badge_recalc).
+        let childTables = ["user_badges", "daily_progress", "game_sessions"]
+        for table in childTables {
+            print("   ↳ Deleting from \(table)...")
+            try await client.from(table).delete().eq("user_id", value: userId).execute()
+        }
+
+        // Friendships uses requester_id / receiver_id instead of user_id
+        print("   ↳ Deleting from friendships...")
+        try await client.from("friendships").delete()
+            .or("requester_id.eq.\(userId),receiver_id.eq.\(userId)")
+            .execute()
+
+        // 2. Now safe to delete the user row itself (remaining FKs will CASCADE cleanly)
+        print("   ↳ Deleting from users...")
         try await client.from("users").delete().eq("id", value: userId).execute()
+
         try await client.auth.signOut()
         UserDefaults.standard.removeObject(forKey: "supabaseUserID")
         print("✅ Account deleted and logged out!")
@@ -588,28 +618,24 @@ class SupabaseManager {
 
     /// Returns true if the given email already has an account in `public.users`.
     func checkEmailExists(_ email: String) async throws -> Bool {
-        struct EmailRow: Decodable { let email: String }
-        let rows: [EmailRow] = try await client
+        let response = try await client
             .from("users")
-            .select("email")
+            .select("id")
             .eq("email", value: email.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))
             .limit(1)
-            .execute()
-            .value
-        return !rows.isEmpty
+            .execute(options: .init(count: .exact))
+        return (response.count ?? 0) > 0
     }
 
     /// Returns true if the given username is already taken in `public.users`.
     func checkUsernameExists(_ username: String) async throws -> Bool {
-        struct UsernameRow: Decodable { let username: String }
-        let rows: [UsernameRow] = try await client
+        let response = try await client
             .from("users")
-            .select("username")
+            .select("id")
             .ilike("username", value: username.trimmingCharacters(in: .whitespacesAndNewlines))
             .limit(1)
-            .execute()
-            .value
-        return !rows.isEmpty
+            .execute(options: .init(count: .exact))
+        return (response.count ?? 0) > 0
     }
 
     // MARK: - Session Expired Handler

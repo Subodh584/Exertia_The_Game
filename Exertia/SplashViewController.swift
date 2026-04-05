@@ -1,5 +1,6 @@
 import UIKit
 import Lottie
+import SceneKit
 
 class SplashViewController: UIViewController {
 
@@ -8,15 +9,50 @@ class SplashViewController: UIViewController {
     private let loadingLabel = UILabel()
     private var animationView: LottieAnimationView?
 
+    /// Tracks whether both conditions are met before navigating:
+    /// 1. Minimum splash time elapsed   2. Character preload finished
+    private var animationTimerDone = false
+    private var preloadDone = false
+    private var hasNavigated = false
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+
+        // Listen for preload completion
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(onPreloadReady),
+            name: .characterPreviewReady, object: nil
+        )
+
+        // Start preloading the 3D character model
+        AssetLoader.shared.preloadCharacterPreview()
+
+        // Safety timeout: if preload takes longer than 8 seconds, navigate anyway
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) { [weak self] in
+            guard let self = self, !self.hasNavigated else { return }
+            print("⚠️ Character preload timed out — navigating anyway")
+            self.preloadDone = true
+            self.navigateIfReady()
+        }
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         AudioManager.shared.playAppMusic()
         animateOpeningSequence()
+    }
+
+    @objc private func onPreloadReady() {
+        preloadDone = true
+        navigateIfReady()
+    }
+
+    /// Only navigates when both the minimum animation time AND preload are done.
+    private func navigateIfReady() {
+        guard animationTimerDone, preloadDone, !hasNavigated else { return }
+        hasNavigated = true
+        checkAuthAndNavigate()
     }
 
     func setupUI() {
@@ -87,7 +123,8 @@ class SplashViewController: UIViewController {
             }) { _ in
                 self.animationView?.play()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                    self.checkAuthAndNavigate()
+                    self.animationTimerDone = true
+                    self.navigateIfReady()
                 }
             }
         }
