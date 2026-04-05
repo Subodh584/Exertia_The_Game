@@ -167,9 +167,11 @@ class LeanDetector {
             
             switch newDirection {
             case .left:
-                print("⬅️ LEAN LEFT detected! Angle: \(String(format: "%.1f", angle))°")
+//                print("⬅️ LEAN LEFT detected! Angle: \(String(format: "%.1f", angle))°")
+                break
             case .right:
-                print("➡️ LEAN RIGHT detected! Angle: \(String(format: "%.1f", angle))°")
+//                print("➡️ LEAN RIGHT detected! Angle: \(String(format: "%.1f", angle))°")
+                break
             case .neutral:
                 break
             }
