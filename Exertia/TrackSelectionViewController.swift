@@ -62,6 +62,8 @@ class TrackSelectionViewController: UIViewController {
     
     private var rowHeightConstraint: NSLayoutConstraint!
     private weak var beamView: UIImageView?
+    private var skipCalibrationToggle = UISwitch()
+    private let skipCalibrationLabel = UILabel()
 
     private var videoWidth: CGFloat {
         if Responsive.isIPad { return min(view.bounds.width * 0.62, 470) }
@@ -143,6 +145,23 @@ class TrackSelectionViewController: UIViewController {
         // To re-enable: delete these two lines. No storyboard changes needed.
         prevTrackTapped.isHidden = true
         nextTrackTapped.isHidden = true
+
+        // Default skip calibration: OFF for first-time users, ON if they've played before
+        configureSkipCalibrationDefault()
+    }
+
+    private func configureSkipCalibrationDefault() {
+        guard let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
+        Task {
+            do {
+                let hasPlayed = try await SupabaseManager.shared.hasCompletedAnySession(userId: userId)
+                DispatchQueue.main.async {
+                    self.skipCalibrationToggle.isOn = hasPlayed
+                }
+            } catch {
+                print("⚠️ Could not check session history for skip calibration default: \(error)")
+            }
+        }
     }
 
     private func adjustStartButtonAlignment() {
@@ -386,6 +405,39 @@ class TrackSelectionViewController: UIViewController {
             rowHeightConstraint
         ])
         
+        // Skip calibration row — between goal controls and start button
+        let skipRow = UIView()
+        skipRow.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(skipRow)
+        view.bringSubviewToFront(skipRow)
+
+        skipCalibrationLabel.text = "Skip Calibration"
+        skipCalibrationLabel.font = UIFont(name: "Audiowide-Regular", size: Responsive.font(12))
+            ?? .systemFont(ofSize: Responsive.font(12), weight: .semibold)
+        skipCalibrationLabel.textColor = UIColor.white.withAlphaComponent(0.7)
+        skipCalibrationLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        skipCalibrationToggle.isOn = false
+        skipCalibrationToggle.onTintColor = UIColor(red: 0.63, green: 0.31, blue: 0.94, alpha: 1.0)
+        skipCalibrationToggle.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
+        skipCalibrationToggle.translatesAutoresizingMaskIntoConstraints = false
+
+        skipRow.addSubview(skipCalibrationLabel)
+        skipRow.addSubview(skipCalibrationToggle)
+
+        NSLayoutConstraint.activate([
+            skipRow.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            skipRow.bottomAnchor.constraint(equalTo: row.topAnchor, constant: Responsive.isSmallPhone ? -10 : -14),
+            skipRow.heightAnchor.constraint(equalToConstant: 30),
+
+            skipCalibrationLabel.leadingAnchor.constraint(equalTo: skipRow.leadingAnchor),
+            skipCalibrationLabel.centerYAnchor.constraint(equalTo: skipRow.centerYAnchor),
+
+            skipCalibrationToggle.leadingAnchor.constraint(equalTo: skipCalibrationLabel.trailingAnchor, constant: 10),
+            skipCalibrationToggle.centerYAnchor.constraint(equalTo: skipRow.centerYAnchor),
+            skipCalibrationToggle.trailingAnchor.constraint(equalTo: skipRow.trailingAnchor),
+        ])
+
         // Picker overlay button over the WHOLE screen to catch outside taps gracefully
         pickerOverlay.frame = view.bounds
         pickerOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -669,13 +721,15 @@ class TrackSelectionViewController: UIViewController {
                 )
                 DifficultySettings.shared.setDistanceTarget(km: self.distanceKm)
 
-                let diffVC = DifficultySelectionViewController()
-                let nav    = UINavigationController(rootViewController: diffVC)
+                // Default to Medium difficulty (only available mode)
+                DifficultySettings.shared.setDifficulty(.medium)
+                DifficultySettings.shared.setSkipDemo(self.skipCalibrationToggle.isOn)
+
+                // Go directly to CameraViewController, skipping difficulty screen
+                let cameraVC = CameraViewController()
+                let nav = UINavigationController(rootViewController: cameraVC)
                 nav.setNavigationBarHidden(true, animated: false)
                 nav.modalPresentationStyle = .fullScreen
-                diffVC.onDifficultySelected = { [weak nav] in
-                    nav?.pushViewController(CameraViewController(), animated: true)
-                }
                 self.present(nav, animated: true)
             }
         }

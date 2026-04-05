@@ -258,9 +258,10 @@ class OnboardingProfileViewController: UIViewController, UIPickerViewDelegate, U
                     "daily_target_distance": AnyEncodable(distance)
                 ]
 
-                // Optional weight fields
+                // Optional weight fields — set initial_weight = current_weight on first setup
                 if let cwText = currentWeightField.text, let cw = Double(cwText), cw > 0 {
                     data["current_weight"] = AnyEncodable(cw)
+                    data["initial_weight"] = AnyEncodable(cw)
                 }
                 if let twText = targetWeightField.text, let tw = Double(twText), tw > 0 {
                     data["target_weight"] = AnyEncodable(tw)

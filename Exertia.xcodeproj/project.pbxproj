@@ -45,6 +45,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				PandaCharacter.rkassets,
 			);
 			target = 5B2754932EBD0DC6007BB1C0 /* Exertia */;
 		};

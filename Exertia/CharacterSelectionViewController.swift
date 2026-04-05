@@ -26,6 +26,9 @@ class CharacterSelectionViewController: UIViewController {
     private var characterNode: SCNNode?
     private var lastPanX: CGFloat = 0
     private var sceneSetupDone = false
+    /// Tracks whether the 3D scene is actively displaying (preloaded or fresh).
+    /// If false when the preload notification fires, we apply it.
+    private var sceneApplied = false
 
     /// Adjust to scale the 3D character up or down
     private let characterScale: Float = 0.085
@@ -150,6 +153,20 @@ class CharacterSelectionViewController: UIViewController {
         updateMainDisplay(index: currentViewingIndex)
         profileButton.addTarget(self, action: #selector(profileTapped), for: .touchUpInside)
         backButton.addTarget(self, action: #selector(backButtonTapped), for: .touchUpInside)
+
+        // Listen for preloaded character scene becoming ready
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(onCharacterPreviewReady),
+            name: .characterPreviewReady, object: nil
+        )
+    }
+
+    @objc private func onCharacterPreviewReady() {
+        // If the 3D scene hasn't been applied yet and we have an SCNView waiting, apply now
+        guard !sceneApplied, let scnView = characterSceneView else { return }
+        if applyPreloadedScene(to: scnView) {
+            print("✅ Character: applied preloaded scene via notification")
+        }
     }
     
     override func viewDidLayoutSubviews() {
@@ -169,17 +186,23 @@ class CharacterSelectionViewController: UIViewController {
     }
     // MARK: - 3D Character Scene
 
+    /// The Y rotation that makes the character face the camera.
+    /// Adjust this value if the model faces sideways (try Float.pi, Float.pi/2, etc.)
+    private let characterFrontAngleY: Float = -Float.pi / 2
+
     private func setupCharacterSceneView() {
         guard !sceneSetupDone, mainCharacterImageView.frame.width > 0 else { return }
         sceneSetupDone = true
 
-        mainCharacterImageView.isHidden = true
+        // Keep the 2D image visible as a placeholder until 3D is ready
+        // mainCharacterImageView.isHidden stays false until we show the 3D view
 
         let scnView = SCNView(frame: mainCharacterImageView.frame)
         scnView.backgroundColor = .clear
         scnView.allowsCameraControl = false
         scnView.autoenablesDefaultLighting = false
         scnView.antialiasingMode = .multisampling4X
+        scnView.alpha = 0  // start hidden; reveal when scene is attached
 
         if let superview = mainCharacterImageView.superview,
            let idx = superview.subviews.firstIndex(of: mainCharacterImageView) {
@@ -189,74 +212,87 @@ class CharacterSelectionViewController: UIViewController {
         }
         characterSceneView = scnView
 
-        // LOAD THE PHYSICAL GEOMETRY MESH ASYNCHRONOUSLY TO PREVENT MAIN THREAD BLOCKING!
-        scnView.alpha = 0
-        
+        // Try to use the preloaded scene from AssetLoader (loaded during splash)
+        if applyPreloadedScene(to: scnView) {
+            return
+        }
+
+        // Preload not ready yet — load fresh on background thread
+        loadCharacterFresh(into: scnView)
+    }
+
+    /// Attempts to use the preloaded scene. Returns true if successful.
+    private func applyPreloadedScene(to scnView: SCNView) -> Bool {
+        let loader = AssetLoader.shared
+        guard let preloadedScene = loader.characterPreviewScene,
+              let preloadedCamera = loader.characterPreviewCameraNode,
+              let preloadedWrapper = loader.characterPreviewWrapperNode else {
+            return false
+        }
+
+        // Face the camera before starting rotation
+        preloadedWrapper.removeAllActions()
+        preloadedWrapper.eulerAngles.y = characterFrontAngleY
+
+        let spin = SCNAction.rotateBy(x: 0, y: CGFloat.pi * 2, z: 0, duration: 15.0)
+        preloadedWrapper.runAction(SCNAction.repeatForever(spin))
+
+        self.characterNode = preloadedWrapper
+        scnView.scene = preloadedScene
+        scnView.pointOfView = preloadedCamera
+        scnView.isPlaying = true
+
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(self.handleCharacterPan(_:)))
+        scnView.addGestureRecognizer(pan)
+
+        // Crossfade: hide 2D placeholder, show 3D scene
+        sceneApplied = true
+        mainCharacterImageView.isHidden = true
+        scnView.alpha = 1.0
+        print("✅ Character: using preloaded scene (instant)")
+        return true
+    }
+
+    /// Fallback: loads the character model from scratch on a background thread.
+    private func loadCharacterFresh(into scnView: SCNView) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            
+
             guard let importedScene = SCNScene(named: "Character.scnassets/MascotFinal.usdz") else {
-                print("⚠️ Could not load Character.scnassets/charMain.usdz")
+                print("⚠️ Could not load Character.scnassets/MascotFinal.usdz")
                 return
             }
 
-            // Build a mathematically clean master view scene container!
             let masterScene = SCNScene()
-            
-            // Safely extract the completely intact payload geometry shell from the freshly parsed .dae without breaking its internal bone/animation target paths!
             let characterShell = importedScene.rootNode.clone()
-            
-            // Wrap the character in a master container to cleanly handle global spinning without messing up its local Z-up orientation correction!
             let wrapperNode = SCNNode()
             wrapperNode.addChildNode(characterShell)
             masterScene.rootNode.addChildNode(wrapperNode)
-            
-            // Force the USDZ to stand up if it was exported laying down (Z-up)
-            characterShell.eulerAngles = SCNVector3(-Float.pi / 2, 0, 0)
-            
-            // Note: MascotFinal.usdz has baked textures, so we DO NOT inject procedural materials here!
-            
 
-            
-            // Compute bounds AFTER rotation/injection
+            characterShell.eulerAngles = SCNVector3(-Float.pi / 2, 0, 0)
+
             let (minB, maxB) = characterShell.boundingBox
-            
-            // Use the largest dimension as the "height" since bounding box might be weirdly rotated
-            let modelSpanX = maxB.x - minB.x
-            let modelSpanY = maxB.y - minB.y
-            let modelSpanZ = maxB.z - minB.z
-            let maxDim = max(modelSpanX, modelSpanY, modelSpanZ)
-            
+            let maxDim = max(maxB.x - minB.x, maxB.y - minB.y, maxB.z - minB.z)
             let autoScale: Float = maxDim > 0 ? (1.8 / maxDim) : 1.0
-            
             characterShell.scale = SCNVector3(1, 1, 1)
 
             let midX = (minB.x + maxB.x) / 2
             let midY = (minB.y + maxB.y) / 2
-            
-            // Mathematically inversely cleanly scale the standard UI mathematical layout parameter
             let virtualShiftX = self.characterOffsetX / autoScale
             let virtualShiftY = self.characterOffsetY / autoScale
-            
             characterShell.position = SCNVector3(-midX + virtualShiftX, -midY + virtualShiftY, 0)
 
-            // VERY IMPORTANT: Since we restored native PBR materials, they need an environment to reflect,
-            // otherwise they turn pitch black when you spin the character.
             masterScene.lightingEnvironment.contents = UIColor(white: 0.2, alpha: 1.0)
-            
+
             let ambientNode = SCNNode()
             let ambient = SCNLight()
-            ambient.type = .ambient
-            ambient.color = UIColor.white
-            ambient.intensity = 600
+            ambient.type = .ambient; ambient.color = UIColor.white; ambient.intensity = 600
             ambientNode.light = ambient
             masterScene.rootNode.addChildNode(ambientNode)
 
             let dirNode = SCNNode()
             let dir = SCNLight()
-            dir.type = .directional
-            dir.color = UIColor.white
-            dir.intensity = 900
+            dir.type = .directional; dir.color = UIColor.white; dir.intensity = 900
             dirNode.light = dir
             dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
             masterScene.rootNode.addChildNode(dirNode)
@@ -264,34 +300,36 @@ class CharacterSelectionViewController: UIViewController {
             let cameraNode = SCNNode()
             cameraNode.camera = SCNCamera()
             cameraNode.camera?.fieldOfView = 50
-            
-            // Re-tuned to 2.1 to pull the camera back slightly and prevent the model from clipping out of the view bounds!
             let visualCameraZ = 2.5 / autoScale
             let visualOffsetZ = self.characterOffsetZ / autoScale
-      
             cameraNode.camera?.zNear = Double(visualCameraZ) * 0.05
-            cameraNode.camera?.zFar = Double(visualCameraZ) * 5.0
+            cameraNode.camera?.zFar  = Double(visualCameraZ) * 5.0
             cameraNode.position = SCNVector3(0, 0, visualCameraZ - visualOffsetZ)
-            
             masterScene.rootNode.addChildNode(cameraNode)
 
-            // START SLOW AUTO-ROTATION
+            // Face front, then spin
+            wrapperNode.eulerAngles.y = self.characterFrontAngleY
             let spin = SCNAction.rotateBy(x: 0, y: CGFloat.pi * 2, z: 0, duration: 15.0)
-            let repeatSpin = SCNAction.repeatForever(spin)
-            wrapperNode.runAction(repeatSpin)
+            wrapperNode.runAction(SCNAction.repeatForever(spin))
 
-            // Safely deploy fully built complex mathematical memory hierarchy onto main UIKit rendering thread smoothly
             DispatchQueue.main.async {
+                guard !self.sceneApplied else { return }  // preload may have arrived first
+                self.sceneApplied = true
                 self.characterNode = wrapperNode
                 scnView.scene = masterScene
                 scnView.pointOfView = cameraNode
-                scnView.isPlaying = true 
+                scnView.isPlaying = true
 
                 let pan = UIPanGestureRecognizer(target: self, action: #selector(self.handleCharacterPan(_:)))
                 scnView.addGestureRecognizer(pan)
-                
-                UIView.animate(withDuration: 0.4) {
+
+                // Crossfade from 2D placeholder to 3D scene
+                UIView.animate(withDuration: 0.3) {
+                    self.mainCharacterImageView.alpha = 0
                     scnView.alpha = 1.0
+                } completion: { _ in
+                    self.mainCharacterImageView.isHidden = true
+                    self.mainCharacterImageView.alpha = 1.0
                 }
             }
         }

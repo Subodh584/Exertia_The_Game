@@ -10,6 +10,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         let userName: String?
         let dailyTargetCalories: Int
         let dailyTargetDistance: Double
+        let initialWeight: Double?
         let currentWeight: Double?
         let targetWeight: Double?
         let currentStreak: Int
@@ -170,6 +171,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
     private var apiBestSessionDistance: Double? = nil
     private var apiDailyTargetCalories: Int = 500
     private var apiDailyTargetDistance: Double = 5.0
+    private var apiInitialWeight: Double? = nil
     private var apiCurrentWeight: Double? = nil
     private var apiTargetWeight: Double? = nil
 
@@ -230,6 +232,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
         nameLabel.text = snapshot.userName ?? "Player"
         apiDailyTargetCalories = snapshot.dailyTargetCalories
         apiDailyTargetDistance = snapshot.dailyTargetDistance
+        apiInitialWeight = snapshot.initialWeight
         apiCurrentWeight = snapshot.currentWeight
         apiTargetWeight = snapshot.targetWeight
         apiCurrentStreak = snapshot.currentStreak
@@ -261,6 +264,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             userName: nameLabel.text,
             dailyTargetCalories: apiDailyTargetCalories,
             dailyTargetDistance: apiDailyTargetDistance,
+            initialWeight: apiInitialWeight,
             currentWeight: apiCurrentWeight,
             targetWeight: apiTargetWeight,
             currentStreak: apiCurrentStreak,
@@ -304,6 +308,7 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                         self.nameLabel.text = user.display_name ?? user.username ?? "Player"
                         self.apiDailyTargetCalories = user.daily_target_calories ?? 500
                         self.apiDailyTargetDistance = user.daily_target_distance ?? 5.0
+                        self.apiInitialWeight = user.initial_weight
                         self.apiCurrentWeight = user.current_weight
                         self.apiTargetWeight = user.target_weight
                         self.apiLongestStreak = user.longest_streak ?? 0
@@ -705,15 +710,35 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
 
         weightStartLabel.text = "-- kg"
         weightStartLabel.textColor = .white
-        weightStartLabel.font = .systemFont(ofSize: 12, weight: .bold)
+        weightStartLabel.font = .systemFont(ofSize: 11, weight: .bold)
         weightEndLabel.text = "-- kg"
         weightEndLabel.textColor = .white
-        weightEndLabel.font = .systemFont(ofSize: 12, weight: .bold)
+        weightEndLabel.font = .systemFont(ofSize: 11, weight: .bold)
         weightMsg.text = "Set your weight goal to track progress"
         weightMsg.textColor = .gray
         weightMsg.font = .systemFont(ofSize: 10)
         weightMsg.textAlignment = .center
-        let bottom = UIStackView(arrangedSubviews: [weightStartLabel, weightMsg, weightEndLabel])
+
+        // Sub-labels for "Initial" and "Target" under the weight values
+        let initialSubLabel = UILabel()
+        initialSubLabel.text = "Initial"
+        initialSubLabel.font = .systemFont(ofSize: 9, weight: .medium)
+        initialSubLabel.textColor = UIColor.white.withAlphaComponent(0.5)
+        initialSubLabel.textAlignment = .left
+
+        let targetSubLabel = UILabel()
+        targetSubLabel.text = "Target"
+        targetSubLabel.font = .systemFont(ofSize: 9, weight: .medium)
+        targetSubLabel.textColor = UIColor.white.withAlphaComponent(0.5)
+        targetSubLabel.textAlignment = .right
+
+        let leftStack = UIStackView(arrangedSubviews: [weightStartLabel, initialSubLabel])
+        leftStack.axis = .vertical; leftStack.spacing = 1; leftStack.alignment = .leading
+
+        let rightStack = UIStackView(arrangedSubviews: [weightEndLabel, targetSubLabel])
+        rightStack.axis = .vertical; rightStack.spacing = 1; rightStack.alignment = .trailing
+
+        let bottom = UIStackView(arrangedSubviews: [leftStack, weightMsg, rightStack])
         bottom.distribution = .equalCentering
         bottom.alignment = .center
         bottom.translatesAutoresizingMaskIntoConstraints = false
@@ -1124,15 +1149,13 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             bestCalLabel.text = "-- cal"
         }
 
-        // Weight goal from user profile
+        // Weight goal from user profile — 3-value model: initial → current → target
         if let current = apiCurrentWeight, let target = apiTargetWeight, target > 0 {
-            // Determine range: start = max(current, target), end = min(current, target)
-            let startWeight = max(current, target)  // heavier end (left)
-            let endWeight = min(current, target)    // lighter end (right/goal)
-            weightStartLabel.text = String(format: "%.0f kg", startWeight)
-            weightEndLabel.text = String(format: "%.0f kg", endWeight)
+            let initial = apiInitialWeight ?? current  // fall back to current if no initial
 
-            let totalRange = startWeight - endWeight
+            weightStartLabel.text = String(format: "%.0f kg", initial)
+            weightEndLabel.text = String(format: "%.0f kg", target)
+
             let diff = current - target
             if abs(diff) < 0.1 {
                 weightMsg.text = "Goal reached! 🎉"
@@ -1142,10 +1165,20 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
                 weightMsg.text = String(format: "%.1f kg below target!", abs(diff))
             }
 
-            // Progress: how far along the range from start to target
+            // Progress bar: initial → target is the full range, current is positioned within.
+            // Direction-aware: only count progress TOWARD the target, not away from it.
+            let totalRange = abs(initial - target)
             let progress: Float
-            if totalRange > 0 {
-                progress = Float((startWeight - current) / totalRange)
+            if totalRange > 0.1 {
+                if initial > target {
+                    // Losing weight: progress increases as current drops from initial toward target
+                    let moved = initial - current  // positive = moved toward target
+                    progress = moved > 0 ? Float(moved / totalRange) : 0.0
+                } else {
+                    // Gaining weight: progress increases as current rises from initial toward target
+                    let moved = current - initial  // positive = moved toward target
+                    progress = moved > 0 ? Float(moved / totalRange) : 0.0
+                }
             } else {
                 progress = 1.0
             }
@@ -1205,6 +1238,14 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             accentColor: .neonPink,
             fields: [
                 GlassEditModalController.FieldConfig(
+                    placeholder: "e.g. 75.0",
+                    icon: "arrow.down.right.circle",
+                    keyboard: .decimalPad,
+                    value: apiInitialWeight.map { String(format: "%.1f", $0) } ?? "",
+                    label: "Initial Weight",
+                    unit: "kg"
+                ),
+                GlassEditModalController.FieldConfig(
                     placeholder: "e.g. 70.0",
                     icon: "figure.stand",
                     keyboard: .decimalPad,
@@ -1223,23 +1264,32 @@ class StatisticsViewController: UIViewController, UICollectionViewDataSource, UI
             ],
             validator: { [weak self] values in
                 guard let self = self else { return "Something went wrong. Please try again." }
-                guard let current = Double(values[0]), current > 0,
-                      let target = Double(values[1]), target > 0 else {
+                guard let initial = Double(values[0]), initial > 0,
+                      let current = Double(values[1]), current > 0,
+                      let target = Double(values[2]), target > 0 else {
                     return "Please enter valid weight values greater than 0."
                 }
 
+                // Validate initial and current against limits
+                if let err = self.validateWeightInputs(current: initial, target: target) { return err }
                 return self.validateWeightInputs(current: current, target: target)
             },
             onSave: { [weak self] values in
                 guard let self = self,
-                      let current = Double(values[0]), current > 0,
-                      let target = Double(values[1]), target > 0,
+                      let initial = Double(values[0]), initial > 0,
+                      let current = Double(values[1]), current > 0,
+                      let target = Double(values[2]), target > 0,
                       let userId = UserDefaults.standard.string(forKey: "supabaseUserID") else { return }
                 Task {
                     do {
-                        let data: [String: AnyEncodable] = ["current_weight": AnyEncodable(current), "target_weight": AnyEncodable(target)]
+                        let data: [String: AnyEncodable] = [
+                            "initial_weight": AnyEncodable(initial),
+                            "current_weight": AnyEncodable(current),
+                            "target_weight": AnyEncodable(target)
+                        ]
                         let _ = try await SupabaseManager.shared.updateUser(userId: userId, data: data)
                         DispatchQueue.main.async {
+                            self.apiInitialWeight = initial
                             self.apiCurrentWeight = current
                             self.apiTargetWeight = target
                             self.refreshUI()

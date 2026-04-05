@@ -6,6 +6,7 @@
 //
 
 import SceneKit
+import UIKit
 
 class AssetLoader {
     
@@ -138,10 +139,100 @@ class AssetLoader {
         )
     }
     
+    // MARK: - Character Preview Cache (for CharacterSelectionViewController)
+
+    /// Pre-built SCNScene for the character selection 3D preview.
+    /// Populated during SplashViewController so the model appears instantly.
+    private(set) var characterPreviewScene: SCNScene?
+    private(set) var characterPreviewCameraNode: SCNNode?
+    private(set) var characterPreviewWrapperNode: SCNNode?
+
+    /// Call from SplashViewController to preload the character preview on a background thread.
+    func preloadCharacterPreview(
+        offsetX: Float = 0, offsetY: Float = 0, offsetZ: Float = 0
+    ) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            guard let importedScene = SCNScene(named: "Character.scnassets/MascotFinal.usdz") else {
+                print("⚠️ AssetLoader: Could not preload MascotFinal.usdz")
+                return
+            }
+
+            let masterScene = SCNScene()
+            let characterShell = importedScene.rootNode.clone()
+            let wrapperNode = SCNNode()
+            wrapperNode.addChildNode(characterShell)
+            masterScene.rootNode.addChildNode(wrapperNode)
+
+            // Force USDZ to stand up (Z-up → Y-up)
+            characterShell.eulerAngles = SCNVector3(-Float.pi / 2, 0, 0)
+
+            // Compute bounds
+            let (minB, maxB) = characterShell.boundingBox
+            let maxDim = max(maxB.x - minB.x, maxB.y - minB.y, maxB.z - minB.z)
+            let autoScale: Float = maxDim > 0 ? (1.8 / maxDim) : 1.0
+            characterShell.scale = SCNVector3(1, 1, 1)
+
+            let midX = (minB.x + maxB.x) / 2
+            let midY = (minB.y + maxB.y) / 2
+            let virtualShiftX = offsetX / autoScale
+            let virtualShiftY = offsetY / autoScale
+            characterShell.position = SCNVector3(-midX + virtualShiftX, -midY + virtualShiftY, 0)
+
+            // Lighting
+            masterScene.lightingEnvironment.contents = UIColor(white: 0.2, alpha: 1.0)
+
+            let ambientNode = SCNNode()
+            let ambient = SCNLight()
+            ambient.type = .ambient; ambient.color = UIColor.white; ambient.intensity = 600
+            ambientNode.light = ambient
+            masterScene.rootNode.addChildNode(ambientNode)
+
+            let dirNode = SCNNode()
+            let dir = SCNLight()
+            dir.type = .directional; dir.color = UIColor.white; dir.intensity = 900
+            dirNode.light = dir
+            dirNode.eulerAngles = SCNVector3(-Float.pi / 4, -Float.pi / 6, 0)
+            masterScene.rootNode.addChildNode(dirNode)
+
+            // Camera
+            let cameraNode = SCNNode()
+            cameraNode.camera = SCNCamera()
+            cameraNode.camera?.fieldOfView = 50
+            let visualCameraZ = 2.5 / autoScale
+            let visualOffsetZ = offsetZ / autoScale
+            cameraNode.camera?.zNear = Double(visualCameraZ) * 0.05
+            cameraNode.camera?.zFar  = Double(visualCameraZ) * 5.0
+            cameraNode.position = SCNVector3(0, 0, visualCameraZ - visualOffsetZ)
+            masterScene.rootNode.addChildNode(cameraNode)
+
+            // NOTE: Rotation is NOT started here — CharacterSelectionVC starts it
+            // after setting the initial facing angle.
+
+            self.characterPreviewScene      = masterScene
+            self.characterPreviewCameraNode  = cameraNode
+            self.characterPreviewWrapperNode = wrapperNode
+            print("✅ AssetLoader: Character preview preloaded")
+
+            // Notify any listener that the preload is ready
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .characterPreviewReady, object: nil)
+            }
+        }
+    }
+
     // MARK: - Clear Cache
     func clearCache() {
         sceneCache.removeAll()
+        characterPreviewScene = nil
+        characterPreviewCameraNode = nil
+        characterPreviewWrapperNode = nil
     }
+}
+
+// MARK: - Notification Name
+extension Notification.Name {
+    static let characterPreviewReady = Notification.Name("characterPreviewReady")
 }
 
 // MARK: - SCNNode Extension for Cloning with Animations

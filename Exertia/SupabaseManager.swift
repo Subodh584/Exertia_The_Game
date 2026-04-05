@@ -36,6 +36,7 @@ struct AppUser: Codable {
     let display_name: String?
     let daily_target_distance: Double?
     let daily_target_calories: Int?
+    let initial_weight: Double?
     let current_weight: Double?
     let target_weight: Double?
     let current_streak: Int?
@@ -419,6 +420,17 @@ class SupabaseManager {
 
     func abandonSession(sessionId: String) async throws {
         try await client.rpc("abandon_session", params: ["p_session_id": sessionId]).execute()
+    }
+
+    /// Returns true if the user has completed at least one game session.
+    func hasCompletedAnySession(userId: String) async throws -> Bool {
+        let response = try await client
+            .from("game_sessions")
+            .select("id")
+            .eq("user_id", value: userId)
+            .limit(1)
+            .execute(options: .init(count: .exact))
+        return (response.count ?? 0) > 0
     }
 
     func getUserSessions(userId: String) async throws -> [AppSession] {
