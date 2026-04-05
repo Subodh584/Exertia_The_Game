@@ -559,10 +559,28 @@ class SupabaseManager {
         try await performAccountDeletion(userId: user.id)
     }
 
-    /// Shared deletion logic
+    /// Shared deletion logic – deletes child rows first to avoid trigger conflicts
     private func performAccountDeletion(userId: UUID) async throws {
-        print("🗑️ Deleting user profile from database...")
+        print("🗑️ Deleting user data from database...")
+
+        // 1. Delete child tables that reference 'users' or whose triggers
+        //    could try to write back during CASCADE (e.g. trg_badge_recalc).
+        let childTables = ["user_badges", "daily_progress", "game_sessions"]
+        for table in childTables {
+            print("   ↳ Deleting from \(table)...")
+            try await client.from(table).delete().eq("user_id", value: userId).execute()
+        }
+
+        // Friendships uses requester_id / receiver_id instead of user_id
+        print("   ↳ Deleting from friendships...")
+        try await client.from("friendships").delete()
+            .or("requester_id.eq.\(userId),receiver_id.eq.\(userId)")
+            .execute()
+
+        // 2. Now safe to delete the user row itself (remaining FKs will CASCADE cleanly)
+        print("   ↳ Deleting from users...")
         try await client.from("users").delete().eq("id", value: userId).execute()
+
         try await client.auth.signOut()
         UserDefaults.standard.removeObject(forKey: "supabaseUserID")
         print("✅ Account deleted and logged out!")

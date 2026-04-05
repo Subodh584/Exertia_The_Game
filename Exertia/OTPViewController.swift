@@ -299,16 +299,16 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
     }
 
     // MARK: - Eye toggles (reset password)
-    @objc private func toggleNewPwVisibility() {
+    @objc private func toggleNewPwVisibility(_ sender: UIButton) {
         newPasswordField.isSecureTextEntry.toggle()
         let icon = newPasswordField.isSecureTextEntry ? "eye.slash" : "eye"
-        newPwEyeButton.setImage(UIImage(systemName: icon), for: .normal)
+        sender.setImage(UIImage(systemName: icon), for: .normal)
     }
 
-    @objc private func toggleConfirmPwVisibility() {
+    @objc private func toggleConfirmPwVisibility(_ sender: UIButton) {
         confirmPasswordField.isSecureTextEntry.toggle()
         let icon = confirmPasswordField.isSecureTextEntry ? "eye.slash" : "eye"
-        confirmPwEyeButton.setImage(UIImage(systemName: icon), for: .normal)
+        sender.setImage(UIImage(systemName: icon), for: .normal)
     }
 
     private func makeEyeButton(action: Selector) -> UIButton {

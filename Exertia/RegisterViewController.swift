@@ -248,16 +248,16 @@ class RegisterViewController: UIViewController, UITextFieldDelegate {
 
     // MARK: - Eye toggle
 
-    @objc private func togglePasswordVisibility() {
+    @objc private func togglePasswordVisibility(_ sender: UIButton) {
         passwordField.isSecureTextEntry.toggle()
         let icon = passwordField.isSecureTextEntry ? "eye.slash" : "eye"
-        passwordEyeButton.setImage(UIImage(systemName: icon), for: .normal)
+        sender.setImage(UIImage(systemName: icon), for: .normal)
     }
 
-    @objc private func toggleConfirmPasswordVisibility() {
+    @objc private func toggleConfirmPasswordVisibility(_ sender: UIButton) {
         confirmPasswordField.isSecureTextEntry.toggle()
         let icon = confirmPasswordField.isSecureTextEntry ? "eye.slash" : "eye"
-        confirmPasswordEyeButton.setImage(UIImage(systemName: icon), for: .normal)
+        sender.setImage(UIImage(systemName: icon), for: .normal)
     }
 
     // MARK: - Helpers

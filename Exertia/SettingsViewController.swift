@@ -243,7 +243,7 @@ class SettingsViewController: UIViewController {
         pctLabel.textColor     = UIColor.white.withAlphaComponent(0.45)
         pctLabel.textAlignment = .right
         pctLabel.setContentHuggingPriority(.required, for: .horizontal)
-        pctLabel.widthAnchor.constraint(equalToConstant: 36).isActive = true
+        pctLabel.widthAnchor.constraint(equalToConstant: 48).isActive = true
 
         let sliderRow = UIStackView(arrangedSubviews: [slider, pctLabel])
         sliderRow.axis      = .horizontal
