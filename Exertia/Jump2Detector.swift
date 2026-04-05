@@ -211,9 +211,9 @@ class Jump2Detector {
         onDebugInfo?(ankleLiftFromGround, ankleLiftThreshold, isValidJump)
         
         // Debug logging
-        if hasUpperBodyLift {
-            print("🔍 AnkleLift:\(String(format: "%.1f", ankleLiftFromGround))/\(String(format: "%.1f", ankleLiftThreshold)) KneeΔ:\(String(format: "%.1f", kneeAngleChange))° AnkleVel:\(String(format: "%.1f", ankleVelocity)) Valid:\(isValidJumpFrame) Consec:\(consecutiveValidFrames)")
-        }
+//        if hasUpperBodyLift {
+//            print("🔍 AnkleLift:\(String(format: "%.1f", ankleLiftFromGround))/\(String(format: "%.1f", ankleLiftThreshold)) KneeΔ:\(String(format: "%.1f", kneeAngleChange))° AnkleVel:\(String(format: "%.1f", ankleVelocity)) Valid:\(isValidJumpFrame) Consec:\(consecutiveValidFrames)")
+//        }
         
         // Detect jump
         detectJump(isValidJump: isValidJump)

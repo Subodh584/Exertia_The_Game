@@ -77,6 +77,9 @@ class CrouchDetector {
         // Send real-time distance updates
         onDistancesUpdated?(smoothedLeft, smoothedRight)
 
+        // Debug: per-frame hip-to-toe distances
+        print("🦵 HipToe L:\(String(format: "%.1f", smoothedLeft)) R:\(String(format: "%.1f", smoothedRight)) threshold:\(DifficultySettings.shared.crouchThreshold)")
+
         // Detect crouch based on both hip-to-toe distances
         detectCrouch(leftDistance: smoothedLeft, rightDistance: smoothedRight)
     }
