@@ -655,7 +655,9 @@ class CameraViewController: UIViewController {
   // MARK: - Back Button Action
 
   @objc private func backButtonTapped() {
-    navigationController?.popViewController(animated: true)
+    // CameraViewController is the root of its UINavigationController, so popViewController
+    // does nothing. Dismiss the nav controller to return to TrackSelectionViewController.
+    navigationController?.dismiss(animated: true)
   }
 
   // MARK: - Play Button Action

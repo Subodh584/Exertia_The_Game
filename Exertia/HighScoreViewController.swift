@@ -474,10 +474,10 @@ final class HighScoreViewController: UIViewController {
         continueButton.layer.shadowOffset  = CGSize(width: 0, height: 5)
 
         var config = UIButton.Configuration.plain()
-        var titleAttr = AttributedString("CONTINUE")
+        var titleAttr = AttributedString("Continue")
         titleAttr.font = UIFont.monospacedSystemFont(ofSize: 16, weight: .bold)
         titleAttr.kern = 2
-        titleAttr.foregroundColor = bgDark
+        titleAttr.foregroundColor = UIColor.white
         config.attributedTitle = titleAttr
         config.image = UIImage(
             systemName: "chevron.right.2",
@@ -485,7 +485,7 @@ final class HighScoreViewController: UIViewController {
         )
         config.imagePlacement  = .trailing
         config.imagePadding    = 8
-        config.baseForegroundColor = bgDark
+        config.baseForegroundColor = UIColor.white
         continueButton.configuration = config
 
         continueButton.addTarget(self, action: #selector(continueTapped), for: .touchUpInside)
