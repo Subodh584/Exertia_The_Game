@@ -2197,7 +2197,20 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         let presentSummary = { [weak self] in
             guard let self = self else { return }
             let summaryView = SessionSummaryView(summary: summaryData) {
-                NotificationCenter.default.post(name: .navigateToHome, object: nil)
+                DispatchQueue.main.async {
+                    guard
+                        let windowScene = UIApplication.shared.connectedScenes
+                            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+                        let window = windowScene.windows.first(where: { $0.isKeyWindow }),
+                        let homeVC = UIStoryboard(name: "Main", bundle: nil)
+                            .instantiateViewController(withIdentifier: "HomeViewController") as? HomeViewController
+                    else { return }
+
+                    UIView.transition(with: window, duration: 0.35,
+                                      options: .transitionCrossDissolve,
+                                      animations: { window.rootViewController = homeVC },
+                                      completion: nil)
+                }
             }
             let hosting = UIHostingController(rootView: summaryView)
             hosting.modalPresentationStyle = .overFullScreen
