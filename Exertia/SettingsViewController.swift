@@ -373,7 +373,14 @@ class SettingsViewController: UIViewController {
             action: #selector(openContactUs)
         )
 
-        let inner = UIStackView(arrangedSubviews: [header, privacyRow, sep1, termsRow, sep2, contactRow])
+        let sep3 = makeSeparator()
+        let creditsRow = makeInfoRow(
+            icon: "person.3.fill",
+            title: "Credits",
+            action: #selector(openCredits)
+        )
+
+        let inner = UIStackView(arrangedSubviews: [header, privacyRow, sep1, termsRow, sep2, contactRow, sep3, creditsRow])
         inner.axis    = .vertical
         inner.spacing = 4
         inner.translatesAutoresizingMaskIntoConstraints = false
@@ -459,6 +466,13 @@ class SettingsViewController: UIViewController {
         termsVC.modalPresentationStyle = .fullScreen
         termsVC.modalTransitionStyle   = .coverVertical
         present(termsVC, animated: true)
+    }
+
+    @objc private func openCredits() {
+        let creditsVC = CreditsViewController()
+        creditsVC.modalPresentationStyle = .fullScreen
+        creditsVC.modalTransitionStyle   = .coverVertical
+        present(creditsVC, animated: true)
     }
 
     // MARK: - Danger Section
