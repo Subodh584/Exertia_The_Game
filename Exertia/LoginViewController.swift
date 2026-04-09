@@ -1,5 +1,4 @@
 import UIKit
-import AuthenticationServices
 import Supabase
 
 class LoginViewController: UIViewController {
@@ -17,7 +16,6 @@ class LoginViewController: UIViewController {
     private let forgotButton = UIButton()
     private let registerLabel = UILabel()
     private let registerButton = UIButton()
-    private var googleBtn: UIButton!
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -153,96 +151,6 @@ class LoginViewController: UIViewController {
         }
     }
 
-    // MARK: - OAuth Actions
-
-    @objc func googleSignInTapped() {
-        handleOAuthSignIn(provider: .google)
-    }
-
-    private func handleOAuthSignIn(provider: Auth.Provider) {
-        googleBtn.isEnabled = false
-
-        Task {
-            defer {
-                DispatchQueue.main.async {
-                    self.googleBtn.isEnabled = true
-                }
-            }
-
-            do {
-                try await SupabaseManager.shared.signInWithOAuth(provider: provider)
-
-                guard let authUser = SupabaseManager.shared.client.auth.currentUser else {
-                    throw NSError(domain: "OAuth", code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "No user after sign-in"])
-                }
-
-                let userId = authUser.id.uuidString
-                UserDefaults.standard.set(userId, forKey: "supabaseUserID")
-                await SupabaseManager.shared.setUserOnline()
-
-                print("✅ OAuth sign-in success! User: \(userId)")
-
-                // Check if user needs to complete their profile
-                let profileComplete = try await SupabaseManager.shared.isProfileComplete(userId: userId)
-
-                if !profileComplete {
-                    // First-time OAuth user — create a minimal row, then go to onboarding
-                    let email = authUser.email ?? ""
-                    let displayName: String? = {
-                        if case let .string(name) = authUser.userMetadata["full_name"] { return name }
-                        return nil
-                    }()
-
-                    // Only create row if it doesn't exist at all
-                    let users: [AppUser] = try await SupabaseManager.shared.client.from("users")
-                        .select().eq("id", value: userId).execute().value
-                    if users.isEmpty {
-                        try await SupabaseManager.shared.createOAuthUserRow(
-                            userId: userId, email: email, displayName: displayName)
-                    }
-
-                    DispatchQueue.main.async {
-                        let onboardingVC = OnboardingProfileViewController()
-                        onboardingVC.isOAuthUser = true
-                        onboardingVC.modalPresentationStyle = .fullScreen
-                        onboardingVC.modalTransitionStyle = .crossDissolve
-                        self.present(onboardingVC, animated: true)
-                    }
-                } else {
-                    // Returning OAuth user — go straight to home
-                    DispatchQueue.main.async {
-                        self.navigateToHome()
-                    }
-                }
-
-            } catch let error as ASWebAuthenticationSessionError
-                        where error.code == .canceledLogin {
-                print("ℹ️ User cancelled OAuth sign-in")
-            } catch {
-                print("❌ OAuth sign-in failed: \(error)")
-                DispatchQueue.main.async {
-                    self.showAlert(title: "Sign-In Failed",
-                                   message: "Could not complete sign-in. Please try again.")
-                }
-            }
-        }
-    }
-    
-    func navigateToHome() {
-        DispatchQueue.main.async {
-            let storyboard = UIStoryboard(name: "Main", bundle: nil)
-            if let homeVC = storyboard.instantiateViewController(withIdentifier: "HomeViewController") as? UIViewController {
-                homeVC.modalPresentationStyle = .fullScreen
-                homeVC.modalTransitionStyle = .crossDissolve
-                self.present(homeVC, animated: true, completion: nil)
-                print("✅ NAVIGATION SUCCESS")
-            } else {
-                print("❌ ERROR: Could not find 'HomeViewController' in Main.storyboard")
-            }
-        }
-    }
-
     // MARK: - UI Setup
     func setupUI() {
         backgroundImageView.image = UIImage(named: "loading background")
@@ -331,23 +239,6 @@ class LoginViewController: UIViewController {
         signInButton.translatesAutoresizingMaskIntoConstraints = false
         glassCard.addSubview(signInButton)
         
-        let orLabel = UILabel()
-        orLabel.text = "or continue with"
-        orLabel.font = .systemFont(ofSize: Responsive.font(14), weight: .medium)
-        orLabel.textColor = UIColor(white: 0.9, alpha: 1.0)
-        orLabel.translatesAutoresizingMaskIntoConstraints = false
-        glassCard.addSubview(orLabel)
-        
-        let socialStack = UIStackView()
-        socialStack.spacing = Responsive.padding(25)
-        socialStack.translatesAutoresizingMaskIntoConstraints = false
-        
-        googleBtn = createSocialButton(iconName: "google logo", isSystem: false)
-        googleBtn.addTarget(self, action: #selector(googleSignInTapped), for: .touchUpInside)
-
-        socialStack.addArrangedSubview(googleBtn)
-        glassCard.addSubview(socialStack)
-        
         let registerStack = UIStackView()
         registerStack.spacing = 5
         registerStack.translatesAutoresizingMaskIntoConstraints = false
@@ -396,13 +287,7 @@ class LoginViewController: UIViewController {
             signInButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
             signInButton.heightAnchor.constraint(equalToConstant: Responsive.size(50)),
 
-            orLabel.topAnchor.constraint(equalTo: signInButton.bottomAnchor, constant: Responsive.padding(30)),
-            orLabel.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-
-            socialStack.topAnchor.constraint(equalTo: orLabel.bottomAnchor, constant: Responsive.padding(20)),
-            socialStack.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
-
-            registerStack.topAnchor.constraint(equalTo: socialStack.bottomAnchor, constant: Responsive.padding(40)),
+            registerStack.topAnchor.constraint(equalTo: signInButton.bottomAnchor, constant: Responsive.padding(40)),
             registerStack.centerXAnchor.constraint(equalTo: glassCard.centerXAnchor),
             registerStack.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -Responsive.padding(30))
         ])
@@ -434,44 +319,6 @@ class LoginViewController: UIViewController {
         textField.translatesAutoresizingMaskIntoConstraints = false
     }
 
-    func createSocialButton(iconName: String, isSystem: Bool = false) -> UIButton {
-        let btn = UIButton(type: .system)
-        var config = UIButton.Configuration.filled()
-        config.baseBackgroundColor = .white
-        config.cornerStyle = .fixed
-        config.background.cornerRadius = Responsive.cornerRadius(12)
-
-        let iconDim = Responsive.size(24)
-        let targetSize = CGSize(width: iconDim, height: iconDim)
-        var originalImage: UIImage?
-        
-        if isSystem {
-            originalImage = UIImage(systemName: iconName)
-            config.baseForegroundColor = .black
-        } else {
-            originalImage = UIImage(named: iconName)?.withRenderingMode(.alwaysOriginal)
-        }
-
-        if let image = originalImage {
-            config.image = resizeImage(image: image, targetSize: targetSize)
-        }
-        
-        config.imagePlacement = .all
-        btn.configuration = config
-
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        btn.widthAnchor.constraint(equalToConstant: Responsive.size(140)).isActive = true
-        btn.heightAnchor.constraint(equalToConstant: Responsive.size(50)).isActive = true
-        return btn
-    }
-
-    func resizeImage(image: UIImage, targetSize: CGSize) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: targetSize)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: targetSize))
-        }
-    }
-    
     func setupKeyboardDismiss() {
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         view.addGestureRecognizer(tap)
