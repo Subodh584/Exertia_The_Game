@@ -465,7 +465,7 @@ final class HighScoreViewController: UIViewController {
         buttonGradientLayer.startPoint  = CGPoint(x: 0, y: 0)
         buttonGradientLayer.endPoint    = CGPoint(x: 1, y: 1)
         buttonGradientLayer.cornerRadius = 14
-        continueButton.layer.insertSublayer(buttonGradientLayer, at: 0)
+        
         continueButton.layer.cornerRadius = 14
         continueButton.clipsToBounds = false
         continueButton.layer.shadowColor   = neonAmber.withAlphaComponent(0.4).cgColor
@@ -474,7 +474,13 @@ final class HighScoreViewController: UIViewController {
         continueButton.layer.shadowOffset  = CGSize(width: 0, height: 5)
 
         var config = UIButton.Configuration.plain()
-        var titleAttr = AttributedString("CONTINUE")
+        
+        let bgView = UIView()
+        bgView.isUserInteractionEnabled = false
+        bgView.layer.addSublayer(buttonGradientLayer)
+        config.background.customView = bgView
+        
+        var titleAttr = AttributedString("Continue")
         titleAttr.font = UIFont.monospacedSystemFont(ofSize: 16, weight: .bold)
         titleAttr.kern = 2
         titleAttr.foregroundColor = bgDark

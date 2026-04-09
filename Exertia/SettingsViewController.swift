@@ -440,7 +440,7 @@ class SettingsViewController: UIViewController {
 
     // Permanent Cloudflare Pages URL — no trailing slash, no hash.
     // Update this once after deploying exertia-web.
-    private let webBaseURL = "https://exertia-privacy-policy.vercel.app"
+    private let webBaseURL = "https://privacy-policy.exertia.me"
 
     // Opens the Exertia web page and auto-scrolls to the given section.
     // hash should be e.g. "#privacy" or "#contact"

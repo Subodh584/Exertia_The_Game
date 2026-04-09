@@ -82,8 +82,15 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
 
             } catch {
                 DispatchQueue.main.async {
-                    self.showAlert(title: "Verification Failed", message: error.localizedDescription)
                     self.shakeOTPFields()
+                    self.clearOTPFields()
+                    let alert = UIAlertController(title: "Verification Failed",
+                                                  message: error.localizedDescription,
+                                                  preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+                        self?.otpFields.first?.becomeFirstResponder()
+                    })
+                    self.present(alert, animated: true)
                 }
             }
         }
@@ -291,6 +298,10 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
         otpStackView.layer.add(animation, forKey: "shake")
     }
 
+    private func clearOTPFields() {
+        otpFields.forEach { $0.text = "" }
+    }
+
     // MARK: - Alert helper
     private func showAlert(title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
@@ -336,9 +347,8 @@ class OTPViewController: UIViewController, UITextFieldDelegate {
             textField.text = string
             if index < otpFields.count - 1 {
                 otpFields[index + 1].becomeFirstResponder()
-            } else {
-                textField.resignFirstResponder()
             }
+            // Last field: keep focus so the user can still backspace to correct a digit
             return false
         }
         return false

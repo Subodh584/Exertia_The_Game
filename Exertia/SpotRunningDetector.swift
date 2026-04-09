@@ -214,23 +214,23 @@ class SpotRunningDetector {
     }
     
     private func handleFootLift(_ foot: Foot) {
-        print("🦶 Foot lifted: \(foot == .left ? "LEFT" : "RIGHT")")
+//        print("🦶 Foot lifted: \(foot == .left ? "LEFT" : "RIGHT")")
         
         if lastLiftedFoot == nil {
             // First lift in the cycle
             lastLiftedFoot = foot
             isWaitingForSecondFootLift = true
-            print("✅ First lift - waiting for opposite foot")
+//            print("✅ First lift - waiting for opposite foot")
         } else if lastLiftedFoot == foot.opposite && isWaitingForSecondFootLift {
             // Second lift in the cycle - complete rep!
-            print("🎉 COMPLETE REP! Both feet lifted alternately")
+//            print("🎉 COMPLETE REP! Both feet lifted alternately")
             completeRep()
         }
     }
     
     private func completeRep() {
         repCount += 1
-        print("🏃 Rep completed! Total reps: \(repCount)")
+//        print("🏃 Rep completed! Total reps: \(repCount)")
         
         // Mark as actively running
         lastActivityTime = Date()
@@ -245,7 +245,7 @@ class SpotRunningDetector {
         // Reset for next cycle
         isWaitingForSecondFootLift = false
         lastLiftedFoot = nil
-        print("🔄 Ready for next cycle")
+//        print("🔄 Ready for next cycle")
     }
     
     private func resetFootStates() {
@@ -266,7 +266,7 @@ class SpotRunningDetector {
         if timeSinceLastActivity > activityTimeout && isCurrentlyRunning {
             isCurrentlyRunning = false
             onRunningStateChanged?(false)
-            print("⏸️ Running stopped - no activity for \(activityTimeout)s")
+//            print("⏸️ Running stopped - no activity for \(activityTimeout)s")
         }
     }
     

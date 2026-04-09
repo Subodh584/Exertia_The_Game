@@ -195,19 +195,23 @@ class GameData {
                 }
             }
 
-            // Step 2: Mark it complete — retry independently, no new row created.
+            // Step 2: Finalise with the correct RPC based on the real status.
             guard let sessionId = createdSession?.id else { return }
             for attempt in 1...3 {
                 do {
-                    try await SupabaseManager.shared.completeSession(sessionId: sessionId, caloriesBurned: calories)
-                    print("✅ Game Session successfully saved to Supabase!")
+                    if completionStatus == "completed" {
+                        try await SupabaseManager.shared.completeSession(sessionId: sessionId, caloriesBurned: calories)
+                    } else {
+                        try await SupabaseManager.shared.abandonSession(sessionId: sessionId)
+                    }
+                    print("✅ Game Session saved to Supabase with status: \(completionStatus)")
                     return
                 } catch {
-                    print("⚠️ completeSession attempt \(attempt)/3 failed: \(error.localizedDescription)")
+                    print("⚠️ finaliseSession attempt \(attempt)/3 failed: \(error.localizedDescription)")
                     if attempt < 3 {
                         try? await Task.sleep(nanoseconds: UInt64(attempt) * 2_000_000_000)
                     } else {
-                        print("❌ Session created but completeSession failed after 3 attempts (id: \(sessionId))")
+                        print("❌ Session created but finaliseSession failed after 3 attempts (id: \(sessionId))")
                     }
                 }
             }

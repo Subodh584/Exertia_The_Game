@@ -88,7 +88,7 @@ class DifficultySettings {
     var crouchThreshold: CGFloat {
         switch currentDifficulty {
         case .easy: return 200.0   // Triggers at a shallower crouch (hip closer to toe)
-        case .medium: return 180.0
+        case .medium: return 100.0
         case .hard: return 160.0   // Requires a deeper crouch to trigger
         }
     }

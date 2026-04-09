@@ -17,7 +17,6 @@ class LoginViewController: UIViewController {
     private let forgotButton = UIButton()
     private let registerLabel = UILabel()
     private let registerButton = UIButton()
-    private var appleBtn: UIButton!
     private var googleBtn: UIButton!
 
     override func viewDidLoad() {
@@ -160,19 +159,13 @@ class LoginViewController: UIViewController {
         handleOAuthSignIn(provider: .google)
     }
 
-    @objc func appleSignInTapped() {
-        handleOAuthSignIn(provider: .apple)
-    }
-
     private func handleOAuthSignIn(provider: Auth.Provider) {
         googleBtn.isEnabled = false
-        appleBtn.isEnabled = false
 
         Task {
             defer {
                 DispatchQueue.main.async {
                     self.googleBtn.isEnabled = true
-                    self.appleBtn.isEnabled = true
                 }
             }
 
@@ -349,12 +342,9 @@ class LoginViewController: UIViewController {
         socialStack.spacing = Responsive.padding(25)
         socialStack.translatesAutoresizingMaskIntoConstraints = false
         
-        appleBtn = createSocialButton(iconName: "apple.logo", isSystem: true)
         googleBtn = createSocialButton(iconName: "google logo", isSystem: false)
-        appleBtn.addTarget(self, action: #selector(appleSignInTapped), for: .touchUpInside)
         googleBtn.addTarget(self, action: #selector(googleSignInTapped), for: .touchUpInside)
-        
-        socialStack.addArrangedSubview(appleBtn)
+
         socialStack.addArrangedSubview(googleBtn)
         glassCard.addSubview(socialStack)
         

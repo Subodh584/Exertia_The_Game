@@ -148,8 +148,10 @@ class HomeViewController: UIViewController {
     }
 
     @objc private func handleNavigateToHome() {
-        // Dismiss everything presented over HomeVC (TrackSelection → nav → CameraVC → GameVC → Summary)
-        presentedViewController?.dismiss(animated: true)
+        // Fallback: dismiss whatever is still presented over HomeVC.
+        DispatchQueue.main.async {
+            self.presentedViewController?.dismiss(animated: true)
+        }
     }
 
     private func configureTodayStatsCapsule() {
