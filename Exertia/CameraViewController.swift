@@ -213,6 +213,9 @@ class CameraViewController: UIViewController {
 
   // Clap-to-pause detector
   private var clapToPauseDetector: ClapToPause?
+
+  // Body visibility monitor (active during gameplay)
+  private var bodyVisibilityDetector: BodyVisibilityDetector?
   
   private var lastDetector: Detector?
 
@@ -499,6 +502,9 @@ class CameraViewController: UIViewController {
       self?.handleSpotRunningRep(repCount)
     }
 
+    // Body Visibility Detector — wired to the game VC in connectDetectorsToExertiaGame
+    bodyVisibilityDetector = BodyVisibilityDetector()
+
     // Clap-to-Pause Detector
     clapToPauseDetector = ClapToPause()
     clapToPauseDetector?.onClapDetected = { [weak self] in
@@ -747,6 +753,14 @@ class CameraViewController: UIViewController {
         gameVC?.playerJump()
       }
     }
+
+    // Connect body visibility — show warning banner or auto-pause when off-screen
+    bodyVisibilityDetector?.reset()
+    bodyVisibilityDetector?.onStateChanged = { [weak gameVC] state in
+      DispatchQueue.main.async {
+        gameVC?.handleBodyVisibilityChange(state)
+      }
+    }
   }
   
 
@@ -799,7 +813,14 @@ class CameraViewController: UIViewController {
           strongSelf.updateUIForCurrentStage()
         }
         
-        guard !poses.isEmpty else { return }
+        // No pose this frame — let the visibility detector escalate to
+        // "not detected" if the absence persists.
+        if poses.isEmpty {
+          if strongSelf.currentStage == .gamePlaying {
+            strongSelf.bodyVisibilityDetector?.processNoPose()
+          }
+          return
+        }
 
         // Process pose with detectors
         poses.forEach { pose in
@@ -826,6 +847,13 @@ class CameraViewController: UIViewController {
           // Process clap-to-pause (only during game)
           if strongSelf.currentStage == .gamePlaying {
             strongSelf.clapToPauseDetector?.processPose(pose)
+          }
+
+          // Process body visibility (only during game)
+          if strongSelf.currentStage == .gamePlaying {
+            strongSelf.bodyVisibilityDetector?.processPose(pose,
+                                                           imageWidth: width,
+                                                           imageHeight: height)
           }
           
           // Always draw skeleton overlay

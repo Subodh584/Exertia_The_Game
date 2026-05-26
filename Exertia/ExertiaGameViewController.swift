@@ -99,6 +99,12 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     var isPaused: Bool = false
     private var pauseMenuHostingController: UIViewController?
     private var countdownHostingController: UIViewController?
+    private var visibilityBanner: UIView?
+    private var visibilityBannerLabel: UILabel?
+    private var visibilityBannerIcon: UIImageView?
+    /// Set when the game was auto-paused (e.g. by body leaving frame).
+    /// Shown in the pause menu, cleared after the menu is dismissed.
+    private var nextPauseReason: String?
     private var summaryHostingController: UIViewController?
     private var highScoreHostingController: UIViewController?
 
@@ -554,6 +560,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
                     self.setupSpeedBar()
                     self.setupHitFlashOverlay()
                     self.setupEndGameButton()
+                    self.setupVisibilityBanner()
 
                     // Step 10: Start game & dismiss loading
                     self.startGame()
@@ -1717,8 +1724,15 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     }
     
     func updateSpeedBarUI() {
+        // SceneKit's renderer delegate fires on a background queue. All UIView
+        // reads/writes (bounds, frame, label text) must happen on main.
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in self?.updateSpeedBarUI() }
+            return
+        }
+
         guard let container = speedBarContainerView else { return }
-        
+
         let barWidth = container.bounds.width
         let divisionWidth = barWidth / 3.0
         
@@ -2098,6 +2112,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
 
     func resumeGame() {
         guard isPaused else { return }
+        nextPauseReason = nil
         pauseMenuHostingController?.dismiss(animated: true) { [weak self] in
             guard let self = self else { return }
             self.pauseMenuHostingController = nil
@@ -2131,6 +2146,139 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         }
     }
 
+    // MARK: - Body Visibility Banner
+
+    private func setupVisibilityBanner() {
+        // Single capsule pill — frosted dark, thin amber outline, soft glow.
+        let blur = UIBlurEffect(style: .systemUltraThinMaterialDark)
+        let container = UIVisualEffectView(effect: blur)
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.layer.cornerRadius = 22
+        container.clipsToBounds = false
+        container.layer.borderWidth = 1
+        container.layer.borderColor = UIColor(red: 1.0, green: 0.75, blue: 0.0, alpha: 0.55).cgColor
+        container.layer.shadowColor = UIColor(red: 1.0, green: 0.55, blue: 0.0, alpha: 1.0).cgColor
+        container.layer.shadowRadius = 14
+        container.layer.shadowOpacity = 0.35
+        container.layer.shadowOffset = .zero
+        container.alpha = 0
+        container.isHidden = true
+        // Round the inner blur view too.
+        container.layer.masksToBounds = false
+        for sub in container.subviews { sub.layer.cornerRadius = 22; sub.clipsToBounds = true }
+        view.addSubview(container)
+
+        let icon = UIImageView(image: UIImage(systemName: "figure.stand"))
+        icon.tintColor = UIColor(red: 1.0, green: 0.80, blue: 0.25, alpha: 1.0)
+        icon.contentMode = .scaleAspectFit
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        container.contentView.addSubview(icon)
+
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
+        label.textColor = .white
+        label.textAlignment = .left
+        label.numberOfLines = 1
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.8
+        label.text = "Step back so your full body is visible"
+        container.contentView.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            container.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 64),
+            container.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            container.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 16),
+            container.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -16),
+            container.heightAnchor.constraint(equalToConstant: 44),
+
+            icon.leadingAnchor.constraint(equalTo: container.contentView.leadingAnchor, constant: 16),
+            icon.centerYAnchor.constraint(equalTo: container.contentView.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 22),
+            icon.heightAnchor.constraint(equalToConstant: 22),
+
+            label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
+            label.trailingAnchor.constraint(equalTo: container.contentView.trailingAnchor, constant: -18),
+            label.centerYAnchor.constraint(equalTo: container.contentView.centerYAnchor)
+        ])
+
+        visibilityBanner = container
+        visibilityBannerLabel = label
+        visibilityBannerIcon = icon
+    }
+
+    /// Called by the camera VC when the body-visibility state changes.
+    func handleBodyVisibilityChange(_ state: BodyVisibilityDetector.VisibilityState) {
+        guard isGameRunning else {
+            hideVisibilityBanner()
+            return
+        }
+
+        if state.isFullyAbsent {
+            // Player has effectively left the camera view — auto-pause.
+            hideVisibilityBanner()
+            guard !isPaused, !isShowingTargetsPopup else { return }
+            nextPauseReason = "No person detected"
+            pauseGame()
+            return
+        }
+
+        if state.isFullyVisible {
+            hideVisibilityBanner()
+            return
+        }
+
+        // Partial: one or more body parts outside the safe frame.
+        guard !isPaused else { return }
+        let message = visibilityMessage(for: state.outOfFrame)
+        showVisibilityBanner(text: message)
+    }
+
+    /// Produces a short, natural sentence describing what's out of frame.
+    private func visibilityMessage(for parts: Set<BodyVisibilityDetector.BodyPart>) -> String {
+        let hasLegs = parts.contains(.leftLeg) || parts.contains(.rightLeg)
+        let hasArms = parts.contains(.leftArm) || parts.contains(.rightArm)
+        let hasHead = parts.contains(.head)
+
+        // Common combinations get tailored copy; rare ones fall back to generic.
+        switch (hasLegs, hasArms, hasHead) {
+        case (true,  false, false): return "Step back — legs out of frame"
+        case (false, true,  false): return "Move in — arms out of frame"
+        case (false, false, true ): return "Move down — head out of frame"
+        case (true,  true,  false): return "Step back so your body fits in frame"
+        default:                    return "Adjust your position — body partially out of frame"
+        }
+    }
+
+    private func showVisibilityBanner(text: String) {
+        guard let banner = visibilityBanner else { return }
+        visibilityBannerLabel?.text = text
+
+        if banner.isHidden || banner.alpha < 1 {
+            banner.isHidden = false
+            banner.transform = CGAffineTransform(translationX: 0, y: -10)
+            view.bringSubviewToFront(banner)
+            UIView.animate(withDuration: 0.28,
+                           delay: 0,
+                           usingSpringWithDamping: 0.85,
+                           initialSpringVelocity: 0.4,
+                           options: [.curveEaseOut],
+                           animations: {
+                banner.alpha = 1
+                banner.transform = .identity
+            })
+        }
+    }
+
+    private func hideVisibilityBanner() {
+        guard let banner = visibilityBanner, !banner.isHidden else { return }
+        UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseIn], animations: {
+            banner.alpha = 0
+        }, completion: { _ in
+            banner.isHidden = true
+        })
+    }
+
     private func showPauseMenu() {
         let elapsed      = Date().timeIntervalSince(sessionStartTime)
         let currentCal   = Int(elapsed * (80.0 / 600.0))
@@ -2143,6 +2291,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
             targetCalories:    targetCal,
             currentDistanceKm: currentDistKm,
             targetDistanceKm:  targetDistKm,
+            pauseReason:       nextPauseReason,
             onResume:         { [weak self] in self?.resumeGame() },
             onExitConfirmed:  { [weak self] in self?.exitAndShowSummary() }
         )

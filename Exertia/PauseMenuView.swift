@@ -59,6 +59,9 @@ struct PauseMenuView: View {
     let targetCalories: Int
     let currentDistanceKm: Double
     let targetDistanceKm: Double
+    /// Optional reason the game auto-paused (e.g. "Full body not visible").
+    /// When nil, the menu shows the regular header only.
+    var pauseReason: String? = nil
     var onResume: () -> Void
     var onExitConfirmed: () -> Void
 
@@ -122,6 +125,18 @@ struct PauseMenuView: View {
                             .tracking(3)
                             .foregroundColor(PC.neonCyan.opacity(0.45))
                         Rectangle().fill(PC.neonCyan.opacity(0.35)).frame(width: 30, height: 1)
+                    }
+
+                    if let reason = pauseReason, !reason.isEmpty {
+                        HStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(PC.neonAmber)
+                            Text(reason)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.95))
+                        }
+                        .padding(.top, 10)
                     }
                 }
                 .padding(.top, 64)
