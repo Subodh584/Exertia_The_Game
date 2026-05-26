@@ -98,6 +98,7 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
     // MARK: - Pause State
     var isPaused: Bool = false
     private var pauseMenuHostingController: UIViewController?
+    private var countdownHostingController: UIViewController?
     private var summaryHostingController: UIViewController?
     private var highScoreHostingController: UIViewController?
 
@@ -2100,6 +2101,30 @@ class ExertiaGameViewController: UIViewController, RoadManagerDelegate {
         pauseMenuHostingController?.dismiss(animated: true) { [weak self] in
             guard let self = self else { return }
             self.pauseMenuHostingController = nil
+            self.presentResumeCountdown()
+        }
+    }
+
+    private func presentResumeCountdown() {
+        // Keep the scene paused while the countdown runs.
+        sceneView.isPlaying = false
+
+        let countdown = CountdownOverlayView { [weak self] in
+            self?.finishResumeCountdown()
+        }
+
+        let hosting = UIHostingController(rootView: countdown)
+        hosting.modalPresentationStyle = .overFullScreen
+        hosting.modalTransitionStyle = .crossDissolve
+        hosting.view.backgroundColor = .clear
+        present(hosting, animated: true)
+        countdownHostingController = hosting
+    }
+
+    private func finishResumeCountdown() {
+        countdownHostingController?.dismiss(animated: true) { [weak self] in
+            guard let self = self else { return }
+            self.countdownHostingController = nil
             self.isPaused = false
             self.isGameRunning = true
             self.sceneView.isPlaying = true
